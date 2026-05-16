@@ -312,7 +312,9 @@ async def _create_organization(ctx: EndpointContext) -> dict[str, Any]:
             ctx, session_id=ctx.session.id, organization_id=org["id"]
         )
 
-    return {"organization": org}
+    # Reference TS returns the organization at the top level (no wrapping key)
+    # so the JS client can do `result.data.id` directly.
+    return org
 
 
 async def _list_organizations(ctx: EndpointContext) -> list[dict[str, Any]]:
@@ -383,7 +385,7 @@ async def _update_organization(ctx: EndpointContext) -> dict[str, Any]:
     )
     if row is None:
         raise APIError(404, "ORGANIZATION_NOT_FOUND")
-    return {"organization": row}
+    return row
 
 
 async def _delete_organization(ctx: EndpointContext) -> dict[str, bool]:

@@ -222,7 +222,8 @@ async def _create_org(
         body["slug"] = slug
     r = await driver.request("POST", "/organization/create", json_body=body)
     assert r.status == 200, r.json()
-    return r.json()["organization"]
+    # Response shape matches better-auth JS reference: org returned at top level.
+    return r.json()
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +398,7 @@ async def test_set_active_explicit(
         },
     )
     assert org_b_resp.status == 200
-    org_b = org_b_resp.json()["organization"]
+    org_b = org_b_resp.json()
     # OrgA stays active because keepCurrentActiveOrganization was True for OrgB.
     r = await driver.request("GET", "/get-session")
     assert r.json()["activeOrganization"]["id"] == org_a["id"]
@@ -899,7 +900,7 @@ async def test_update_organization_by_owner(
         json_body={"organizationId": org["id"], "data": {"name": "New"}},
     )
     assert r.status == 200, r.json()
-    assert r.json()["organization"]["name"] == "New"
+    assert r.json()["name"] == "New"
 
 
 @pytest.mark.parametrize(*org_adapters_param())
