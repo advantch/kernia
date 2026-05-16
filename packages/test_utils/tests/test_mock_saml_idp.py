@@ -62,10 +62,12 @@ def test_assertion_is_well_formed_and_carries_claims() -> None:
     assert group_values == ["admin", "users"]
 
 
-def test_signature_verifies_over_signed_info() -> None:
-    """The SignatureValue is a valid RSA-SHA256 signature over the SignedInfo
-    element bytes the IdP emitted. This is a structural check, not a full
-    XML-DSIG canonicalization round-trip (see module docstring)."""
+def test_signature_verifies_over_c14n_signed_info() -> None:
+    """SignatureValue is a valid RSA-SHA256 signature over the c14n form of the
+    SignedInfo element — this is the strict XML-DSIG contract that python3-saml
+    and xmlsec rebuild during verification."""
+    from lxml import etree
+
     idp = MockSAMLIdP()
     encoded = idp.create_assertion(
         name_id="u",
@@ -73,22 +75,64 @@ def test_signature_verifies_over_signed_info() -> None:
         audience="sp",
         recipient="https://sp/acs",
     )
-    xml_text = base64.b64decode(encoded).decode("utf-8")
+    xml_bytes = base64.b64decode(encoded)
+    root = etree.fromstring(xml_bytes)
 
-    # Locate SignedInfo and SignatureValue substrings as emitted.
-    si_start = xml_text.index("<ds:SignedInfo")
-    si_end = xml_text.index("</ds:SignedInfo>") + len("</ds:SignedInfo>")
-    signed_info_bytes = xml_text[si_start:si_end].encode("utf-8")
+    signed_info = root.find(".//ds:SignedInfo", NS)
+    sig_value_el = root.find(".//ds:SignatureValue", NS)
+    assert signed_info is not None and sig_value_el is not None
+    signature = base64.b64decode(sig_value_el.text or "")
 
-    sv_start = xml_text.index("<ds:SignatureValue>") + len("<ds:SignatureValue>")
-    sv_end = xml_text.index("</ds:SignatureValue>")
-    sig_b64 = xml_text[sv_start:sv_end]
-    signature = base64.b64decode(sig_b64)
+    signed_info_c14n = etree.tostring(
+        signed_info, method="c14n", exclusive=True, with_comments=False
+    )
 
     pub = idp._key.public_key()  # noqa: SLF001 — test-internal access
     pub.verify(
         signature,
-        signed_info_bytes,
+        signed_info_c14n,
         padding.PKCS1v15(),
         hashes.SHA256(),
     )
+
+
+def test_reference_digest_matches_c14n_of_assertion_minus_signature() -> None:
+    """The DigestValue inside SignedInfo == SHA-256(c14n(assertion - Signature)),
+    matching the Reference's enveloped-signature + exc-c14n Transforms chain.
+    This is the second half of the XML-DSIG round-trip that python3-saml runs.
+    """
+    from lxml import etree
+    from cryptography.hazmat.primitives import hashes as _h
+
+    idp = MockSAMLIdP()
+    encoded = idp.create_assertion(
+        name_id="u",
+        attrs={"email": "u@x"},
+        audience="sp",
+        recipient="https://sp/acs",
+    )
+    xml_bytes = base64.b64decode(encoded)
+    root = etree.fromstring(xml_bytes)
+
+    assertion = root.find("saml:Assertion", NS)
+    assert assertion is not None
+
+    # Apply the Reference's first Transform (enveloped-signature): drop the
+    # Signature child from a copy.
+    import copy
+
+    assertion_copy = copy.deepcopy(assertion)
+    sig_in_copy = assertion_copy.find("ds:Signature", NS)
+    if sig_in_copy is not None:
+        assertion_copy.remove(sig_in_copy)
+
+    # Apply the Reference's second Transform (exc-c14n).
+    assertion_c14n = etree.tostring(
+        assertion_copy, method="c14n", exclusive=True, with_comments=False
+    )
+    d = _h.Hash(_h.SHA256())
+    d.update(assertion_c14n)
+    computed_digest = base64.b64encode(d.finalize()).decode("ascii")
+
+    declared_digest = root.find(".//ds:DigestValue", NS).text  # type: ignore[union-attr]
+    assert declared_digest == computed_digest

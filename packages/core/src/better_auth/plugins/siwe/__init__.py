@@ -4,8 +4,9 @@ Port of `reference/packages/better-auth/src/plugins/siwe/`. Verifies an
 EIP-4361 message + signature, consumes a server-issued nonce, then signs the
 user in (auto-creating the user with `walletAddress` if needed).
 
-Requires the optional `eth-account` dependency (declared via the
-`[project.optional-dependencies] siwe` extra on `better-auth`).
+Requires the optional `eth-account` dependency. For ENS reverse-lookup, pass an
+`ENSResolver` (e.g. `web3_ens_resolver(rpc_url=...)`) — without one, ENS lookup
+is disabled even if `enable_ens=True`.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from better_auth.plugins.siwe import routes
+from better_auth.plugins.siwe.ens import ENSResolver, web3_ens_resolver
 from better_auth.types.adapter import FieldDef
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
@@ -28,7 +30,20 @@ SIWE_ERROR_CODES: Mapping[str, str] = {
 
 _SIWE_USER_FIELDS: tuple[FieldDef, ...] = (
     FieldDef("walletAddress", "string", required=False, unique=True),
+    FieldDef("ensName", "string", required=False),
 )
+
+
+# Module-level resolver registry, keyed by plugin instance id. The plugin
+# dataclass is frozen so we can't store the resolver on it directly without
+# breaking equality contracts for downstream tests; instead the routes look up
+# the resolver here.
+_RESOLVERS: dict[int, ENSResolver] = {}
+
+
+def _resolver_for(plugin_id: str) -> ENSResolver | None:
+    """Look up the resolver registered for the plugin instance id."""
+    return _RESOLVERS.get(hash(plugin_id))
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,14 +68,29 @@ class _SIWEPlugin:
     init: None = None
 
 
-def siwe(*, enable_ens: bool = False) -> BetterAuthPlugin:
+def siwe(
+    *,
+    enable_ens: bool = False,
+    ens_resolver: ENSResolver | None = None,
+    ens_rpc_url: str | None = None,
+) -> BetterAuthPlugin:
     """Construct the SIWE plugin.
 
-    `enable_ens` is reserved for future ENS reverse-lookup support; callers can
-    wire ENS via a custom after-hook for now.
+    To enable ENS reverse-lookup, supply *either* a custom `ens_resolver`
+    (an async callable `(address) -> ens_name | None`) OR `ens_rpc_url`
+    (the default web3.py-based resolver is built for you). Either way, set
+    `enable_ens=True`. If both are supplied, `ens_resolver` wins.
+
+    On successful sign-in, when ENS is enabled, the resolved name is written
+    to `user.ensName` (a new field added via PluginSchema.extend).
     """
-    del enable_ens
-    return _SIWEPlugin()  # type: ignore[return-value]
+    plugin = _SIWEPlugin()
+    if enable_ens:
+        if ens_resolver is None and ens_rpc_url is not None:
+            ens_resolver = web3_ens_resolver(ens_rpc_url)
+        if ens_resolver is not None:
+            _RESOLVERS[hash(plugin.id)] = ens_resolver
+    return plugin  # type: ignore[return-value]
 
 
-__all__ = ["SIWE_ERROR_CODES", "siwe"]
+__all__ = ["ENSResolver", "SIWE_ERROR_CODES", "siwe", "web3_ens_resolver"]

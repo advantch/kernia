@@ -31,6 +31,7 @@ from better_auth_test_utils.mock_saml_idp import MockSAMLIdP
 from better_auth_test_utils.mock_sms import MockSMS, SentSMS
 from better_auth_test_utils.mock_smtp import MockSMTP, SentEmail
 from better_auth_test_utils.mock_stripe import MockStripe
+from better_auth_test_utils.soft_webauthn import SoftAuthenticator
 
 __all__ = [
     "ASGIDriver",
@@ -43,6 +44,7 @@ __all__ = [
     "MockStripe",
     "SentEmail",
     "SentSMS",
+    "SoftAuthenticator",
     "adapter_cleanup",
     "all_adapters_param",
     "docker_available",

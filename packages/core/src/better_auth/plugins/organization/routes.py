@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.error import APIError
+from better_auth.events import MemberEvent, get_bus
 from better_auth.plugins.organization.access_control import (
     DEFAULT_ROLES,
     DEFAULT_STATEMENTS,
@@ -580,6 +581,7 @@ async def _accept_invitation(ctx: EndpointContext) -> dict[str, Any]:
     )
     if existing_member:
         member = existing_member
+        newly_added = False
     else:
         member = await ctx.auth.adapter.create(
             model="member",
@@ -590,12 +592,23 @@ async def _accept_invitation(ctx: EndpointContext) -> dict[str, Any]:
                 "createdAt": _now(),
             },
         )
+        newly_added = True
 
     await ctx.auth.adapter.update(
         model="invitation",
         where=(Where(field="id", value=invite["id"]),),
         update={"status": "accepted"},
     )
+    if newly_added:
+        await get_bus(ctx.auth).emit(
+            "organization.member.added",
+            MemberEvent(
+                organization_id=invite["organizationId"],
+                user_id=ctx.session.user_id,
+                role=invite["role"],
+                action="added",
+            ),
+        )
     return {"member": member, "invitation": {**invite, "status": "accepted"}}
 
 
@@ -699,6 +712,15 @@ async def _remove_member(ctx: EndpointContext) -> dict[str, bool]:
         model="member",
         where=(Where(field="id", value=target["id"]),),
     )
+    await get_bus(ctx.auth).emit(
+        "organization.member.removed",
+        MemberEvent(
+            organization_id=body.organizationId,
+            user_id=target["userId"],
+            role=target["role"],
+            action="removed",
+        ),
+    )
     return {"success": True}
 
 
@@ -729,6 +751,15 @@ async def _update_member_role(ctx: EndpointContext) -> dict[str, Any]:
         where=(Where(field="id", value=body.memberId),),
         update={"role": body.role},
     )
+    await get_bus(ctx.auth).emit(
+        "organization.member.updated",
+        MemberEvent(
+            organization_id=body.organizationId,
+            user_id=target["userId"],
+            role=body.role,
+            action="updated",
+        ),
+    )
     return {"member": row}
 
 
@@ -747,6 +778,15 @@ async def _leave_organization(ctx: EndpointContext) -> dict[str, bool]:
     await ctx.auth.adapter.delete(
         model="member",
         where=(Where(field="id", value=member["id"]),),
+    )
+    await get_bus(ctx.auth).emit(
+        "organization.member.removed",
+        MemberEvent(
+            organization_id=body.organizationId,
+            user_id=ctx.session.user_id,
+            role=member["role"],
+            action="removed",
+        ),
     )
     # If this org was active, clear it on the session.
     session_row = await ctx.auth.adapter.find_one(

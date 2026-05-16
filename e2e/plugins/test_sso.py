@@ -159,7 +159,9 @@ def _make_saml_driver() -> ASGIDriver:
             advanced={
                 "sso": {
                     "disable_admin_check": True,
-                    "saml_validation": "permissive",
+                    # Strict XML-DSIG validation now works against MockSAMLIdP
+                    # since the fixture canonicalizes via lxml exc-c14n.
+                    "saml_validation": "strict",
                 },
                 "disable_csrf_check": True,
             },

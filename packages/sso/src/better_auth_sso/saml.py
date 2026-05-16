@@ -283,19 +283,27 @@ async def validate_strict(
 ) -> SAMLAssertion:
     """Strict validation via python3-saml. Verifies XML-DSIG.
 
-    Requires the IdP to canonicalize via libxml2-compatible exclusive c14n. The
-    `MockSAMLIdP` in tests does *not* satisfy this; use `validate_permissive`
-    against it.
+    Requires the IdP to canonicalize via libxml2-compatible exclusive c14n.
+    `MockSAMLIdP` (in our test_utils) now satisfies this — strict mode works
+    against it. Use `validate_permissive` only for legacy IdPs that emit
+    non-canonical signatures.
     """
 
     def _validate() -> SAMLAssertion:
+        from urllib.parse import urlparse
+
         from onelogin.saml2.auth import OneLogin_Saml2_Auth
 
+        # python3-saml reconstructs the request URL from request_data; the path
+        # of the ACS URL goes in script_name, host/scheme/port live in their
+        # own keys. Splitting plan.acs_url ensures the rebuilt URL matches the
+        # Destination attribute on the SAML Response.
+        parsed = urlparse(plan.acs_url)
         request_data = {
-            "https": "off",
-            "http_host": "localhost",
-            "server_port": "80",
-            "script_name": plan.acs_url,
+            "https": "on" if parsed.scheme == "https" else "off",
+            "http_host": parsed.hostname or "localhost",
+            "server_port": str(parsed.port or (443 if parsed.scheme == "https" else 80)),
+            "script_name": parsed.path or "/",
             "get_data": {},
             "post_data": {"SAMLResponse": saml_response_b64},
         }
@@ -485,7 +493,13 @@ def apply_mapping(
     if mapping:
         for our, theirs in mapping.items():
             if theirs in attrs:
-                out[our] = attrs[theirs]
+                value = attrs[theirs]
+                # SAML attributes are intrinsically multi-valued; for fields
+                # the IdP only ever delivers one value (email, name, sub, ...)
+                # flatten the single-element list so consumers don't have to.
+                if isinstance(value, list) and len(value) == 1:
+                    value = value[0]
+                out[our] = value
     if "email" not in out and assertion.name_id and "@" in assertion.name_id:
         out["email"] = assertion.name_id
     if "sub" not in out:

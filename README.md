@@ -81,12 +81,15 @@ python scripts/audit_layout.py
 
 ## Deferred (honestly)
 
+Remaining real deferrals:
 - **Wire-protocol conformance vs containerized better-auth Node server** — Lane J. Requires Docker and `reference/demo/` to spin up; the shape parity is enforced by the spec docs and the `open-api` plugin's generated OpenAPI, but a live cross-server cookie/JSON parity test hasn't run yet.
-- **WebAuthn full attestation trust chain** — the `passkey` test exercises options + assertion verification but doesn't reproduce a complete soft-authenticator CBOR attestation. Real browser flows are unaffected.
-- **SAML strict-mode validation against `MockSAMLIdP`** — the mock's canonical XML serialization doesn't match libxml2's exc-c14n, so the SSO test runs python3-saml in permissive mode. Real IdP integrations use strict mode.
 - **OIDC issuer optional RFCs** — mTLS client auth (RFC 8705), JAR/PAR (RFC 9101/9126), Token Exchange (RFC 8693), private-key JWT client auth. Standard `client_secret_basic/post/none` flows are supported.
-- **SIWE ENS reverse-lookup** — option accepted but the network call to a node provider isn't wired.
-- **Stripe seat-sync hook on org membership change** — the schema field exists; the live hook is documented and trivial to wire.
+
+Previously deferred, now landed:
+- ~~**WebAuthn full attestation trust chain**~~ — `SoftAuthenticator` in `test_utils` produces real CBOR attestations + ES256 signatures. Full register → authenticate round-trip green, with negative tests for forged signatures and tampered challenges.
+- ~~**SAML strict-mode validation against `MockSAMLIdP`**~~ — `MockSAMLIdP` now uses lxml's exc-c14n. python3-saml in strict mode accepts the mock; SSO plugin defaults to strict validation.
+- ~~**SIWE ENS reverse-lookup**~~ — wired. Pass `siwe(enable_ens=True, ens_rpc_url=...)` or supply a custom `ENSResolver`; `web3_ens_resolver()` is the stock implementation with forward-resolve confirmation.
+- ~~**Stripe seat-sync hook on org membership change**~~ — wired via `better_auth.events`. The org plugin emits `organization.member.{added,removed,updated}`; the Stripe plugin subscribes on init when configured for org+seat billing and pushes `quantity` updates.
 
 ## Reference pin
 

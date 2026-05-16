@@ -1,22 +1,16 @@
-"""Minimal SAML 2.0 IdP fixture.
+"""Minimal SAML 2.0 IdP fixture with strict XML-DSIG signing.
 
 Builds a signed SAML Response containing a single Assertion. The Response is
 returned as base64 ready to feed into an SP's ACS endpoint.
 
-Limitations (documented):
-    * Signing uses `cryptography` directly — no `xmlsec` dependency. The output
-      is an XML-DSIG `enveloped-signature` over the Assertion element using
-      Exclusive XML C14N (a minimal, deterministic serialization we emit
-      ourselves rather than running through libxml2). Real-world consumers
-      (`python3-saml`, `pysaml2`) generally re-canonicalize with libxml2, so
-      verification of the signature value will only succeed if the SP either
-      (a) accepts our canonical form byte-for-byte or (b) is configured with
-      `wantAssertionsSigned=false` / equivalent.
-    * The assertion is fine for transport/structure tests and for SP code
-      paths that parse claims/NameID/Conditions. End-to-end signature
-      verification against python3-saml is exercised in the SSO lane with a
-      real xmlsec1 round-trip.
-    * Only the SHA-256/RSA signature suite is supported. No encryption.
+Signing uses `lxml`'s built-in Exclusive XML Canonicalization (libxml2-backed)
+so the signature digest and SignatureValue are computed over the same canonical
+bytes a strict SP (e.g. `python3-saml`, `pysaml2`, `xmlsec`) computes during
+verification. Only RSA-SHA256 is supported. No encryption.
+
+The previous version of this fixture signed over our own serialization, which
+strict XML-DSIG verifiers would reject. Strict verification now works as long
+as the SP is configured with the IdP's cert.
 """
 
 from __future__ import annotations
@@ -187,19 +181,45 @@ class MockSAMLIdP:
         )
 
     def _sign(self, assertion_xml: str, *, ref_id: str) -> str:
-        """Wrap `assertion_xml` with an enveloped XML-DSIG signature.
+        """Wrap `assertion_xml` with a strict XML-DSIG enveloped signature.
 
-        Signs `hashes.SHA256(assertion_xml.encode())` with RSA-PKCS#1v1.5 (the
-        bytes we sign are the assertion serialization we just emitted). The
-        signature element is inserted directly after the `<saml:Issuer>` child,
-        matching the placement most SAML SPs expect.
+        Conforms to xmldsig-core §4 + xml-exc-c14n. Uses lxml for canonicalization
+        so the bytes we sign exactly match the bytes a verifier (python3-saml,
+        xmlsec) will reconstruct.
+
+        Steps:
+          1. Parse the assertion as XML.
+          2. Compute Reference digest:
+                c14n(assertion with the (not-yet-inserted) Signature element
+                     subtracted by the enveloped-signature transform)
+             Since there is no Signature inside yet, the enveloped-signature
+             transform is a no-op; we just c14n the assertion as-is.
+          3. Build SignedInfo with that digest.
+          4. Compute SignatureValue = RSA-SHA256(c14n(SignedInfo)).
+          5. Insert the assembled Signature element immediately after the
+             Assertion's <saml:Issuer> child (the standard placement).
         """
-        # Digest over the assertion bytes (our canonical form).
+        from lxml import etree
+
+        ns = {
+            "saml": "urn:oasis:names:tc:SAML:2.0:assertion",
+            "ds": "http://www.w3.org/2000/09/xmldsig#",
+        }
+
+        # Parse the (unsigned) assertion. The c14n method we use here is the
+        # one the Reference Transforms also specify (exclusive c14n).
+        assertion_elem = etree.fromstring(assertion_xml.encode("utf-8"))
+        assertion_c14n = etree.tostring(
+            assertion_elem,
+            method="c14n",
+            exclusive=True,
+            with_comments=False,
+        )
         digest = hashes.Hash(hashes.SHA256())
-        digest.update(assertion_xml.encode("utf-8"))
+        digest.update(assertion_c14n)
         digest_value = base64.b64encode(digest.finalize()).decode("ascii")
 
-        signed_info = (
+        signed_info_xml = (
             '<ds:SignedInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">'
             '<ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>'
             '<ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>'
@@ -213,29 +233,43 @@ class MockSAMLIdP:
             "</ds:SignedInfo>"
         )
 
+        # Canonicalize SignedInfo before signing — strict verifiers rebuild
+        # exactly these bytes from the parsed SignedInfo node.
+        signed_info_elem = etree.fromstring(signed_info_xml.encode("utf-8"))
+        signed_info_c14n = etree.tostring(
+            signed_info_elem,
+            method="c14n",
+            exclusive=True,
+            with_comments=False,
+        )
         signature_bytes = self._key.sign(
-            signed_info.encode("utf-8"),
+            signed_info_c14n,
             padding.PKCS1v15(),
             hashes.SHA256(),
         )
         signature_value = base64.b64encode(signature_bytes).decode("ascii")
 
-        signature = (
+        signature_xml = (
             '<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">'
-            f"{signed_info}"
+            f"{signed_info_xml}"
             f"<ds:SignatureValue>{signature_value}</ds:SignatureValue>"
             "<ds:KeyInfo><ds:X509Data>"
             f"<ds:X509Certificate>{self.cert_b64}</ds:X509Certificate>"
             "</ds:X509Data></ds:KeyInfo></ds:Signature>"
         )
 
-        # Insert signature right after the Assertion's <saml:Issuer> child.
-        marker = f"</saml:Issuer>"
-        idx = assertion_xml.find(marker)
-        if idx == -1:
+        # Insert <ds:Signature> right after <saml:Issuer> (the standard slot).
+        issuer = assertion_elem.find("saml:Issuer", namespaces=ns)
+        if issuer is None:
             return assertion_xml
-        insert_at = idx + len(marker)
-        return assertion_xml[:insert_at] + signature + assertion_xml[insert_at:]
+        signature_elem = etree.fromstring(signature_xml.encode("utf-8"))
+        # Place the signature element as the next sibling after Issuer.
+        issuer.addnext(signature_elem)
+
+        # Serialize the now-signed assertion. We deliberately serialize the
+        # in-memory tree (lxml decides on the literal byte ordering); the
+        # signature byte-positions are still valid because c14n is canonical.
+        return etree.tostring(assertion_elem, encoding="unicode")
 
 
 __all__ = ["MockSAMLIdP"]

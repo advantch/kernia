@@ -117,6 +117,17 @@ async def _verify(ctx: EndpointContext) -> dict[str, object]:
         ),
     )
 
+    # Optional ENS reverse-lookup (best-effort; never blocks sign-in on failure).
+    from better_auth.plugins.siwe import _resolver_for
+
+    ens_name: str | None = None
+    resolver = _resolver_for("siwe")
+    if resolver is not None:
+        try:
+            ens_name = await resolver(address)
+        except Exception:
+            ens_name = None
+
     # Lookup or create user.
     user = await ctx.auth.adapter.find_one(
         model="user",
@@ -129,8 +140,9 @@ async def _verify(ctx: EndpointContext) -> dict[str, object]:
             model="user",
             data={
                 "email": email,
-                "name": address,
+                "name": ens_name or address,
                 "walletAddress": address,
+                "ensName": ens_name,
                 "emailVerified": False,
                 "createdAt": now,
                 "updatedAt": now,
@@ -146,6 +158,14 @@ async def _verify(ctx: EndpointContext) -> dict[str, object]:
                 "updatedAt": now,
             },
         )
+    elif ens_name and user.get("ensName") != ens_name:
+        # Existing user: refresh stale ENS name on each sign-in.
+        await ctx.auth.adapter.update(
+            model="user",
+            where=(Where(field="id", value=user["id"]),),
+            update={"ensName": ens_name, "updatedAt": now},
+        )
+        user["ensName"] = ens_name
 
     session, cookies = await create_session(
         ctx.auth,
