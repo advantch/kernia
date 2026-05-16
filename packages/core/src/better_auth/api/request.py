@@ -67,3 +67,24 @@ class JSONResponse:
         if self.body is None:
             return b""
         return json.dumps(self.body, default=str).encode("utf-8")
+
+
+@dataclass(frozen=True, slots=True)
+class RedirectResponse:
+    """302 redirect envelope produced by handlers (OAuth, magic-link, etc.)."""
+
+    location: str
+    status: int = 302
+    headers: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class HTMLResponse:
+    """HTML response envelope (used by /device landing, debug pages, etc.)."""
+
+    body: str
+    status: int = 200
+    headers: tuple[tuple[str, str], ...] = ()
+
+    def to_bytes(self) -> bytes:
+        return self.body.encode("utf-8")

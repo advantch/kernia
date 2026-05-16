@@ -100,6 +100,40 @@ class MockStripe:
             if obj is None:
                 return self._err(404, f"No such subscription: {sid}")
             return httpx.Response(200, json=obj)
+        if path.startswith("/v1/subscriptions/") and method == "POST":
+            sid = path.rsplit("/", 1)[-1]
+            obj = self.subscriptions.get(sid)
+            if obj is None:
+                return self._err(404, f"No such subscription: {sid}")
+            for k, v in body.items():
+                if k == "cancel_at_period_end":
+                    obj["cancel_at_period_end"] = v in ("true", "True", True)
+                elif k == "status":
+                    obj["status"] = v
+                else:
+                    obj[k] = v
+            self.capture_events.append({"type": "subscription.update", "object": obj})
+            return httpx.Response(200, json=obj)
+        if path.startswith("/v1/subscriptions/") and method == "DELETE":
+            sid = path.rsplit("/", 1)[-1]
+            obj = self.subscriptions.get(sid)
+            if obj is None:
+                return self._err(404, f"No such subscription: {sid}")
+            obj["status"] = "canceled"
+            self.capture_events.append({"type": "subscription.delete", "object": obj})
+            return httpx.Response(200, json=obj)
+
+        # /v1/billing_portal/sessions
+        if path == "/v1/billing_portal/sessions" and method == "POST":
+            obj = {
+                "id": _new_id("bps"),
+                "object": "billing_portal.session",
+                "customer": body.get("customer"),
+                "return_url": body.get("return_url"),
+                "url": f"https://billing.stripe.test/p/{_new_id('sess')}",
+            }
+            self.capture_events.append({"type": "billing_portal.create", "object": obj})
+            return httpx.Response(200, json=obj)
 
         if path.startswith("/v1/prices/") and method == "GET":
             pid = path.rsplit("/", 1)[-1]

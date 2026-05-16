@@ -30,16 +30,26 @@ async def create_session(
     token = new_token()
     now = int(time.time())
     expires_at = now + auth.options.session.expires_in
-    row = await auth.adapter.create(
-        model="session",
-        data={
-            "userId": user_id,
-            "token": token,
-            "expiresAt": expires_at,
-            "ipAddress": ip_address,
-            "userAgent": user_agent,
-        },
-    )
+    provider = auth.plugin_state.get("session_provider")
+    if provider is not None and hasattr(provider, "create_session"):
+        row = await provider.create_session(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    else:
+        row = await auth.adapter.create(
+            model="session",
+            data={
+                "userId": user_id,
+                "token": token,
+                "expiresAt": expires_at,
+                "ipAddress": ip_address,
+                "userAgent": user_agent,
+            },
+        )
     session = Session(
         id=row["id"],
         user_id=row["userId"],
@@ -72,10 +82,14 @@ async def revoke_session(
     token: str,
 ) -> list[tuple[str, str, CookieAttributes]]:
     """Delete the session row and emit cookie-clearing instructions."""
-    await auth.adapter.delete_many(
-        model="session",
-        where=(Where(field="token", value=token),),
-    )
+    provider = auth.plugin_state.get("session_provider")
+    if provider is not None and hasattr(provider, "delete_session"):
+        await provider.delete_session(token=token)
+    else:
+        await auth.adapter.delete_many(
+            model="session",
+            where=(Where(field="token", value=token),),
+        )
     clear = CookieAttributes(path="/", max_age=0, http_only=True, secure=False, same_site="lax")
     return [
         (SESSION_TOKEN_COOKIE, "", clear),

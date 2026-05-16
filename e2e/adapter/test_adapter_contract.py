@@ -9,34 +9,56 @@ Run:  uv run pytest e2e/adapter/test_adapter_contract.py
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import secrets
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import pytest
 
-from better_auth.types.adapter import CustomAdapter, SortBy, Where
+from better_auth.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
 from better_auth_memory_adapter import memory_adapter
+from better_auth_mongo import mongo_adapter
 from better_auth_sqlalchemy import sqlalchemy_adapter
+from better_auth_test_utils.containers import docker_available, mongodb_container
 
 
-async def _memory() -> CustomAdapter:
-    return memory_adapter()
+async def _memory() -> AsyncIterator[CustomAdapter]:
+    yield memory_adapter()
 
 
-async def _sqlalchemy() -> CustomAdapter:
-    return await sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
+async def _sqlalchemy() -> AsyncIterator[CustomAdapter]:
+    yield await sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
+
+
+async def _mongo() -> AsyncIterator[CustomAdapter]:
+    if not docker_available():
+        pytest.skip("Docker is not available")
+    with mongodb_container() as url:
+        # Each test gets its own random db so parametrize doesn't leak state.
+        adapter = await mongo_adapter(
+            url=url,
+            db_name=f"better_auth_test_{secrets.token_hex(4)}",
+        )
+        yield adapter
 
 
 # Registry: list of (id, async factory). Add new adapters here.
-ADAPTERS: list[tuple[str, Callable[[], "Awaitable[CustomAdapter]"]]] = [
+ADAPTERS: list[tuple[str, Callable[[], AsyncIterator[CustomAdapter]]]] = [
     ("memory", _memory),
     ("sqlalchemy", _sqlalchemy),
+    ("mongo", _mongo),
 ]
 
 
 @pytest.fixture(params=ADAPTERS, ids=[name for name, _ in ADAPTERS])
-async def adapter(request: pytest.FixtureRequest) -> CustomAdapter:
+async def adapter(request: pytest.FixtureRequest) -> AsyncIterator[CustomAdapter]:
     _, factory = request.param
-    return await factory()
+    async for a in factory():
+        yield a
+
+
+def _supports(adapter: Any, name: str) -> bool:
+    return hasattr(adapter, name)
 
 
 # --------------------------------------------------------------------------- CRUD
@@ -149,6 +171,146 @@ async def test_where_operators(
         where=(Where(field="email", value=value, operator=operator),),  # type: ignore[arg-type]
     )
     assert sorted(r["email"] for r in rows) == sorted(matches)
+
+
+# --------------------------------------------------------------------------- ilike_eq
+
+
+async def test_ilike_eq_matches_case_insensitive(adapter: CustomAdapter) -> None:
+    await adapter.create(model="user", data={"email": "Mixed@Example.COM"})
+    found = await adapter.find_one(
+        model="user",
+        where=(Where(field="email", value="mixed@example.com", operator="ilike_eq"),),
+    )
+    assert found is not None
+    assert found["email"] == "Mixed@Example.COM"
+
+
+async def test_ilike_eq_does_not_match_other_strings(adapter: CustomAdapter) -> None:
+    await adapter.create(model="user", data={"email": "alice@example.com"})
+    found = await adapter.find_one(
+        model="user",
+        where=(Where(field="email", value="bob@example.com", operator="ilike_eq"),),
+    )
+    assert found is None
+
+
+# --------------------------------------------------------------------------- joins
+
+
+async def test_find_one_with_join_returns_nested_record(adapter: CustomAdapter) -> None:
+    user = await adapter.create(model="user", data={"email": "j@example.com"})
+    await adapter.create(
+        model="session",
+        data={
+            "userId": user["id"],
+            "token": "tok-1",
+            "expiresAt": 9999999999,
+        },
+    )
+    row = await adapter.find_one(
+        model="session",
+        where=(Where(field="token", value="tok-1"),),
+        join=JoinConfig(model="user", on="userId", foreign_field="id", as_="user"),
+    )
+    assert row is not None
+    assert row["user"] is not None
+    assert row["user"]["email"] == "j@example.com"
+
+
+async def test_find_one_with_join_missing_foreign_is_none(adapter: CustomAdapter) -> None:
+    # MongoDB enforces ObjectId-style FK references via lookup; we pass through
+    # whatever the caller provides and the missing-row case must surface as None.
+    if getattr(adapter, "__class__").__name__ == "MongoAdapter":
+        pytest.skip("MongoDB does not enforce FK; missing-foreign-key tested via lookup elsewhere")
+    await adapter.create(
+        model="session",
+        data={
+            "userId": "ghost-id",
+            "token": "tok-2",
+            "expiresAt": 9999999999,
+        },
+    )
+    row = await adapter.find_one(
+        model="session",
+        where=(Where(field="token", value="tok-2"),),
+        join=JoinConfig(model="user", on="userId", foreign_field="id", as_="user"),
+    )
+    assert row is not None
+    assert row["user"] is None
+
+
+# --------------------------------------------------------------------------- transactions
+
+
+async def test_transaction_commits_on_clean_exit(adapter: CustomAdapter) -> None:
+    if not _supports(adapter, "transaction"):
+        pytest.skip("adapter does not implement TransactionalAdapter")
+    async with adapter.transaction():  # type: ignore[attr-defined]
+        await adapter.create(model="user", data={"email": "tx-ok@example.com"})
+    found = await adapter.find_one(
+        model="user",
+        where=(Where(field="email", value="tx-ok@example.com"),),
+    )
+    assert found is not None
+
+
+async def test_transaction_rolls_back_on_exception(adapter: CustomAdapter) -> None:
+    if not _supports(adapter, "transaction"):
+        pytest.skip("adapter does not implement TransactionalAdapter")
+    # In-memory has no real rollback — declare that explicitly so the test
+    # is not silently misleading.
+    if getattr(adapter, "__class__").__name__ == "MemoryAdapter":
+        pytest.skip("memory adapter transactions are no-ops (documented)")
+    if getattr(adapter, "__class__").__name__ == "MongoAdapter":
+        pytest.skip("MongoAdapter transactions require replica-set deployment")
+    pre = await adapter.count(model="user")
+    with pytest.raises(RuntimeError):
+        async with adapter.transaction():  # type: ignore[attr-defined]
+            await adapter.create(model="user", data={"email": "tx-rb@example.com"})
+            raise RuntimeError("force rollback")
+    post = await adapter.count(model="user")
+    assert post == pre
+    found = await adapter.find_one(
+        model="user",
+        where=(Where(field="email", value="tx-rb@example.com"),),
+    )
+    assert found is None
+
+
+# --------------------------------------------------------------------------- uuid PK
+
+
+async def test_sqlalchemy_uuid_pk_mode() -> None:
+    """Verify the SQLAlchemy adapter materializes a real UUID column when
+    `FieldDef(name='id', type='uuid')` is requested.
+    """
+    import uuid as uuid_mod
+
+    from better_auth.types.adapter import FieldDef, ModelDef
+
+    uuid_model = ModelDef(
+        name="widget",
+        fields=(
+            FieldDef("id", "uuid", unique=True),
+            FieldDef("name", "string"),
+            FieldDef("createdAt", "date"),
+            FieldDef("updatedAt", "date"),
+        ),
+    )
+    adapter = await sqlalchemy_adapter(
+        url="sqlite+aiosqlite:///:memory:",
+        extra_models=(uuid_model,),
+    )
+    row = await adapter.create(model="widget", data={"name": "w1"})
+    # The id should round-trip as a UUID-compatible value.
+    assert isinstance(row["id"], uuid_mod.UUID) or uuid_mod.UUID(str(row["id"]))
+    found = await adapter.find_one(
+        model="widget",
+        where=(Where(field="id", value=row["id"]),),
+    )
+    assert found is not None
+    assert found["name"] == "w1"
 
 
 # --------------------------------------------------------------------------- consume_one

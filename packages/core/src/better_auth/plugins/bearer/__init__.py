@@ -1,4 +1,5 @@
-"""bearer — see reference/packages/better-auth/src/plugins/bearer/.
+"""bearer — see reference/packages/better-auth/src/plugins/bearer/."""
 
-Implemented in Lane C/D/E/F per the parity plan.
-"""
+from better_auth.plugins.bearer.plugin import bearer
+
+__all__ = ["bearer"]

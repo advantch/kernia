@@ -32,7 +32,9 @@ def test_init_with_email_password_plugin_registers_routes() -> None:
 
     sign_in = auth.router.lookup("POST", "/sign-in/email")
     assert sign_in is not None
-    assert sign_in.owner == "email-password"
+    # `lookup` returns `(endpoint, path_params)` since dynamic routes landed.
+    sign_in_ep = sign_in[0] if isinstance(sign_in, tuple) else sign_in
+    assert sign_in_ep.owner == "email-password"
 
     # Error codes from the plugin are merged into the registry.
     assert "INVALID_CREDENTIALS" in auth.errors.codes

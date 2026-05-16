@@ -6,9 +6,12 @@ that the memory adapter uses also drives Postgres/MySQL/SQLite.
 
 from __future__ import annotations
 
+import contextlib
 import secrets
 import time
-from collections.abc import Sequence
+import uuid as uuid_mod
+from collections.abc import AsyncIterator, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -16,11 +19,13 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Column,
+    ForeignKey,
     Integer,
     MetaData,
     String,
     Table,
     Text,
+    Uuid,
     and_,
     func,
     or_,
@@ -29,7 +34,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import insert as sa_insert
 from sqlalchemy import select as sa_select
 from sqlalchemy import update as sa_update
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from better_auth.db.schema import CORE_MODELS
 from better_auth.types.adapter import (
@@ -45,8 +50,10 @@ from better_auth.types.adapter import (
 
 def _sa_type(f: FieldDef) -> Any:
     match f.type:
-        case "string" | "uuid":
+        case "string":
             return String(255)
+        case "uuid":
+            return Uuid(as_uuid=True)
         case "text":
             return Text()
         case "number":
@@ -76,7 +83,14 @@ def build_metadata(models: Sequence[ModelDef]) -> MetaData:
                 # explicitly. Boolean `default=False` is a legitimate default.
                 if f.default is not None or f.type == "boolean":
                     kwargs["default"] = f.default
-            cols.append(Column(f.name, _sa_type(f), **kwargs))
+            # UUID primary keys auto-generate via uuid4 server-side.
+            if f.name == "id" and f.type == "uuid":
+                kwargs["default"] = uuid_mod.uuid4
+            args: list[Any] = [_sa_type(f)]
+            if f.references is not None:
+                ref_model, ref_field = f.references
+                args.append(ForeignKey(f"{ref_model}.{ref_field}"))
+            cols.append(Column(f.name, *args, **kwargs))
         Table(model.name, md, *cols)
     return md
 
@@ -116,6 +130,8 @@ def _where_to_sql(table: Table, where: Sequence[Where]) -> Any:
                 cond = col.startswith(val)
             case "ends_with":
                 cond = col.endswith(val)
+            case "ilike_eq":
+                cond = func.lower(col) == func.lower(val)
             case _:  # pragma: no cover
                 raise ValueError(f"unsupported operator: {op}")
         if expr is None:
@@ -139,12 +155,42 @@ class SQLAlchemyAdapter:
     engine: AsyncEngine
     metadata: MetaData = field(default_factory=MetaData)
     models: tuple[ModelDef, ...] = ()
+    # Per-task active transaction connection. When set inside `transaction()`
+    # every CRUD method uses this connection so the work happens in one txn.
+    _txn_conn: ContextVar[AsyncConnection | None] = field(
+        default_factory=lambda: ContextVar("better_auth_sa_txn", default=None)
+    )
 
     def _table(self, model: str) -> Table:
         try:
             return self.metadata.tables[model]
         except KeyError:
             raise ValueError(f"unknown model: {model}") from None
+
+    @contextlib.asynccontextmanager
+    async def _connect(self, *, write: bool) -> AsyncIterator[AsyncConnection]:
+        """Yield a connection.
+
+        - If a transaction is in progress, reuse its connection (no commit).
+        - Otherwise open a fresh connection (committing on `write=True`).
+        """
+        active = self._txn_conn.get()
+        if active is not None:
+            yield active
+            return
+        if write:
+            async with self.engine.begin() as conn:
+                yield conn
+        else:
+            async with self.engine.connect() as conn:
+                yield conn
+
+    def _id_default(self, table: Table) -> Any:
+        """Generate a fresh PK value matching the table's id-column type."""
+        id_col = table.c.id
+        if isinstance(id_col.type, Uuid):
+            return uuid_mod.uuid4()
+        return secrets.token_urlsafe(16)
 
     async def create(
         self,
@@ -155,10 +201,10 @@ class SQLAlchemyAdapter:
     ) -> Record:
         table = self._table(model)
         row = dict(data)
-        row.setdefault("id", secrets.token_urlsafe(16))
+        row.setdefault("id", self._id_default(table))
         row.setdefault("createdAt", int(time.time()))
         row.setdefault("updatedAt", int(time.time()))
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             await conn.execute(sa_insert(table).values(**row))
             inserted = (
                 await conn.execute(sa_select(table).where(_column(table, "id") == row["id"]))
@@ -177,18 +223,22 @@ class SQLAlchemyAdapter:
     ) -> Record | None:
         table = self._table(model)
         expr = _where_to_sql(table, where)
+        if join is not None:
+            stmt = self._select_with_join(table, select, join)
+            if expr is not None:
+                stmt = stmt.where(expr)
+            async with self._connect(write=False) as conn:
+                row = (await conn.execute(stmt.limit(1))).first()
+            if row is None:
+                return None
+            return self._project_joined(row, table, select, join)
+
         stmt = sa_select(table).where(expr) if expr is not None else sa_select(table)
-        async with self.engine.connect() as conn:
+        async with self._connect(write=False) as conn:
             row = (await conn.execute(stmt.limit(1))).first()
         if row is None:
             return None
-        out = _row_to_dict(row, select)
-        if join is not None:
-            out[join.as_] = await self.find_one(
-                model=join.model,
-                where=(Where(field=join.foreign_field, value=out.get(join.on)),),
-            )
-        return out
+        return _row_to_dict(row, select)
 
     async def find_many(
         self,
@@ -202,7 +252,10 @@ class SQLAlchemyAdapter:
         join: JoinConfig | None = None,
     ) -> list[Record]:
         table = self._table(model)
-        stmt = sa_select(table)
+        if join is not None:
+            stmt = self._select_with_join(table, select, join)
+        else:
+            stmt = sa_select(table)
         expr = _where_to_sql(table, where)
         if expr is not None:
             stmt = stmt.where(expr)
@@ -213,16 +266,51 @@ class SQLAlchemyAdapter:
             stmt = stmt.offset(offset)
         if limit is not None:
             stmt = stmt.limit(limit)
-        async with self.engine.connect() as conn:
+        async with self._connect(write=False) as conn:
             rows = (await conn.execute(stmt)).all()
-        out = [_row_to_dict(r, select) for r in rows]
         if join is not None:
-            for r in out:
-                r[join.as_] = await self.find_one(
-                    model=join.model,
-                    where=(Where(field=join.foreign_field, value=r.get(join.on)),),
-                )
-        return out
+            return [self._project_joined(r, table, select, join) for r in rows]
+        return [_row_to_dict(r, select) for r in rows]
+
+    def _select_with_join(
+        self,
+        table: Table,
+        select: Sequence[str] | None,
+        join: JoinConfig,
+    ) -> Any:
+        """Build a SELECT with an explicit SQL join.
+
+        The local field `join.on` joins the foreign model on `join.foreign_field`.
+        The foreign columns are exposed with a unique label prefix so we can pull
+        them back out into a nested dict in `_project_joined`.
+        """
+        foreign_table = self._table(join.model)
+        local_col = _column(table, join.on)
+        foreign_col = _column(foreign_table, join.foreign_field)
+        cols: list[Any] = [c.label(f"__l__{c.name}") for c in table.c]
+        cols.extend(c.label(f"__r__{c.name}") for c in foreign_table.c)
+        return sa_select(*cols).select_from(
+            table.outerjoin(foreign_table, local_col == foreign_col)
+        )
+
+    def _project_joined(
+        self,
+        row: Any,
+        table: Table,
+        select: Sequence[str] | None,
+        join: JoinConfig,
+    ) -> Record:
+        m = dict(row._mapping)
+        local = {c.name: m[f"__l__{c.name}"] for c in table.c}
+        foreign_table = self._table(join.model)
+        foreign_vals = {c.name: m[f"__r__{c.name}"] for c in foreign_table.c}
+        foreign: Record | None = (
+            foreign_vals if any(v is not None for v in foreign_vals.values()) else None
+        )
+        if select:
+            local = {k: local[k] for k in select if k in local}
+        local[join.as_] = foreign
+        return local
 
     async def update(
         self,
@@ -237,7 +325,7 @@ class SQLAlchemyAdapter:
             return None
         patch = dict(update)
         patch["updatedAt"] = int(time.time())
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             await conn.execute(sa_update(table).where(expr).values(**patch))
             row = (await conn.execute(sa_select(table).where(expr).limit(1))).first()
         return _row_to_dict(row, None) if row else None
@@ -256,7 +344,7 @@ class SQLAlchemyAdapter:
         stmt = sa_update(table)
         if expr is not None:
             stmt = stmt.where(expr)
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             result = await conn.execute(stmt.values(**patch))
         return int(result.rowcount or 0)
 
@@ -270,7 +358,7 @@ class SQLAlchemyAdapter:
         expr = _where_to_sql(table, where)
         if expr is None:
             return
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             row = (await conn.execute(sa_select(table).where(expr).limit(1))).first()
             if row is None:
                 return
@@ -287,7 +375,7 @@ class SQLAlchemyAdapter:
         stmt = sa_delete(table)
         if expr is not None:
             stmt = stmt.where(expr)
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             result = await conn.execute(stmt)
         return int(result.rowcount or 0)
 
@@ -302,7 +390,7 @@ class SQLAlchemyAdapter:
         stmt = sa_select(func.count()).select_from(table)
         if expr is not None:
             stmt = stmt.where(expr)
-        async with self.engine.connect() as conn:
+        async with self._connect(write=False) as conn:
             return int((await conn.execute(stmt)).scalar() or 0)
 
     async def consume_one(
@@ -315,7 +403,7 @@ class SQLAlchemyAdapter:
         expr = _where_to_sql(table, where)
         if expr is None:
             return None
-        async with self.engine.begin() as conn:
+        async with self._connect(write=True) as conn:
             row = (await conn.execute(sa_select(table).where(expr).limit(1))).first()
             if row is None:
                 return None
@@ -326,6 +414,23 @@ class SQLAlchemyAdapter:
         self.metadata = build_metadata(list(self.models) + list(models))
         async with self.engine.begin() as conn:
             await conn.run_sync(self.metadata.create_all)
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> AsyncIterator[None]:
+        """Run a batch of adapter calls under a single SQL transaction.
+
+        On clean exit the transaction commits; on exception it rolls back. Nested
+        calls reuse the outer connection (no savepoint nesting yet).
+        """
+        if self._txn_conn.get() is not None:
+            yield
+            return
+        async with self.engine.begin() as conn:
+            token = self._txn_conn.set(conn)
+            try:
+                yield
+            finally:
+                self._txn_conn.reset(token)
 
 
 async def sqlalchemy_adapter(

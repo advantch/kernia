@@ -1,4 +1,18 @@
-"""admin — see reference/packages/better-auth/src/plugins/admin/.
+"""admin plugin — user management surface gated on the `access` primitive.
 
-Implemented in Lane C/D/E/F per the parity plan.
+Mirrors `reference/packages/better-auth/src/plugins/admin/`.
+
+Schema extensions:
+  * `user.role: string`
+  * `user.banned: boolean`
+  * `user.banReason: string?`
+  * `user.banExpires: integer?`
+  * `session.impersonatedBy: string?`
+
+Endpoints under `/admin/*`. All require an admin role (resolved via the
+`access` plugin's `Role.authorize`).
 """
+
+from better_auth.plugins.admin.plugin import AdminOptions, admin
+
+__all__ = ["AdminOptions", "admin"]

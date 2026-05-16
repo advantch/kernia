@@ -1,4 +1,6 @@
-"""multi_session — see reference/packages/better-auth/src/plugins/multi-session/.
+"""multi_session — see reference/packages/better-auth/src/plugins/multi-session/."""
 
-Implemented in Lane C/D/E/F per the parity plan.
-"""
+from better_auth.plugins.multi_session.plugin import multi_session
+
+__all__ = ["multi_session"]
+

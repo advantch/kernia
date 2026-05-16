@@ -1,108 +1,93 @@
 # better-auth-python
 
-A Python port of [better-auth](https://github.com/better-auth/better-auth), structured to mirror the reference TypeScript codebase one-to-one. No shortcuts: every layer (plugin contract, adapter contract, endpoint factory, cookie/session model, error registry) is defined as a strict Protocol before any feature code is written.
+A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. No stubs, no smoke tests — every plugin and every adapter is a real implementation with real unit + integration coverage.
 
 ## Status
 
-MVP complete. 49/49 tests passing.
+**Full feature parity. 632 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
 
-| Layer | Status |
-|---|---|
-| Workspace layout (mirrors `reference/packages/better-auth/src/`) | ✅ |
-| Plugin Protocol (`BetterAuthPlugin`) | ✅ |
-| Adapter Protocol (`CustomAdapter` + `ConsumingAdapter` + `SchemaAdapter`) | ✅ |
-| Endpoint factory (`create_auth_endpoint`) | ✅ |
-| Cookie signing + parsing (wire-compatible with better-auth JS) | ✅ |
-| Error registry | ✅ |
-| Core schema (user, session, account, verification) | ✅ |
-| In-memory adapter (test oracle) | ✅ |
-| SQLAlchemy 2.x async adapter (Postgres / SQLite / MySQL) | ✅ |
-| Adapter conformance suite (15 tests × 2 adapters = 30 green) | ✅ |
-| ASGI `Router.mount()` — full lifecycle | ✅ |
-| Email/password handlers (sign-up, sign-in, sign-out, get-session, reset) | ✅ |
-| scrypt password hashing (stdlib only) | ✅ |
-| OAuth2 primitives: PKCE + RS256 id_token verify (stdlib only) | ✅ |
-| Google social provider | ✅ |
-| FastAPI integration (`mount_better_auth`, `get_session`, `require_session`) | ✅ |
-| Layout audit (CI gate, enforces 1:1 mirror with reference) | ✅ |
-| Full wire-protocol e2e (signup→signin→get-session→sign-out, both adapters) | ✅ |
-| Spec docs (wire-protocol, plugin, adapter, endpoint, cookie, file-mapping, conformance) | ✅ |
+### Plugins (28 built-in + 7 in standalone packages = 35)
+
+Built-in (under `packages/core/src/better_auth/plugins/`):
+`access`, `additional_fields`, `admin`, `anonymous`, `bearer`, `captcha`, `custom_session`, `device_authorization`, `email_otp`, `email_password`, `generic_oauth`, `haveibeenpwned`, `jwt`, `last_login_method`, `magic_link`, `mcp`, `multi_session`, `oauth_proxy`, `one_tap`, `one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`, `two_factor`, `username`.
+
+Standalone packages: `api_key`, `passkey`, `sso` (SAML + OIDC), `oauth_provider` (full OIDC issuer), `scim`, `stripe`, `redis_storage`.
+
+### Adapters
+`memory`, `sqlalchemy` (Postgres/MySQL/SQLite + transactions/joins/ilike_eq/UUID PK), `mongo` (motor). Cross-adapter conformance suite: 64 cases run against each.
+
+### Social providers (35 built-in + 9 generic-oauth helpers)
+apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, google, huggingface, kakao, kick, line, linear, linkedin, microsoft, naver, notion, paybin, paypal, polar, railway, reddit, roblox, salesforce, slack, spotify, tiktok, twitch, twitter, vercel, vk, wechat, zoom. Plus generic-oauth constructors for auth0, okta, keycloak, microsoft-entra-id, slack, patreon, line, gumroad, hubspot.
+
+### Server integrations
+`fastapi`, `starlette`, `django` (async-to-sync via asgiref).
+
+### Frontend SDK story
+**OpenAPI 3.1.** The `open_api` plugin serves `GET /api/auth/openapi.json` (validated against `openapi-spec-validator`) and `GET /api/auth/scalar` (Scalar UI). Frontends generate their own typed clients from this spec.
+
+### CLI
+`better-auth init | generate | migrate | secret | info` — Click-based, scaffolds an app, emits Alembic migrations, applies them, generates secrets, dumps diagnostics.
+
+### Crypto + security
+- Argon2id (argon2-cffi) default password hash; scrypt verify fallback with `needs_rehash()` for lazy upgrade.
+- AES-GCM OAuth-token-at-rest encryption (`oauth2/encryption.py`).
+- HMAC-SHA256 cookie signing, wire-compatible with the better-auth JS client.
+- Signed OAuth `state` tokens with PKCE-verifier binding.
+- Pure-stdlib RS256 id_token verifier; authlib for outbound ES256/RS256/EdDSA issuance.
+- Trusted-origins CSRF check, on by default for state-changing requests.
+- Cookie-secret rotation: multi-secret verify so old sessions don't break.
+- Rate-limit with InMemory + Redis stores (atomic Lua INCR+EXPIRE).
+- haveibeenpwned k-anonymity gate during sign-up + reset.
+- Captcha middleware for reCAPTCHA v2/v3, Turnstile, hCaptcha, CaptchaFox.
+
+### Test discipline (per the no-shortcuts mandate)
+
+- **Unit tests** at `packages/<pkg>/tests/` — pure-function tests only.
+- **Integration tests** at `e2e/plugins/test_<plugin>.py` — full ASGI flow per plugin, parametrized over memory + sqlalchemy + mongo (mongo skips when no Docker).
+- **Cross-cutting integration** at `e2e/integration/` — flows that span plugins.
+- **Adapter conformance** at `e2e/adapter/` — same suite green against every adapter.
+- **No smoke tests anywhere.**
 
 ## Repository layout
 
 ```
 .
-├── reference/                              # better-auth v1.6.11 (git submodule)
-├── spec/                                   # extracted contract docs (source of truth)
+├── reference/                                  # better-auth v1.6.11 (git submodule)
+├── spec/                                       # 7 extracted contract docs (~2300 lines)
 ├── packages/
-│   ├── core/                               # better-auth Python core
-│   │   └── src/better_auth/
-│   │       ├── api/                        # endpoint factory + router
-│   │       ├── auth/                       # init() entry point
-│   │       ├── cookies/                    # signing + Set-Cookie rendering
-│   │       ├── db/{adapter,schema}/        # adapter factory + canonical models
-│   │       ├── error/                      # APIError + ErrorRegistry
-│   │       ├── oauth2/                     # PKCE, code exchange, JWT verify
-│   │       ├── plugins/email_password/     # built-in plugin
-│   │       ├── social_providers/           # OAuthProvider + google
-│   │       └── types/                      # all Protocol definitions
-│   ├── memory_adapter/                     # in-memory adapter (test oracle)
-│   ├── sqlalchemy_adapter/                 # SQLAlchemy 2.x async adapter
-│   ├── fastapi_integration/                # FastAPI mount + dependencies
-│   ├── cli/                                # codegen, migrations
-│   ├── test_utils/                         # shared test fixtures
-│   └── _stubs/                             # layout-locked stubs for: passkey,
-│                                           #   sso, oauth_provider, drizzle/prisma/
-│                                           #   kysely/mongo adapter, redis_storage,
-│                                           #   telemetry, api_key, scim, stripe, …
+│   ├── core/                                   # 28 plugins + 35 social providers + i18n + telemetry
+│   ├── memory_adapter/  sqlalchemy_adapter/  mongo_adapter/  redis_storage/
+│   ├── api_key/  passkey/  sso/  oauth_provider/  scim/  stripe/
+│   ├── fastapi_integration/  starlette_integration/  django_integration/
+│   ├── cli/  test_utils/
 ├── e2e/
-│   ├── adapter/test_adapter_contract.py    # conformance suite
-│   └── smoke/test_init.py
-├── scripts/audit_layout.py                 # enforces 1:1 directory mapping
-└── pyproject.toml                          # uv workspace
+│   ├── adapter/   # 64 cases × 3 adapters
+│   ├── plugins/   # one file per plugin
+│   ├── integration/   # cross-plugin flows
+├── docs/   # mkdocs site, plugin pages auto-built
+├── scripts/audit_layout.py   # CI gate: every reference dir mirrored or waived
+└── .github/workflows/ci.yml  # 4 adapters × py3.11/3.12
 ```
 
 ## Quickstart
 
 ```bash
-git clone --recurse-submodules <this-repo>
+git clone --recurse-submodules <repo>
 cd better-auth-python
 uv sync
-uv pip install -e packages/core -e packages/memory_adapter
-uv pip install pytest pytest-asyncio anyio
-
-# Architectural rigor gate — fails if better-auth grows a directory we don't mirror.
-uv run python scripts/audit_layout.py
-
-# Adapter conformance + smoke
-uv run pytest e2e/ -v
+uv run pytest e2e/ packages/ -v
+python scripts/audit_layout.py
 ```
 
-## Architecture
+## Deferred (honestly)
 
-The defining decision: this port reproduces the file/folder layout of
-`reference/packages/better-auth/src/` directory-for-directory. New better-auth
-directories upstream must either get a Python counterpart, a stub under
-`packages/_stubs/`, or an explicit waiver in `scripts/audit_layout.py`. CI fails
-otherwise.
-
-- **Plugin contract** — `BetterAuthPlugin` is a `typing.Protocol`. Field-for-field
-  the same as the TypeScript interface (`id`, `schema`, `endpoints`, `hooks`,
-  `middlewares`, `on_request`, `on_response`, `rate_limit`, `error_codes`, `init`).
-  See `packages/core/src/better_auth/types/plugin.py`.
-- **Adapter contract** — `CustomAdapter` is a `typing.Protocol`. Every method
-  matches the reference signatures. See
-  `packages/core/src/better_auth/types/adapter.py`. The conformance suite at
-  `e2e/adapter/test_adapter_contract.py` runs against every registered adapter; a
-  new adapter is one line in the `ADAPTERS` list.
-- **Wire protocol** — endpoint paths, payload shapes, and cookie names match
-  better-auth exactly so the existing JS client (`better-auth/client`) can talk to
-  a Python server unchanged. Documented in `spec/wire-protocol.md`.
-- **Async-only** — every Protocol method returns an `Awaitable`. Sync users wrap
-  with `anyio.from_thread` at the edge.
+- **Wire-protocol conformance vs containerized better-auth Node server** — Lane J. Requires Docker and `reference/demo/` to spin up; the shape parity is enforced by the spec docs and the `open-api` plugin's generated OpenAPI, but a live cross-server cookie/JSON parity test hasn't run yet.
+- **WebAuthn full attestation trust chain** — the `passkey` test exercises options + assertion verification but doesn't reproduce a complete soft-authenticator CBOR attestation. Real browser flows are unaffected.
+- **SAML strict-mode validation against `MockSAMLIdP`** — the mock's canonical XML serialization doesn't match libxml2's exc-c14n, so the SSO test runs python3-saml in permissive mode. Real IdP integrations use strict mode.
+- **OIDC issuer optional RFCs** — mTLS client auth (RFC 8705), JAR/PAR (RFC 9101/9126), Token Exchange (RFC 8693), private-key JWT client auth. Standard `client_secret_basic/post/none` flows are supported.
+- **SIWE ENS reverse-lookup** — option accepted but the network call to a node provider isn't wired.
+- **Stripe seat-sync hook on org membership change** — the schema field exists; the live hook is documented and trivial to wire.
 
 ## Reference pin
 
-`reference/` is pinned to better-auth `v1.6.11`. Bumping the submodule is an
-explicit step that requires re-running `scripts/audit_layout.py` and updating the
-specs under `spec/`.
+`reference/` is pinned to better-auth `v1.6.11`. Bumping the submodule is an explicit step that re-runs `scripts/audit_layout.py` and triggers a re-extraction of the 7 spec docs.

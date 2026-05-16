@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from better_auth.api.router import Router
     from better_auth.types.adapter import CustomAdapter
     from better_auth.types.init_options import BetterAuthOptions
 
@@ -31,6 +32,14 @@ class AuthContext:
     plugins: list[Any] = field(default_factory=list)
     # Plugins may park their own state here under their plugin id as the key.
     plugin_state: MutableMapping[str, Any] = field(default_factory=dict)
+    # The router, assigned by `init()` after construction so plugins (e.g.
+    # open-api) can introspect the registered endpoints during their `init` hook.
+    router: Router | None = None
+    # Optional ephemeral key/value backend (Redis, in-memory, …).
+    secondary_storage: Any | None = None
+    # Optional rate-limit store; `init()` synthesizes an in-memory store when
+    # rate-limit is enabled and no explicit store is supplied.
+    rate_limit_store: Any | None = None
 
 
 @dataclass
@@ -90,3 +99,5 @@ class EndpointContext:
     set_cookies: list[tuple[str, str, Any]] = field(default_factory=list)
     # Headers the handler wants on the response.
     response_headers: dict[str, str] = field(default_factory=dict)
+    # Path parameters captured from `:param` segments in the route template.
+    path_params: dict[str, str] = field(default_factory=dict)

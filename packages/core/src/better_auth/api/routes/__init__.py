@@ -13,6 +13,7 @@ from better_auth.api.routes.email_verification import EMAIL_VERIFICATION_ROUTES
 from better_auth.api.routes.error import ERROR_ROUTES
 from better_auth.api.routes.ok import OK_ROUTES
 from better_auth.api.routes.session import SESSION_ROUTES
+from better_auth.api.routes.sign_in_social import SOCIAL_ROUTES
 from better_auth.api.routes.update_user import UPDATE_USER_ROUTES
 from better_auth.types.endpoint import AuthEndpoint
 
@@ -25,6 +26,7 @@ def core_routes() -> tuple[AuthEndpoint, ...]:
         *ACCOUNT_ROUTES,
         *UPDATE_USER_ROUTES,
         *EMAIL_VERIFICATION_ROUTES,
+        *SOCIAL_ROUTES,
     )
 
 

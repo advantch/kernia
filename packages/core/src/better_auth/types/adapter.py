@@ -7,6 +7,7 @@ Every database adapter (memory, SQLAlchemy, Drizzle-equivalent, etc.) implements
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -26,6 +27,7 @@ WhereOperator = Literal[
     "contains",
     "starts_with",
     "ends_with",
+    "ilike_eq",
 ]
 
 WhereConnector = Literal["AND", "OR"]
@@ -207,3 +209,18 @@ class SchemaAdapter(Protocol):
     """Optional: adapters that can materialize their own schema."""
 
     async def create_schema(self, *, models: Sequence[ModelDef]) -> None: ...
+
+
+@runtime_checkable
+class TransactionalAdapter(Protocol):
+    """Optional: adapters that support atomic transactions.
+
+    `transaction()` returns an async context manager. Operations performed on the
+    adapter inside `async with adapter.transaction():` commit on clean exit and
+    roll back if the block raises.
+
+    Adapters that cannot meaningfully provide atomicity (e.g. in-memory) MAY
+    implement this as a no-op so the same code path works in tests.
+    """
+
+    def transaction(self) -> AbstractAsyncContextManager[None]: ...

@@ -1,8 +1,12 @@
 """Anonymous, opt-in usage telemetry.
 
-Mirrors `reference/packages/telemetry/`. Off by default. When opted in (via
-`BetterAuthOptions.advanced["telemetry"] = True`), emits a single event at startup
-with: better-auth-python version, registered plugin ids, adapter kind. No PII.
+Mirrors `reference/packages/telemetry/`. Off by default: the plugin is the opt-in
+signal — adding it to `BetterAuthOptions.plugins` enables emission. When opted in,
+the plugin emits a single startup event with: better-auth-python version,
+registered plugin ids, adapter kind. No PII.
+
+`BetterAuthOptions.advanced["telemetry"] = False` force-suppresses emission even
+when the plugin is present.
 
 Implementation is intentionally minimal — events go to stdout JSON-lines unless a
 custom sink is supplied. Production users can wire their own sink to forward to
@@ -42,6 +46,12 @@ class _TelemetryPlugin:
     error_codes: None = None
 
     async def init(self, ctx) -> None:  # type: ignore[no-untyped-def]
+        # Explicit opt-out: advanced.telemetry=False suppresses emission even
+        # though the plugin is present (useful for tests that opt-out without
+        # rewiring the plugin list).
+        if ctx.options.advanced.get("telemetry") is False:
+            return None
+
         from better_auth import __version__
 
         plugin_ids = [p.id for p in ctx.plugins if p.id != "telemetry"]

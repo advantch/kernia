@@ -47,14 +47,27 @@ def init(options: BetterAuthOptions) -> BetterAuth:
     if options.database is None:  # type: ignore[unreachable]
         raise ValueError("BetterAuthOptions.database is required")
 
+    # Synthesize an in-memory rate-limit store when one isn't supplied — keeps
+    # the no-config path well-behaved without forcing a Redis dependency.
+    rate_limit_store = options.rate_limit_store
+    if rate_limit_store is None and options.rate_limit.enabled:
+        from better_auth.auth.rate_limit import InMemoryRateLimitStore
+
+        rate_limit_store = InMemoryRateLimitStore()
+
     ctx = AuthContext(
         options=options,
         adapter=options.database,
         base_url=options.base_url,
         secret=options.secret,
         plugins=list(options.plugins),
+        secondary_storage=options.secondary_storage,
+        rate_limit_store=rate_limit_store,
     )
     router = Router(auth=ctx)
+    # Expose the router on the context so plugins (e.g. open-api) can introspect
+    # the full set of registered endpoints during their own `init` hook.
+    ctx.router = router
     errors = ErrorRegistry()
 
     # 1. Core routes are always registered.

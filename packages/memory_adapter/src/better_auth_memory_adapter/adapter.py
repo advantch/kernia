@@ -9,9 +9,10 @@ Mirrors `reference/packages/better-auth/src/adapters/memory-adapter/index.ts`.
 
 from __future__ import annotations
 
+import contextlib
 import secrets
 import time
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -61,6 +62,12 @@ def _match(row: Record, where: Sequence[Where]) -> bool:
                 ok = isinstance(cell, str) and cell.startswith(val)
             case "ends_with":
                 ok = isinstance(cell, str) and cell.endswith(val)
+            case "ilike_eq":
+                ok = (
+                    isinstance(cell, str)
+                    and isinstance(val, str)
+                    and cell.lower() == val.lower()
+                )
             case _:  # pragma: no cover — exhaustive
                 raise ValueError(f"unsupported operator: {op}")
 
@@ -226,6 +233,17 @@ class MemoryAdapter:
                 del table[i]
                 return dict(row)
         return None
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> AsyncIterator[None]:
+        """No-op transaction support.
+
+        The in-memory adapter has no persistence layer, so transactions cannot be
+        meaningfully rolled back. The context manager is provided so callers can
+        write adapter-agnostic code; tests that need real rollback semantics must
+        run against SQLAlchemy or MongoDB.
+        """
+        yield
 
 
 def memory_adapter() -> CustomAdapter:
