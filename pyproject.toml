@@ -9,18 +9,37 @@ members = [
     "packages/core",
     "packages/memory_adapter",
     "packages/sqlalchemy_adapter",
+    "packages/mongo_adapter",
+    "packages/redis_storage",
+    "packages/api_key",
+    "packages/passkey",
+    "packages/sso",
+    "packages/oauth_provider",
+    "packages/scim",
+    "packages/stripe",
     "packages/fastapi_integration",
+    "packages/starlette_integration",
+    "packages/django_integration",
     "packages/cli",
     "packages/test_utils",
 ]
-# Excluded from workspace install but kept in tree to lock layout:
-exclude = ["packages/_stubs/*", "reference"]
+exclude = ["reference"]
 
 [tool.uv.sources]
 better-auth = { workspace = true }
 better-auth-memory-adapter = { workspace = true }
 better-auth-sqlalchemy = { workspace = true }
+better-auth-mongo = { workspace = true }
+better-auth-redis-storage = { workspace = true }
+better-auth-api-key = { workspace = true }
+better-auth-passkey = { workspace = true }
+better-auth-sso = { workspace = true }
+better-auth-oauth-provider = { workspace = true }
+better-auth-scim = { workspace = true }
+better-auth-stripe = { workspace = true }
 better-auth-fastapi = { workspace = true }
+better-auth-starlette = { workspace = true }
+better-auth-django = { workspace = true }
 better-auth-cli = { workspace = true }
 better-auth-test-utils = { workspace = true }
 
@@ -32,6 +51,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "httpx>=0.27",
+    "cryptography>=42",
 ]
 
 [tool.ruff]
@@ -41,14 +61,15 @@ extend-exclude = ["reference"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "PT", "RUF"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
 exclude = ["reference/"]
-mypy_path = "packages/core/src:packages/memory_adapter/src:packages/sqlalchemy_adapter/src:packages/fastapi_integration/src:packages/test_utils/src"
+mypy_path = "packages/core/src:packages/memory_adapter/src:packages/sqlalchemy_adapter/src:packages/mongodb_adapter/src:packages/redis_storage/src:packages/api_key/src:packages/passkey/src:packages/sso/src:packages/oauth_provider/src:packages/scim/src:packages/stripe/src:packages/fastapi_integration/src:packages/starlette_integration/src:packages/django_integration/src:packages/cli/src:packages/test_utils/src"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["e2e", "packages"]
+filterwarnings = ["ignore::DeprecationWarning"]

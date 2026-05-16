@@ -7,12 +7,14 @@ returns a `BetterAuth` handle that exposes the ASGI router and helpers.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from better_auth.api.router import Router
 from better_auth.db.schema import CORE_MODELS
 from better_auth.error import ErrorRegistry
 from better_auth.types.context import AuthContext
+from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.init_options import BetterAuthOptions
 
 
@@ -31,11 +33,14 @@ class BetterAuth:
 
 
 def init(options: BetterAuthOptions) -> BetterAuth:
-    """Build a `BetterAuth` handle from options. Phase 2 fills in plugin composition.
+    """Build a `BetterAuth` handle from options.
 
-    Validates the required pieces (database adapter, secret), then sets up the
-    `AuthContext`, registers the canonical email/password routes if enabled, and
-    runs each plugin's `init` hook. Returns a `BetterAuth` ready to mount.
+    Steps:
+      1. Validate required options.
+      2. Build `AuthContext`.
+      3. Register core routes (always on).
+      4. For each plugin: stamp + register endpoints, merge error codes, run init
+         hook synchronously (via event loop if needed).
     """
     if not options.secret:
         raise ValueError("BetterAuthOptions.secret is required")
@@ -52,23 +57,38 @@ def init(options: BetterAuthOptions) -> BetterAuth:
     router = Router(auth=ctx)
     errors = ErrorRegistry()
 
-    # Register plugin endpoints + error codes. (Plugin init hooks run in Phase 2.)
+    # 1. Core routes are always registered.
+    from better_auth.api.routes import core_routes
+
+    core_stamped = [_stamp(ep, owner="core") for ep in core_routes()]
+    router.register(core_stamped)
+
+    # 2. Plugin endpoints + error codes.
     for plugin in options.plugins:
         if plugin.endpoints:
-            # Stamp owner attribution on endpoints from this plugin.
-            stamped = []
-            for ep in plugin.endpoints:
-                stamped.append(ep.__class__(  # type: ignore[call-arg]
-                    path=ep.path,
-                    options=ep.options,
-                    handler=ep.handler,
-                    owner=plugin.id,
-                ))
-            router.register(stamped)
+            router.register([_stamp(ep, owner=plugin.id) for ep in plugin.endpoints])
         if plugin.error_codes:
             errors.extend(plugin.error_codes, plugin_id=plugin.id)
 
-    # Core schema is always present. Plugin schema extension lands in Phase 2.
-    _ = CORE_MODELS  # referenced for the migration step
+    # 3. Plugin init hooks (synchronous via event loop — kept simple; plugins that
+    # need a running loop already are handled by the first ASGI request).
+    for plugin in options.plugins:
+        plugin_init = getattr(plugin, "init", None)
+        if plugin_init is None:
+            continue
+        try:
+            asyncio.get_running_loop()
+            # We're already inside a loop — schedule and fire-and-forget.
+            asyncio.create_task(plugin_init(ctx))
+        except RuntimeError:
+            asyncio.run(plugin_init(ctx))
+
+    # Core schema is always present (CORE_MODELS).  Plugin schema is collected via
+    # `db.migrations.resolve_full_schema` when generating migrations.
+    _ = CORE_MODELS
 
     return BetterAuth(context=ctx, router=router, errors=errors)
+
+
+def _stamp(ep: AuthEndpoint, *, owner: str) -> AuthEndpoint:
+    return AuthEndpoint(path=ep.path, options=ep.options, handler=ep.handler, owner=owner)

@@ -122,6 +122,20 @@ async def _handle_http(
     ctx = EndpointContext(request=request, auth=router.auth)
 
     try:
+        # Trusted-origins / CSRF check on state-changing requests.
+        from better_auth.auth.trusted_origins import is_state_changing, is_trusted
+
+        if is_state_changing(method) and not router.auth.options.advanced.get(
+            "disable_csrf_check", False
+        ):
+            if not is_trusted(
+                origin=headers.get("origin"),
+                referer=headers.get("referer"),
+                base_url=router.auth.base_url,
+                trusted_origins=router.auth.options.trusted_origins,
+            ):
+                raise APIError(403, "FORBIDDEN", message="Origin is not trusted.")
+
         # Resolve session (Phase 2b will fill the real lookup; for now: cookie-only)
         await _attach_session(ctx)
         if endpoint.options.requires_session and ctx.session is None:
