@@ -3,7 +3,7 @@ name = "better-auth-test-utils"
 version = "0.0.0"
 description = "Shared test utilities for better-auth"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["better-auth"]
 
 [build-system]
 requires = ["hatchling"]

@@ -103,6 +103,12 @@ requires-dist = [
 name = "better-auth-test-utils"
 version = "0.0.0"
 source = { editable = "packages/test_utils" }
+dependencies = [
+    { name = "better-auth" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "better-auth", editable = "packages/core" }]
 
 [[package]]
 name = "fastapi"
