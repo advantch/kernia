@@ -4,7 +4,7 @@ A Python port of [better-auth](https://github.com/better-auth/better-auth), stru
 
 ## Status
 
-Phase 1 complete. Phase 2 in progress.
+MVP complete. 49/49 tests passing.
 
 | Layer | Status |
 |---|---|
@@ -12,18 +12,21 @@ Phase 1 complete. Phase 2 in progress.
 | Plugin Protocol (`BetterAuthPlugin`) | ✅ |
 | Adapter Protocol (`CustomAdapter` + `ConsumingAdapter` + `SchemaAdapter`) | ✅ |
 | Endpoint factory (`create_auth_endpoint`) | ✅ |
-| Cookie signing + parsing | ✅ |
+| Cookie signing + parsing (wire-compatible with better-auth JS) | ✅ |
 | Error registry | ✅ |
 | Core schema (user, session, account, verification) | ✅ |
 | In-memory adapter (test oracle) | ✅ |
-| Adapter conformance suite (15 tests, runs against every adapter) | ✅ |
-| Smoke tests (init, plugin registration, cookies) | ✅ |
-| Layout audit script (CI gate) | ✅ |
-| Email/password handler bodies | ⏳ Phase 3 |
-| SQLAlchemy adapter | ⏳ Phase 3 |
-| FastAPI integration | ⏳ Phase 3 |
-| Google OAuth (PKCE + id_token verify) | ⏳ Phase 3 |
-| ASGI `Router.mount()` | ⏳ Phase 2 |
+| SQLAlchemy 2.x async adapter (Postgres / SQLite / MySQL) | ✅ |
+| Adapter conformance suite (15 tests × 2 adapters = 30 green) | ✅ |
+| ASGI `Router.mount()` — full lifecycle | ✅ |
+| Email/password handlers (sign-up, sign-in, sign-out, get-session, reset) | ✅ |
+| scrypt password hashing (stdlib only) | ✅ |
+| OAuth2 primitives: PKCE + RS256 id_token verify (stdlib only) | ✅ |
+| Google social provider | ✅ |
+| FastAPI integration (`mount_better_auth`, `get_session`, `require_session`) | ✅ |
+| Layout audit (CI gate, enforces 1:1 mirror with reference) | ✅ |
+| Full wire-protocol e2e (signup→signin→get-session→sign-out, both adapters) | ✅ |
+| Spec docs (wire-protocol, plugin, adapter, endpoint, cookie, file-mapping, conformance) | ✅ |
 
 ## Repository layout
 

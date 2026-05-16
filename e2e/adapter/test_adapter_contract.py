@@ -15,18 +15,28 @@ import pytest
 
 from better_auth.types.adapter import CustomAdapter, SortBy, Where
 from better_auth_memory_adapter import memory_adapter
+from better_auth_sqlalchemy import sqlalchemy_adapter
 
 
-# Registry: list of (id, factory). Add new adapters here.
-ADAPTERS: list[tuple[str, Callable[[], CustomAdapter]]] = [
-    ("memory", memory_adapter),
+async def _memory() -> CustomAdapter:
+    return memory_adapter()
+
+
+async def _sqlalchemy() -> CustomAdapter:
+    return await sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
+
+
+# Registry: list of (id, async factory). Add new adapters here.
+ADAPTERS: list[tuple[str, Callable[[], "Awaitable[CustomAdapter]"]]] = [
+    ("memory", _memory),
+    ("sqlalchemy", _sqlalchemy),
 ]
 
 
 @pytest.fixture(params=ADAPTERS, ids=[name for name, _ in ADAPTERS])
-def adapter(request: pytest.FixtureRequest) -> CustomAdapter:
+async def adapter(request: pytest.FixtureRequest) -> CustomAdapter:
     _, factory = request.param
-    return factory()
+    return await factory()
 
 
 # --------------------------------------------------------------------------- CRUD
@@ -147,9 +157,14 @@ async def test_where_operators(
 async def test_consume_one_deletes_atomically(adapter: CustomAdapter) -> None:
     if not hasattr(adapter, "consume_one"):
         pytest.skip("adapter does not implement ConsumingAdapter")
+    import time as _time
     await adapter.create(
         model="verification",
-        data={"identifier": "u@example.com", "value": "token-1"},
+        data={
+            "identifier": "u@example.com",
+            "value": "token-1",
+            "expiresAt": int(_time.time()) + 3600,
+        },
     )
     consumed = await adapter.consume_one(  # type: ignore[attr-defined]
         model="verification",
