@@ -1,0 +1,54 @@
+[project]
+name = "better-auth-python-workspace"
+version = "0.0.0"
+description = "Better-auth port to Python — workspace root"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = [
+    "packages/core",
+    "packages/memory_adapter",
+    "packages/sqlalchemy_adapter",
+    "packages/fastapi_integration",
+    "packages/cli",
+    "packages/test_utils",
+]
+# Excluded from workspace install but kept in tree to lock layout:
+exclude = ["packages/_stubs/*", "reference"]
+
+[tool.uv.sources]
+better-auth = { workspace = true }
+better-auth-memory-adapter = { workspace = true }
+better-auth-sqlalchemy = { workspace = true }
+better-auth-fastapi = { workspace = true }
+better-auth-cli = { workspace = true }
+better-auth-test-utils = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "anyio>=4.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "PT", "RUF"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+exclude = ["reference/"]
+mypy_path = "packages/core/src:packages/memory_adapter/src:packages/sqlalchemy_adapter/src:packages/fastapi_integration/src:packages/test_utils/src"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["e2e", "packages"]

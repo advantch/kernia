@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Install workspace + dev deps
+        run: |
+          uv sync
+          uv pip install -e packages/core -e packages/memory_adapter
+          uv pip install pytest pytest-asyncio anyio ruff mypy
+
+      - name: Layout audit (no shortcuts gate)
+        run: uv run python scripts/audit_layout.py
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy packages/core/src
+
+      - name: Tests
+        run: uv run pytest e2e/ -v
