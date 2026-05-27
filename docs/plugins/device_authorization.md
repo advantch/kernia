@@ -1,6 +1,6 @@
 # Device Authorization
 
-> Module: `better_auth.plugins.device_authorization`
+> Module: `kernia.plugins.device_authorization`
 > Constructor: `DEVICE_AUTHORIZATION_ERROR_CODES`
 
 device_authorization — see reference/packages/better-auth/src/plugins/device-authorization/.
@@ -16,12 +16,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.device_authorization import DEVICE_AUTHORIZATION_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.device_authorization import DEVICE_AUTHORIZATION_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

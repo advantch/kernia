@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import bearer, email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.adapter_fixtures import all_adapters_param
+from kernia.auth import init
+from kernia.plugins import bearer, email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.adapter_fixtures import all_adapters_param
 
 
 @pytest.mark.parametrize(*all_adapters_param())
 async def test_bearer_token_authenticates(adapter_factory) -> None:
     adapter = await adapter_factory()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="bearer-secret",
             plugins=[email_and_password(), bearer()],
@@ -49,7 +49,7 @@ async def test_bearer_token_authenticates(adapter_factory) -> None:
 async def test_bearer_invalid_signature_rejected(adapter_factory) -> None:
     adapter = await adapter_factory()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="bearer-secret",
             plugins=[email_and_password(), bearer()],

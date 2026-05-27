@@ -1,6 +1,6 @@
 # Haveibeenpwned
 
-> Module: `better_auth.plugins.haveibeenpwned`
+> Module: `kernia.plugins.haveibeenpwned`
 > Constructor: `have_i_been_pwned`
 
 Have-I-Been-Pwned password compromise plugin.
@@ -21,12 +21,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.haveibeenpwned import have_i_been_pwned
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.haveibeenpwned import have_i_been_pwned
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

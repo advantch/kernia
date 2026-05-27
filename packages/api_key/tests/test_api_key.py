@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_api_key import api_key, generate_api_key, parse_api_key
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_api_key import api_key, generate_api_key, parse_api_key
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 # ----- Unit tests ----------------------------------------------------------
@@ -42,7 +42,7 @@ def test_parse_api_key_rejects_bad_shapes() -> None:
 
 async def _signed_in_driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -127,7 +127,7 @@ async def test_api_key_header_attaches_session() -> None:
 
 async def test_revoke_rejects_other_users_key() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],

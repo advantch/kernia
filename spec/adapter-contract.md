@@ -98,7 +98,7 @@ export type JoinConfig = {
 ## `DBAdapter<Options>` (public adapter)
 
 ```ts
-export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
+export type DBAdapter<Options extends KerniaOptions = KerniaOptions> = {
   id: string;
 
   create: <T extends Record<string, any>, R = T>(data: {
@@ -256,7 +256,7 @@ export interface CustomAdapter {
   }) => Promise<number>;
 
   createSchema?:
-    | ((props: { file?: string; tables: BetterAuthDBSchema })
+    | ((props: { file?: string; tables: KerniaDBSchema })
         => Promise<DBAdapterSchemaCreation>)
     | undefined;
 
@@ -296,8 +296,8 @@ disableTransformJoin?:   boolean;
 The factory invokes the adapter creator with helpers:
 
 ```
-options: BetterAuthOptions;
-schema: BetterAuthDBSchema;
+options: KerniaOptions;
+schema: KerniaDBSchema;
 debugLog: (...args: unknown[]) => void;
 getModelName: (model: string) => string;
 getFieldName: ({ model, field }) => string;

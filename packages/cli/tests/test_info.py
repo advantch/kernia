@@ -1,4 +1,4 @@
-"""Tests for `better-auth info`."""
+"""Tests for `kernia info`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from better_auth_cli.commands.info import info
+from kernia_cli.commands.info import info
 
 
 def test_info_dry_run_works_without_config() -> None:
@@ -15,7 +15,7 @@ def test_info_dry_run_works_without_config() -> None:
     result = runner.invoke(info, ["--dry-run", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert "better_auth_python_version" in data
+    assert "kernia_python_version" in data
     assert "python_version" in data
 
 
@@ -51,5 +51,5 @@ def test_info_text_output_mentions_plugins(
         ["--cwd", str(tmp_path), "--config", str(fixture_config_path)],
     )
     assert result.exit_code == 0, result.output
-    assert "better-auth-python" in result.output
+    assert "kernia" in result.output
     assert "stub" in result.output

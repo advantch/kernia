@@ -1,7 +1,7 @@
-site_name: better-auth-python
-site_description: A Python port of better-auth — authentication for ASGI apps.
-site_url: https://better-auth-python.dev
-repo_url: https://github.com/better-auth/better-auth-python
+site_name: kernia
+site_description: A Python implementation compatible with Better Auth — authentication for ASGI apps.
+site_url: https://kernia.dev
+repo_url: https://github.com/better-auth/kernia
 docs_dir: .
 
 theme:

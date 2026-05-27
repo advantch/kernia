@@ -1,6 +1,6 @@
 # Mcp
 
-> Module: `better_auth.plugins.mcp`
+> Module: `kernia.plugins.mcp`
 > Constructor: `mcp`
 
 MCP (Model Context Protocol) authorization plugin.
@@ -25,12 +25,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.mcp import mcp
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.mcp import mcp
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

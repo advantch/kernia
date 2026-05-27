@@ -1,6 +1,6 @@
 # Two Factor
 
-> Module: `better_auth.plugins.two_factor`
+> Module: `kernia.plugins.two_factor`
 > Constructor: `TWO_FACTOR_ERROR_CODES`
 
 two_factor plugin — TOTP + backup codes.
@@ -15,7 +15,7 @@ session, and returns `{requiresTwoFactor: True, confirmationId: ...}` instead.
 The follow-up `/two-factor/verify-totp` (or `/two-factor/verify-backup-code`)
 exchanges the confirmation id for a real session.
 
-Requires `pyotp` (declared under the `two-factor` extra of `better-auth`).
+Requires `pyotp` (declared under the `two-factor` extra of `kernia`).
 
 ## Endpoints
 
@@ -28,12 +28,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.two_factor import TWO_FACTOR_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.two_factor import TWO_FACTOR_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

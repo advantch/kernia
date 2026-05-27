@@ -1,6 +1,6 @@
 # Username
 
-> Module: `better_auth.plugins.username`
+> Module: `kernia.plugins.username`
 > Constructor: `USERNAME_ERROR_CODES`
 
 username plugin — port of `reference/packages/better-auth/src/plugins/username/`.
@@ -20,12 +20,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.username import USERNAME_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.username import USERNAME_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

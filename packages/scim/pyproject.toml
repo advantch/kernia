@@ -1,10 +1,10 @@
 [project]
-name = "better-auth-scim"
+name = "kernia-scim"
 version = "0.0.0"
 description = "SCIM 2.0 provisioning plugin"
 requires-python = ">=3.11"
 dependencies = [
-    "better-auth",
+    "kernia",
 ]
 
 [build-system]
@@ -12,4 +12,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/better_auth_scim"]
+packages = ["src/kernia_scim"]

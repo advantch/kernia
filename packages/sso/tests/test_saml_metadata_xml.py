@@ -10,7 +10,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from better_auth_sso.saml import SAMLPlan, sp_metadata_xml
+from kernia_sso.saml import SAMLPlan, sp_metadata_xml
 
 
 @pytest.fixture

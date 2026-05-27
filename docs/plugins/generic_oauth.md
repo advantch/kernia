@@ -1,6 +1,6 @@
 # Generic Oauth
 
-> Module: `better_auth.plugins.generic_oauth`
+> Module: `kernia.plugins.generic_oauth`
 > Constructor: `GENERIC_OAUTH_ERROR_CODES`
 
 Generic OAuth plugin.
@@ -20,12 +20,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.generic_oauth import GENERIC_OAUTH_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.generic_oauth import GENERIC_OAUTH_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

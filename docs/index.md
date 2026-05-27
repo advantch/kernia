@@ -1,6 +1,6 @@
-# better-auth-python
+# kernia
 
-A Python port of [better-auth](https://better-auth.com), the framework-agnostic
+Kernia is a Python implementation compatible with [Better Auth](https://better-auth.com), the framework-agnostic
 authentication library for TypeScript. Same plugin model, same database schema, same
 endpoints — wired for ASGI apps (FastAPI, Starlette) and Django.
 
@@ -13,26 +13,26 @@ endpoints — wired for ASGI apps (FastAPI, Starlette) and Django.
   the JS reference.
 - **One schema, many adapters.** Memory, SQLAlchemy (SQLite/Postgres/MySQL), MongoDB,
   Redis (storage), pluggable via the `CustomAdapter` protocol.
-- **Migrations via Alembic.** `better-auth generate` emits an Alembic revision; the
+- **Migrations via Alembic.** `kernia generate` emits an Alembic revision; the
   schema is the merge of core + every plugin's contributions.
-- **Wire-compatible.** Better-auth JS clients can talk to a Python server unchanged.
+- **Wire-compatible.** Better Auth JS clients can talk to a Python server unchanged.
 
 ## Install
 
 ```bash
-pip install better-auth-python better-auth-cli
+pip install kernia kernia-cli
 ```
 
 ## 30-second tour
 
 ```python
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth_memory_adapter import memory_adapter
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia_memory_adapter import memory_adapter
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=memory_adapter(),
         secret="change-me",
         plugins=[email_and_password()],
@@ -44,7 +44,7 @@ Mount on FastAPI:
 
 ```python
 from fastapi import FastAPI
-from better_auth.fastapi_integration import mount_auth
+from kernia_fastapi import mount_auth
 
 app = FastAPI()
 mount_auth(app, auth)

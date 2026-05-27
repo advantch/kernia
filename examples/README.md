@@ -1,7 +1,7 @@
 # Examples — full-stack walkthrough
 
-A working FastAPI server + React SPA, demonstrating that the Python port of
-better-auth is wire-compatible with the official JavaScript client.
+A working FastAPI server + React SPA, demonstrating that Kernia is
+wire-compatible with the official JavaScript client.
 
 ## What's here
 
@@ -65,7 +65,7 @@ Expected output:
 ✓ organization.list contains created org
 ✓ signIn.email rejects wrong password  INVALID_CREDENTIALS
 
-OK — wire protocol matches better-auth client expectations
+OK — wire protocol matches Better Auth client expectations
 ```
 
 This is the test that subsumes the "containerized Node oracle" idea from the

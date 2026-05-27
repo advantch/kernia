@@ -16,14 +16,14 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from better_auth.auth import init
-from better_auth.oauth2 import exchange_code, fetch_userinfo, verify_id_token
-from better_auth.plugins.oauth_proxy import OAuthProxyOptions, oauth_proxy
-from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.mock_idp import MockIdP
+from kernia.auth import init
+from kernia.oauth2 import exchange_code, fetch_userinfo, verify_id_token
+from kernia.plugins.oauth_proxy import OAuthProxyOptions, oauth_proxy
+from kernia.social_providers._base import OAuthProvider, OAuthUserProfile
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.mock_idp import MockIdP
 
 
 @dataclass
@@ -108,7 +108,7 @@ def setup():
         client_id="client-A", http_client=client, issuer="https://test-idp"
     )
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[

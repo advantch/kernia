@@ -1,10 +1,10 @@
-"""Unit tests for better_auth.oauth2.encryption — AES-GCM token encryption."""
+"""Unit tests for kernia.oauth2.encryption — AES-GCM token encryption."""
 
 from __future__ import annotations
 
 import pytest
 
-from better_auth.oauth2.encryption import decrypt_token, encrypt_token, is_encrypted
+from kernia.oauth2.encryption import decrypt_token, encrypt_token, is_encrypted
 
 
 def test_round_trip() -> None:

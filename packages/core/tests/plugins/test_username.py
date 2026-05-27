@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.username import USERNAME_ERROR_CODES, username
+from kernia.plugins.username import USERNAME_ERROR_CODES, username
 
 
 def test_username_plugin_id_and_endpoints() -> None:

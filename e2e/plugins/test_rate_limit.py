@@ -13,17 +13,17 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.auth.rate_limit import InMemoryRateLimitStore
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions, RateLimitOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.auth.rate_limit import InMemoryRateLimitStore
+from kernia.plugins import email_and_password
+from kernia.types.init_options import KerniaOptions, RateLimitOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _make_driver(store: object | None = None, *, enabled: bool = True) -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="rl-secret",
             plugins=[email_and_password()],

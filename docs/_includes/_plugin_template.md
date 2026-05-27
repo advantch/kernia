@@ -17,11 +17,11 @@
 
 ```python
 from {plugin_module} import {plugin_constructor}
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

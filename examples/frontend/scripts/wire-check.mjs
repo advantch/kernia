@@ -116,4 +116,4 @@ let orgId;
   step("signIn.email rejects wrong password", !!error, error ? error.code : "");
 }
 
-console.log(process.exitCode ? "\nFAIL" : "\nOK — wire protocol matches better-auth client expectations");
+console.log(process.exitCode ? "\nFAIL" : "\nOK — wire protocol matches Better Auth client expectations");

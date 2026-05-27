@@ -1,6 +1,6 @@
 # Open Api
 
-> Module: `better_auth.plugins.open_api`
+> Module: `kernia.plugins.open_api`
 > Constructor: `build_openapi_document`
 
 OpenAPI 3.1 plugin — exposes `/openapi.json` and `/scalar` for the auth surface.
@@ -15,8 +15,8 @@ under `components.schemas` and reused via `$ref`.
 
 Usage::
 
-    from better_auth.plugins.open_api import open_api
-    init(BetterAuthOptions(..., plugins=[open_api()]))
+    from kernia.plugins.open_api import open_api
+    init(KerniaOptions(..., plugins=[open_api()]))
 
 Endpoints (mounted under the auth base path, e.g. `/api/auth/openapi.json`):
 
@@ -34,12 +34,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.open_api import build_openapi_document
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.open_api import build_openapi_document
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

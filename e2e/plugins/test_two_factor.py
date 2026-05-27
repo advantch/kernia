@@ -12,16 +12,16 @@ from __future__ import annotations
 
 import pyotp
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password, two_factor
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins import email_and_password, two_factor
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _build() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), two_factor()],

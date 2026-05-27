@@ -14,15 +14,15 @@ import hashlib
 import httpx
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password, have_i_been_pwned
-from better_auth.types.init_options import (
-    BetterAuthOptions,
+from kernia.auth import init
+from kernia.plugins import email_and_password, have_i_been_pwned
+from kernia.types.init_options import (
+    KerniaOptions,
     EmailPasswordOptions,
     RateLimitOptions,
 )
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _pwned_suffix(password: str) -> tuple[str, str]:
@@ -75,7 +75,7 @@ def _make_driver(
     threshold: int = 0,
 ) -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="hibp-secret",
             email_and_password=EmailPasswordOptions(enabled=True),

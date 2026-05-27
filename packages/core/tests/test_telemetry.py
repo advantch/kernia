@@ -1,15 +1,15 @@
-"""Unit tests for better_auth.telemetry."""
+"""Unit tests for kernia.telemetry."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.telemetry import telemetry
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.telemetry import telemetry
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 def _make_capture_sink():
@@ -25,7 +25,7 @@ def test_plugin_off_by_default_no_emission_without_plugin() -> None:
     # Build an auth instance without telemetry — nothing emitted.
     # (Also verifies the absence of an exception on startup.)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="x" * 32,
             plugins=[email_and_password()],
@@ -37,7 +37,7 @@ def test_plugin_off_by_default_no_emission_without_plugin() -> None:
 def test_plugin_emits_startup_event_when_present() -> None:
     captured, sink = _make_capture_sink()
     init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="x" * 32,
             plugins=[email_and_password(), telemetry(sink=sink)],
@@ -60,7 +60,7 @@ def test_plugin_emits_startup_event_when_present() -> None:
 def test_advanced_telemetry_false_suppresses_emission() -> None:
     captured, sink = _make_capture_sink()
     init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="x" * 32,
             plugins=[telemetry(sink=sink)],

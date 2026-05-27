@@ -8,7 +8,7 @@ import json
 
 import httpx
 
-from better_auth_test_utils import MockStripe
+from kernia_test_utils import MockStripe
 
 
 async def test_create_customer_round_trip() -> None:

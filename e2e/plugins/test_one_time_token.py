@@ -10,16 +10,16 @@ from typing import Any
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.one_time_token import one_time_token
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver, all_adapters_param
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.one_time_token import one_time_token
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver, all_adapters_param
 
 
 def _build_driver(adapter: Any):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             plugins=[email_and_password(), one_time_token()],
@@ -100,7 +100,7 @@ async def test_ott_expired_rejected(adapter_factory) -> None:
     """Bypass the endpoint to write a pre-expired row, then verify it bounces."""
     import time as _time
 
-    from better_auth.types.adapter import Where
+    from kernia.types.adapter import Where
 
     adapter = await adapter_factory()
     driver, auth = _build_driver(adapter)

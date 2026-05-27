@@ -19,15 +19,15 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
-from better_auth.plugins.generic_oauth.routes import _DISCOVERY_CACHE
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.mock_idp import MockIdP
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
+from kernia.plugins.generic_oauth.routes import _DISCOVERY_CACHE
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.mock_idp import MockIdP
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +62,7 @@ def _build_driver(adapter):
         scopes=("openid", "email", "profile"),
     )
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             base_url="http://localhost",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.anonymous import ANONYMOUS_ERROR_CODES, anonymous
+from kernia.plugins.anonymous import ANONYMOUS_ERROR_CODES, anonymous
 
 
 def test_anonymous_plugin_id_and_endpoint() -> None:

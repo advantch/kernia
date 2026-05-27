@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from better_auth import social_providers as sp
+from kernia import social_providers as sp
 
 
 PKCE_VERIFIER = "v" * 64

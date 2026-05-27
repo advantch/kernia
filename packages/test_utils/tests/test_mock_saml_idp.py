@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from better_auth_test_utils import MockSAMLIdP
+from kernia_test_utils import MockSAMLIdP
 
 NS = {
     "samlp": "urn:oasis:names:tc:SAML:2.0:protocol",

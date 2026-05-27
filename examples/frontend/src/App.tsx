@@ -105,7 +105,7 @@ export function App() {
 
   return (
     <div style={box}>
-      <h1 style={{ marginTop: 0 }}>better-auth-python demo</h1>
+      <h1 style={{ marginTop: 0 }}>kernia demo</h1>
       <p style={{ color: "#666", fontSize: 13 }}>
         React + official <code>better-auth</code> JS client talking to a Python
         FastAPI server.

@@ -10,13 +10,13 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.one_tap import OneTapOptions, one_tap
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.mock_idp import MockIdP
+from kernia.auth import init
+from kernia.plugins.one_tap import OneTapOptions, one_tap
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.mock_idp import MockIdP
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def idp() -> MockIdP:
 def driver(idp: MockIdP) -> ASGIDriver:
     client = httpx.AsyncClient(transport=idp.mock_transport())
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -81,7 +81,7 @@ async def test_one_tap_repeat_returns_existing_user(driver: ASGIDriver, idp: Moc
 async def test_one_tap_rejects_bad_audience(idp: MockIdP) -> None:
     client = httpx.AsyncClient(transport=idp.mock_transport())
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[
@@ -105,7 +105,7 @@ async def test_one_tap_rejects_bad_audience(idp: MockIdP) -> None:
 async def test_one_tap_disable_sign_up(idp: MockIdP) -> None:
     client = httpx.AsyncClient(transport=idp.mock_transport())
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[

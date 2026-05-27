@@ -1,6 +1,6 @@
 # Phone Number
 
-> Module: `better_auth.plugins.phone_number`
+> Module: `kernia.plugins.phone_number`
 > Constructor: `PHONE_NUMBER_ERROR_CODES`
 
 phone_number — see reference/packages/better-auth/src/plugins/phone-number/.
@@ -20,12 +20,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.phone_number import PHONE_NUMBER_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.phone_number import PHONE_NUMBER_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

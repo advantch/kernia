@@ -52,7 +52,7 @@ def _settings(idp, sp_entity: str, sp_acs: str):
 
 
 def test_python3_saml_strict_accepts_mock_idp_assertion() -> None:
-    from better_auth_test_utils import MockSAMLIdP
+    from kernia_test_utils import MockSAMLIdP
     from onelogin.saml2.response import OneLogin_Saml2_Response
     from onelogin.saml2.utils import OneLogin_Saml2_Utils
 
@@ -89,7 +89,7 @@ def test_python3_saml_strict_accepts_mock_idp_assertion() -> None:
 def test_python3_saml_strict_rejects_wrong_cert() -> None:
     """If we tell the SP a different cert than the one that signed, strict mode
     must reject. Proves we're not accidentally trusting any signature."""
-    from better_auth_test_utils import MockSAMLIdP
+    from kernia_test_utils import MockSAMLIdP
     from onelogin.saml2.response import OneLogin_Saml2_Response
 
     real = MockSAMLIdP(entity_id="https://idp.example.com", sso_url="https://idp.example.com/sso")

@@ -1,14 +1,14 @@
-# better-auth-python
+# kernia
 
-A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. No stubs, no smoke tests — every plugin and every adapter is a real implementation with real unit + integration coverage.
+Kernia is a Python implementation compatible with [Better Auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. No stubs, no smoke tests — every plugin and every adapter is a real implementation with real unit + integration coverage.
 
 ## Status
 
-**Full feature parity. 632 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
+**Full feature parity. 644 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
 
 ### Plugins (28 built-in + 7 in standalone packages = 35)
 
-Built-in (under `packages/core/src/better_auth/plugins/`):
+Built-in (under `packages/core/src/kernia/plugins/`):
 `access`, `additional_fields`, `admin`, `anonymous`, `bearer`, `captcha`, `custom_session`, `device_authorization`, `email_otp`, `email_password`, `generic_oauth`, `haveibeenpwned`, `jwt`, `last_login_method`, `magic_link`, `mcp`, `multi_session`, `oauth_proxy`, `one_tap`, `one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`, `two_factor`, `username`.
 
 Standalone packages: `api_key`, `passkey`, `sso` (SAML + OIDC), `oauth_provider` (full OIDC issuer), `scim`, `stripe`, `redis_storage`.
@@ -26,12 +26,12 @@ apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, go
 **OpenAPI 3.1.** The `open_api` plugin serves `GET /api/auth/openapi.json` (validated against `openapi-spec-validator`) and `GET /api/auth/scalar` (Scalar UI). Frontends generate their own typed clients from this spec.
 
 ### CLI
-`better-auth init | generate | migrate | secret | info` — Click-based, scaffolds an app, emits Alembic migrations, applies them, generates secrets, dumps diagnostics.
+`kernia init | generate | migrate | secret | info` — Click-based, scaffolds an app, emits Alembic migrations, applies them, generates secrets, dumps diagnostics.
 
 ### Crypto + security
 - Argon2id (argon2-cffi) default password hash; scrypt verify fallback with `needs_rehash()` for lazy upgrade.
 - AES-GCM OAuth-token-at-rest encryption (`oauth2/encryption.py`).
-- HMAC-SHA256 cookie signing, wire-compatible with the better-auth JS client.
+- HMAC-SHA256 cookie signing, wire-compatible with the Better Auth JS client.
 - Signed OAuth `state` tokens with PKCE-verifier binding.
 - Pure-stdlib RS256 id_token verifier; authlib for outbound ES256/RS256/EdDSA issuance.
 - Trusted-origins CSRF check, on by default for state-changing requests.
@@ -73,23 +73,23 @@ apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, go
 
 ```bash
 git clone --recurse-submodules <repo>
-cd better-auth-python
+cd kernia
 uv sync
 uv run pytest e2e/ packages/ -v
 python scripts/audit_layout.py
 ```
 
-## Deferred (honestly)
+## Parity gates
 
-Remaining real deferrals:
-- **Wire-protocol conformance vs containerized better-auth Node server** — Lane J. Requires Docker and `reference/demo/` to spin up; the shape parity is enforced by the spec docs and the `open-api` plugin's generated OpenAPI, but a live cross-server cookie/JSON parity test hasn't run yet.
-- **OIDC issuer optional RFCs** — mTLS client auth (RFC 8705), JAR/PAR (RFC 9101/9126), Token Exchange (RFC 8693), private-key JWT client auth. Standard `client_secret_basic/post/none` flows are supported.
+- `python scripts/audit_layout.py` verifies the pinned Better Auth reference layout is covered or explicitly waived.
+- `uv run pytest e2e/ packages/ -q` is green: 644 passed, 108 skipped.
+- `examples/frontend/scripts/wire-check.mjs` drives the official Better Auth JS client against the Kernia FastAPI example and validates sign-up, session, sign-out, sign-in, organization create/list, and a negative credentials case.
 
-Previously deferred, now landed:
+Previously deferred work now landed:
 - ~~**WebAuthn full attestation trust chain**~~ — `SoftAuthenticator` in `test_utils` produces real CBOR attestations + ES256 signatures. Full register → authenticate round-trip green, with negative tests for forged signatures and tampered challenges.
 - ~~**SAML strict-mode validation against `MockSAMLIdP`**~~ — `MockSAMLIdP` now uses lxml's exc-c14n. python3-saml in strict mode accepts the mock; SSO plugin defaults to strict validation.
 - ~~**SIWE ENS reverse-lookup**~~ — wired. Pass `siwe(enable_ens=True, ens_rpc_url=...)` or supply a custom `ENSResolver`; `web3_ens_resolver()` is the stock implementation with forward-resolve confirmation.
-- ~~**Stripe seat-sync hook on org membership change**~~ — wired via `better_auth.events`. The org plugin emits `organization.member.{added,removed,updated}`; the Stripe plugin subscribes on init when configured for org+seat billing and pushes `quantity` updates.
+- ~~**Stripe seat-sync hook on org membership change**~~ — wired via `kernia.events`. The org plugin emits `organization.member.{added,removed,updated}`; the Stripe plugin subscribes on init when configured for org+seat billing and pushes `quantity` updates.
 
 ## Reference pin
 

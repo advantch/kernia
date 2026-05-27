@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.one_time_token import ONE_TIME_TOKEN_ERROR_CODES, one_time_token
-from better_auth.plugins.one_time_token.routes import (
+from kernia.plugins.one_time_token import ONE_TIME_TOKEN_ERROR_CODES, one_time_token
+from kernia.plugins.one_time_token.routes import (
     GenerateOneTimeTokenBody,
     VerifyOneTimeTokenBody,
 )

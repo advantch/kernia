@@ -1,4 +1,4 @@
-"""Reference FastAPI app demonstrating better-auth-python end-to-end.
+"""Reference FastAPI app demonstrating Kernia end-to-end.
 
 This is what a consumer would write. Boots on port 8000. The vite frontend at
 `../frontend/` points its `better-auth/client` at this server's `/api/auth/*`.
@@ -23,15 +23,15 @@ from typing import Annotated
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.plugins.open_api import open_api
-from better_auth.social_providers import google
-from better_auth.types.context import Session
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_fastapi import get_session, mount_better_auth, require_session
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.organization import organization
+from kernia.plugins.open_api import open_api
+from kernia.social_providers import google
+from kernia.types.context import Session
+from kernia.types.init_options import KerniaOptions
+from kernia_fastapi import get_session, mount_kernia, require_session
+from kernia_memory_adapter import memory_adapter
 
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
@@ -47,9 +47,9 @@ def build_app() -> FastAPI:
         )
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
-            secret=os.environ.get("BETTER_AUTH_SECRET", "dev-only-secret-change-me"),
+            secret=os.environ.get("KERNIA_SECRET", "dev-only-secret-change-me"),
             base_url="http://localhost:8000",
             base_path="/api/auth",
             trusted_origins=[FRONTEND_ORIGIN, "http://localhost:8000"],
@@ -62,7 +62,7 @@ def build_app() -> FastAPI:
         )
     )
 
-    app = FastAPI(title="better-auth-python example")
+    app = FastAPI(title="kernia example")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[FRONTEND_ORIGIN],
@@ -72,18 +72,18 @@ def build_app() -> FastAPI:
         expose_headers=["set-cookie"],
     )
 
-    mount_better_auth(app, auth)
+    mount_kernia(app, auth)
 
     @app.get("/")
     async def root() -> dict:
-        return {"name": "better-auth-python example", "auth_base": "/api/auth"}
+        return {"name": "kernia example", "auth_base": "/api/auth"}
 
     @app.get("/api/me")
     async def me(session: Annotated[Session, Depends(require_session)]) -> dict:
         user = await auth.context.adapter.find_one(
             model="user",
             where=(
-                __import__("better_auth.types.adapter", fromlist=["Where"]).Where(
+                __import__("kernia.types.adapter", fromlist=["Where"]).Where(
                     field="id", value=session.user_id
                 ),
             ),

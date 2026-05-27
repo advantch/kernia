@@ -1,4 +1,4 @@
-"""Unit tests for better_auth.oauth2.state — signed state token round-trip."""
+"""Unit tests for kernia.oauth2.state — signed state token round-trip."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from better_auth.oauth2.state import generate_state, parse_state
+from kernia.oauth2.state import generate_state, parse_state
 
 
 def test_round_trip_minimal() -> None:

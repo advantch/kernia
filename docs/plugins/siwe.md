@@ -1,6 +1,6 @@
 # Siwe
 
-> Module: `better_auth.plugins.siwe`
+> Module: `kernia.plugins.siwe`
 > Constructor: `SIWE_ERROR_CODES`
 
 siwe plugin — Sign-In With Ethereum.
@@ -10,7 +10,7 @@ EIP-4361 message + signature, consumes a server-issued nonce, then signs the
 user in (auto-creating the user with `walletAddress` if needed).
 
 Requires the optional `eth-account` dependency (declared via the
-`[project.optional-dependencies] siwe` extra on `better-auth`).
+`[project.optional-dependencies] siwe` extra on `kernia`).
 
 ## Endpoints
 
@@ -23,12 +23,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.siwe import SIWE_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.siwe import SIWE_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

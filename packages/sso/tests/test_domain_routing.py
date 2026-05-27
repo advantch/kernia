@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_sso import sso
-from better_auth_sso.domain import email_domain, provider_for_email
+from kernia.auth import init
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_sso import sso
+from kernia_sso.domain import email_domain, provider_for_email
 
 
 @pytest.fixture
 def auth_ctx():
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[sso()],

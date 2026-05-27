@@ -1,4 +1,4 @@
-"""Generate one Markdown page per plugin under packages/core/src/better_auth/plugins/.
+"""Generate one Markdown page per plugin under packages/core/src/kernia/plugins/.
 
 Reads each plugin's `__init__.py` docstring and, where the constructor can be
 imported, walks its endpoint list and schema. Writes one file per plugin into
@@ -16,7 +16,7 @@ import importlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLUGINS_DIR = REPO_ROOT / "packages" / "core" / "src" / "better_auth" / "plugins"
+PLUGINS_DIR = REPO_ROOT / "packages" / "core" / "src" / "kernia" / "plugins"
 DOCS_DIR = REPO_ROOT / "docs" / "plugins"
 TEMPLATE = (REPO_ROOT / "docs" / "_includes" / "_plugin_template.md").read_text()
 
@@ -92,7 +92,7 @@ def _schema_section(plugin_obj: object | None) -> str:
 
 def render_plugin(plugin_dir: Path) -> tuple[str, str]:
     name = plugin_dir.name
-    mod_path = f"better_auth.plugins.{name}"
+    mod_path = f"kernia.plugins.{name}"
     init_py = plugin_dir / "__init__.py"
 
     docstring = _docstring_from_init(init_py)

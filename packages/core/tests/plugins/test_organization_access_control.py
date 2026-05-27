@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.plugins.organization.access_control import (
+from kernia.plugins.organization.access_control import (
     DEFAULT_ROLES,
     DEFAULT_STATEMENTS,
     Role,

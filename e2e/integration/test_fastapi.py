@@ -11,26 +11,26 @@ def app_and_client():
     httpx = pytest.importorskip("httpx")
     from fastapi import Depends, FastAPI
 
-    from better_auth.auth import init
-    from better_auth.plugins import email_and_password
-    from better_auth.types.context import Session
-    from better_auth.types.init_options import BetterAuthOptions
-    from better_auth_fastapi import (
+    from kernia.auth import init
+    from kernia.plugins import email_and_password
+    from kernia.types.context import Session
+    from kernia.types.init_options import KerniaOptions
+    from kernia_fastapi import (
         get_session,
-        mount_better_auth,
+        mount_kernia,
         require_session,
     )
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password()],
         )
     )
     app = FastAPI()
-    mount_better_auth(app, auth)
+    mount_kernia(app, auth)
 
     @app.get("/me")
     async def me(session=Depends(require_session)) -> dict:
@@ -45,7 +45,7 @@ def app_and_client():
     return app, client
 
 
-async def test_signup_via_mounted_better_auth_then_dependency(app_and_client) -> None:
+async def test_signup_via_mounted_kernia_then_dependency(app_and_client) -> None:
     _, client = app_and_client
     async with client:
         r = await client.post(

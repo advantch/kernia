@@ -27,12 +27,12 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_sso import sso
-from better_auth_test_utils import ASGIDriver, MockIdP, MockSAMLIdP
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_sso import sso
+from kernia_test_utils import ASGIDriver, MockIdP, MockSAMLIdP
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ from better_auth_test_utils import ASGIDriver, MockIdP, MockSAMLIdP
 
 def _make_oidc_driver(idp: MockIdP) -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[sso(), email_and_password()],
@@ -151,7 +151,7 @@ async def test_oidc_callback_rejects_bad_state() -> None:
 
 def _make_saml_driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             base_url="http://localhost:3000",
@@ -286,7 +286,7 @@ async def test_saml_metadata_returned() -> None:
 async def test_email_signin_redirects_to_sso_when_domain_is_verified() -> None:
     """Sign-in with a password should be hijacked into an SSO redirect."""
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             base_url="http://localhost:3000",
@@ -342,7 +342,7 @@ async def test_email_signin_redirects_to_sso_when_domain_is_verified() -> None:
 
 async def test_email_signin_passes_through_for_unmatched_domain() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[sso(), email_and_password()],

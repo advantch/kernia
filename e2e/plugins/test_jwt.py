@@ -13,12 +13,12 @@ import json
 import pytest
 from authlib.jose import JsonWebKey, jwt as jose_jwt
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.jwt import JwtOptions, jwt
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.jwt import JwtOptions, jwt
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _decode_header(token: str) -> dict:
@@ -30,7 +30,7 @@ def _decode_header(token: str) -> dict:
 @pytest.fixture
 def driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -103,7 +103,7 @@ async def test_rotation_old_token_still_verifies(driver: ASGIDriver) -> None:
 
 async def test_token_requires_session() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), jwt()],

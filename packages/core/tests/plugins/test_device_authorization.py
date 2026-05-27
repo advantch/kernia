@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.device_authorization.routes import (
+from kernia.plugins.device_authorization.routes import (
     DEVICE_CODE_CHARSET,
     USER_CODE_CHARSET,
     _generate_device_code,

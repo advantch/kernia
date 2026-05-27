@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_SRC = ROOT / "reference" / "packages" / "better-auth" / "src"
-CORE_PY = ROOT / "packages" / "core" / "src" / "better_auth"
+CORE_PY = ROOT / "packages" / "core" / "src" / "kernia"
 PACKAGES = ROOT / "packages"
 
 # Directories under reference/.../src that map elsewhere or are deliberately skipped.
@@ -23,7 +23,7 @@ PACKAGES = ROOT / "packages"
 WAIVERS: dict[str, str] = {
     "test-utils": "lives at packages/test_utils/ (top-level workspace pkg)",
     "client": "frontends generate clients from the open-api plugin's OpenAPI 3.1 doc",
-    "adapters": "covered by sibling workspace packages: memory_adapter, sqlalchemy_adapter, mongodb_adapter",
+    "adapters": "covered by sibling workspace packages: memory_adapter, sqlalchemy_adapter, mongo_adapter",
 }
 
 # Standalone reference packages we deliberately do not port, with rationale.
@@ -35,8 +35,8 @@ PACKAGE_WAIVERS: dict[str, str] = {
     "kysely-adapter": "Kysely is TS-specific; SQLAlchemy is the Python equivalent",
     "better-auth": "the main entry pkg in TS — its surface is split across packages/core + integration pkgs in Python",
     "core": "merged into packages/core in Python (TS splits core from facade; we don't)",
-    "i18n": "merged into packages/core/src/better_auth/i18n/ (data + helpers, not a separate workspace pkg)",
-    "telemetry": "merged into packages/core/src/better_auth/telemetry/",
+    "i18n": "merged into packages/core/src/kernia/i18n/ (data + helpers, not a separate workspace pkg)",
+    "telemetry": "merged into packages/core/src/kernia/telemetry/",
 }
 
 # Plugin subdirectories that are not real plugins (e.g. test fixtures) — waive.
@@ -72,7 +72,7 @@ def main() -> int:
             continue
         missing.append(f"  reference/.../src/{kebab}  → expected {candidate.relative_to(ROOT)}")
 
-    # Audit 2: every plugin under better-auth/src/plugins/ is implemented in packages/core/src/better_auth/plugins/
+    # Audit 2: every plugin under better-auth/src/plugins/ is implemented in packages/core/src/kernia/plugins/
     REF_PLUGINS = REFERENCE_SRC / "plugins"
     PY_PLUGINS = CORE_PY / "plugins"
     if REF_PLUGINS.exists():
@@ -99,7 +99,7 @@ def main() -> int:
             if kebab in PACKAGE_WAIVERS:
                 waived.append(f"  packages/{kebab}  → waived ({PACKAGE_WAIVERS[kebab]})")
                 continue
-            # accept either a top-level package or coverage under packages/core/src/better_auth/plugins
+            # accept either a top-level package or coverage under packages/core/src/kernia/plugins
             if (PACKAGES / snake).exists():
                 continue
             if (PY_PLUGINS / snake).exists():

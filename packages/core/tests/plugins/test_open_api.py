@@ -1,20 +1,20 @@
-"""Unit tests for better_auth.plugins.open_api."""
+"""Unit tests for kernia.plugins.open_api."""
 
 from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.open_api import build_openapi_document, open_api, scalar_html
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.open_api import build_openapi_document, open_api, scalar_html
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 @pytest.fixture
 def auth_instance():
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="x" * 32,
             plugins=[email_and_password(), open_api()],

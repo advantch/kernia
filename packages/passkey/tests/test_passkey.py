@@ -21,19 +21,19 @@ import json
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_passkey import passkey
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_passkey import passkey
+from kernia_test_utils import ASGIDriver
 
 
 def _build() -> tuple[ASGIDriver, object]:
     adapter = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret-key",
             plugins=[
@@ -46,7 +46,7 @@ def _build() -> tuple[ASGIDriver, object]:
 
 
 def test_passkey_plugin_schema_registers_table() -> None:
-    from better_auth_passkey import passkey as make
+    from kernia_passkey import passkey as make
 
     p = make(rp_id="localhost", rp_name="t", origin="http://localhost")
     assert p.schema is not None

@@ -1,17 +1,17 @@
-"""Tests for `better-auth secret`."""
+"""Tests for `kernia secret`."""
 
 from __future__ import annotations
 
 from click.testing import CliRunner
 
-from better_auth_cli.commands.secret import secret
+from kernia_cli.commands.secret import secret
 
 
 def test_secret_prints_env_hint() -> None:
     runner = CliRunner()
     result = runner.invoke(secret, [])
     assert result.exit_code == 0
-    assert "BETTER_AUTH_SECRET=" in result.output
+    assert "KERNIA_SECRET=" in result.output
 
 
 def test_secret_raw_is_urlsafe_b64_length() -> None:

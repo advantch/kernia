@@ -1,6 +1,6 @@
 # Captcha
 
-> Module: `better_auth.plugins.captcha`
+> Module: `kernia.plugins.captcha`
 > Constructor: `CaptchaProvider`
 
 Captcha plugin.
@@ -24,12 +24,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.captcha import CaptchaProvider
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.captcha import CaptchaProvider
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

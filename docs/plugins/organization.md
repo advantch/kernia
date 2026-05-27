@@ -1,6 +1,6 @@
 # Organization
 
-> Module: `better_auth.plugins.organization`
+> Module: `kernia.plugins.organization`
 > Constructor: `AccessControl`
 
 organization — multi-tenant orgs, members, invitations, teams, dynamic AC.
@@ -9,7 +9,7 @@ Mirrors `reference/packages/better-auth/src/plugins/organization/`.
 
 Public surface::
 
-    from better_auth.plugins.organization import organization
+    from kernia.plugins.organization import organization
 
     organization(
         teams=True,
@@ -28,12 +28,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.organization import AccessControl
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.organization import AccessControl
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

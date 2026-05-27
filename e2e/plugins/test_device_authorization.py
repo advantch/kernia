@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import device_authorization, email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.adapter_fixtures import all_adapters_param
+from kernia.auth import init
+from kernia.plugins import device_authorization, email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.adapter_fixtures import all_adapters_param
 
 
 async def _make_adapter_with_device_code(adapter_factory) -> object:
@@ -20,7 +20,7 @@ async def _make_adapter_with_device_code(adapter_factory) -> object:
     adapter = await adapter_factory()
     create_schema = getattr(adapter, "create_schema", None)
     if create_schema is not None:
-        from better_auth.plugins.device_authorization.plugin import DEVICE_CODE_MODEL
+        from kernia.plugins.device_authorization.plugin import DEVICE_CODE_MODEL
 
         await create_schema(models=(DEVICE_CODE_MODEL,))
     return adapter
@@ -30,7 +30,7 @@ async def _make_adapter_with_device_code(adapter_factory) -> object:
 async def test_full_device_flow(adapter_factory) -> None:
     adapter = await _make_adapter_with_device_code(adapter_factory)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="device-secret",
             plugins=[email_and_password(), device_authorization(interval=0)],
@@ -103,7 +103,7 @@ async def test_full_device_flow(adapter_factory) -> None:
 async def test_device_flow_denial(adapter_factory) -> None:
     adapter = await _make_adapter_with_device_code(adapter_factory)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="s",
             plugins=[email_and_password(), device_authorization(interval=0)],

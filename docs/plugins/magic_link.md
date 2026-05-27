@@ -1,6 +1,6 @@
 # Magic Link
 
-> Module: `better_auth.plugins.magic_link`
+> Module: `kernia.plugins.magic_link`
 > Constructor: `MAGIC_LINK_ERROR_CODES`
 
 magic_link — see reference/packages/better-auth/src/plugins/magic-link/.
@@ -20,12 +20,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.magic_link import MAGIC_LINK_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.magic_link import MAGIC_LINK_ERROR_CODES
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

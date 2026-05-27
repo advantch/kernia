@@ -14,18 +14,18 @@ def app_and_client():
     from starlette.responses import JSONResponse
     from starlette.routing import Route
 
-    from better_auth.auth import init
-    from better_auth.plugins.email_password import email_and_password
-    from better_auth.types.init_options import BetterAuthOptions
-    from better_auth_memory_adapter import memory_adapter
-    from better_auth_starlette import (
+    from kernia.auth import init
+    from kernia.plugins.email_password import email_and_password
+    from kernia.types.init_options import KerniaOptions
+    from kernia_memory_adapter import memory_adapter
+    from kernia_starlette import (
         get_session,
-        mount_better_auth,
+        mount_kernia,
         require_session,
     )
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password()],
@@ -46,14 +46,14 @@ def app_and_client():
             Route("/maybe-me", maybe_me),
         ]
     )
-    mount_better_auth(app, auth)
+    mount_kernia(app, auth)
 
     transport = httpx.ASGITransport(app=app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     return app, client
 
 
-async def test_signup_via_mounted_better_auth_then_helper(app_and_client) -> None:
+async def test_signup_via_mounted_kernia_then_helper(app_and_client) -> None:
     _, client = app_and_client
     async with client:
         r = await client.post(

@@ -1,6 +1,6 @@
 # Custom Session
 
-> Module: `better_auth.plugins.custom_session`
+> Module: `kernia.plugins.custom_session`
 > Constructor: `SessionProvider`
 
 custom_session — see reference/packages/better-auth/src/plugins/custom-session/.
@@ -16,12 +16,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.custom_session import SessionProvider
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.custom_session import SessionProvider
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

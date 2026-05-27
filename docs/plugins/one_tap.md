@@ -1,6 +1,6 @@
 # One Tap
 
-> Module: `better_auth.plugins.one_tap`
+> Module: `kernia.plugins.one_tap`
 > Constructor: `one_tap`
 
 one_tap — see reference/packages/better-auth/src/plugins/one-tap/.
@@ -18,12 +18,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.one_tap import one_tap
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.one_tap import one_tap
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[
