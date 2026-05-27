@@ -71,7 +71,6 @@ members = [
     "packages/cli",
     "packages/test_utils",
 ]
-exclude = ["reference"]
 
 [tool.uv.sources]
 kernia = { workspace = true }
@@ -107,7 +106,6 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["reference"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "PT", "RUF"]
@@ -116,7 +114,6 @@ ignore = ["E501"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-exclude = ["reference/"]
 mypy_path = "packages/core/src:packages/memory_adapter/src:packages/sqlalchemy_adapter/src:packages/mongo_adapter/src:packages/redis_storage/src:packages/api_key/src:packages/passkey/src:packages/sso/src:packages/oauth_provider/src:packages/scim/src:packages/stripe/src:packages/fastapi_integration/src:packages/starlette_integration/src:packages/django_integration/src:packages/cli/src:packages/test_utils/src"
 
 [tool.pytest.ini_options]

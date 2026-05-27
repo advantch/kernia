@@ -1,15 +1,15 @@
 # kernia
 
-Kernia is a Python implementation compatible with [Better Auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. No stubs, no smoke tests — every plugin and every adapter is a real implementation with real unit + integration coverage.
+Kernia is an independent Python implementation compatible with [Better Auth](https://github.com/better-auth/better-auth) (TS, v1.6.11). It preserves the Better Auth wire protocol where clients depend on it, while exposing a Python-native `kernia` package family. No upstream source is vendored in this repository.
 
 ## Status
 
 **Full feature parity. 644 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
 
-### Plugins (28 built-in + 7 in standalone packages = 35)
+### Plugins (27 built-in + 7 in standalone packages = 34)
 
 Built-in (under `packages/core/src/kernia/plugins/`):
-`access`, `additional_fields`, `admin`, `anonymous`, `bearer`, `captcha`, `custom_session`, `device_authorization`, `email_otp`, `email_password`, `generic_oauth`, `haveibeenpwned`, `jwt`, `last_login_method`, `magic_link`, `mcp`, `multi_session`, `oauth_proxy`, `one_tap`, `one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`, `two_factor`, `username`.
+`access`, `additional_fields`, `admin`, `anonymous`, `bearer`, `captcha`, `custom_session`, `device_authorization`, `email_otp`, `email_password`, `generic_oauth`, `haveibeenpwned`, `jwt`, `last_login_method`, `magic_link`, `mcp`, `multi_session`, `oauth_proxy`, `oidc_provider`, `one_tap`, `one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`, `two_factor`, `username`.
 
 Standalone packages: `api_key`, `passkey`, `sso` (SAML + OIDC), `oauth_provider` (full OIDC issuer), `scim`, `stripe`, `redis_storage`.
 
@@ -52,7 +52,6 @@ apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, go
 
 ```
 .
-├── reference/                                  # better-auth v1.6.11 (git submodule)
 ├── spec/                                       # 7 extracted contract docs (~2300 lines)
 ├── packages/
 │   ├── core/                                   # 28 plugins + 35 social providers + i18n + telemetry
@@ -65,14 +64,14 @@ apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, go
 │   ├── plugins/   # one file per plugin
 │   ├── integration/   # cross-plugin flows
 ├── docs/   # mkdocs site, plugin pages auto-built
-├── scripts/audit_layout.py   # CI gate: every reference dir mirrored or waived
+├── scripts/audit_layout.py   # CI gate: every upstream dir implemented or waived
 └── .github/workflows/ci.yml  # 4 adapters × py3.11/3.12
 ```
 
 ## Quickstart
 
 ```bash
-git clone --recurse-submodules <repo>
+git clone <repo>
 cd kernia
 uv sync
 uv run pytest e2e/ packages/ -v
@@ -81,7 +80,7 @@ python scripts/audit_layout.py
 
 ## Parity gates
 
-- `python scripts/audit_layout.py` verifies the pinned Better Auth reference layout is covered or explicitly waived.
+- `python scripts/audit_layout.py` fetches Better Auth 1.6.11 into a temporary directory and verifies every upstream layout area is implemented or explicitly waived.
 - `uv run pytest e2e/ packages/ -q` is green: 644 passed, 108 skipped.
 - `examples/frontend/scripts/wire-check.mjs` drives the official Better Auth JS client against the Kernia FastAPI example and validates sign-up, session, sign-out, sign-in, organization create/list, and a negative credentials case.
 
@@ -91,6 +90,6 @@ Previously deferred work now landed:
 - ~~**SIWE ENS reverse-lookup**~~ — wired. Pass `siwe(enable_ens=True, ens_rpc_url=...)` or supply a custom `ENSResolver`; `web3_ens_resolver()` is the stock implementation with forward-resolve confirmation.
 - ~~**Stripe seat-sync hook on org membership change**~~ — wired via `kernia.events`. The org plugin emits `organization.member.{added,removed,updated}`; the Stripe plugin subscribes on init when configured for org+seat billing and pushes `quantity` updates.
 
-## Reference pin
+## Upstream parity target
 
-`reference/` is pinned to better-auth `v1.6.11`. Bumping the submodule is an explicit step that re-runs `scripts/audit_layout.py` and triggers a re-extraction of the 7 spec docs.
+The parity audit targets Better Auth commit `f41514ef07cfafc5dbf463bd1500aee6575d88a7` (`1.6.11`). Bumping the target is an explicit code review step that re-runs `scripts/audit_layout.py` and updates the extracted contract docs when needed.
