@@ -4,7 +4,8 @@ Kernia is an independent Python implementation compatible with [Better Auth](htt
 
 ## Status
 
-**Full feature parity. 644 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
+**Full feature parity target: Better Auth 1.6.11. The suite is maintained as a
+green gate, with Docker / external-dep tests skipped when unavailable.**
 
 ### Plugins (27 built-in + 7 in standalone packages = 34)
 
@@ -24,6 +25,14 @@ apple, atlassian, cognito, discord, dropbox, facebook, figma, github, gitlab, go
 
 ### Frontend SDK story
 **OpenAPI 3.1.** The `open_api` plugin serves `GET /api/auth/openapi.json` (validated against `openapi-spec-validator`) and `GET /api/auth/scalar` (Scalar UI). Frontends generate their own typed clients from this spec.
+
+### SaaS reference app
+`examples/backend` and `examples/frontend` are a FastAPI + Vite SaaS demo, not a
+mock-only login form. The app includes login/logout, workspace context, settings
+for profile/accounts/sessions/API keys/billing, admin config for auth methods
+and email clients, Stripe setup, Stripe product/price import, billing checks,
+and usage display. External providers without credentials are shown as not
+configured.
 
 ### CLI
 `kernia init | generate | migrate | secret | info` — Click-based, scaffolds an app, emits Alembic migrations, applies them, generates secrets, dumps diagnostics.
@@ -81,7 +90,7 @@ python scripts/audit_layout.py
 ## Parity gates
 
 - `python scripts/audit_layout.py` fetches Better Auth 1.6.11 into a temporary directory and verifies every upstream layout area is implemented or explicitly waived.
-- `uv run pytest e2e/ packages/ -q` is green: 644 passed, 108 skipped.
+- `uv run pytest e2e/ packages/ -q` is green: 649 passed, 108 skipped.
 - `examples/frontend/scripts/wire-check.mjs` drives the official Better Auth JS client against the Kernia FastAPI example and validates sign-up, session, sign-out, sign-in, organization create/list, and a negative credentials case.
 
 Previously deferred work now landed:

@@ -3,7 +3,7 @@
 > Module: `kernia.plugins.last_login_method`
 > Constructor: `last_login_method`
 
-last_login_method — see reference/packages/better-auth/src/plugins/last-login-method/.
+last_login_method — see Better Auth reference: plugins/last-login-method/.
 
 ## Endpoints
 

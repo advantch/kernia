@@ -32,6 +32,8 @@ def _new_id(prefix: str) -> str:
 @dataclass
 class MockStripe:
     customers: dict[str, dict[str, Any]] = field(default_factory=dict)
+    products: dict[str, dict[str, Any]] = field(default_factory=dict)
+    prices: dict[str, dict[str, Any]] = field(default_factory=dict)
     subscriptions: dict[str, dict[str, Any]] = field(default_factory=dict)
     sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
     capture_events: list[dict[str, Any]] = field(default_factory=list)
@@ -64,6 +66,34 @@ class MockStripe:
             if obj is None:
                 return self._err(404, f"No such customer: {cid}")
             return httpx.Response(200, json=obj)
+
+        if path == "/v1/products" and method == "GET":
+            if not self.products:
+                product = {
+                    "id": "prod_starter",
+                    "object": "product",
+                    "name": "Starter",
+                    "active": True,
+                    "metadata": {"plan": "starter"},
+                }
+                self.products[product["id"]] = product
+            return httpx.Response(200, json={"object": "list", "data": list(self.products.values())})
+
+        if path == "/v1/prices" and method == "GET":
+            if not self.prices:
+                price = {
+                    "id": "price_starter_monthly",
+                    "object": "price",
+                    "product": "prod_starter",
+                    "unit_amount": 2900,
+                    "currency": "usd",
+                    "active": True,
+                    "lookup_key": "starter-monthly",
+                    "recurring": {"interval": "month"},
+                    "metadata": {"feature:projects": "10"},
+                }
+                self.prices[price["id"]] = price
+            return httpx.Response(200, json={"object": "list", "data": list(self.prices.values())})
 
         # /v1/checkout/sessions
         if path == "/v1/checkout/sessions" and method == "POST":
@@ -137,6 +167,8 @@ class MockStripe:
 
         if path.startswith("/v1/prices/") and method == "GET":
             pid = path.rsplit("/", 1)[-1]
+            if pid in self.prices:
+                return httpx.Response(200, json=self.prices[pid])
             return httpx.Response(
                 200,
                 json={

@@ -1,22 +1,30 @@
 # Device Authorization
 
 > Module: `kernia.plugins.device_authorization`
-> Constructor: `DEVICE_AUTHORIZATION_ERROR_CODES`
+> Constructor: `device_authorization`
 
-device_authorization — see reference/packages/better-auth/src/plugins/device-authorization/.
+device_authorization — see Better Auth reference: plugins/device-authorization/.
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/device/code` |
+| `POST` | `/device/token` |
+| `GET` | `/device` |
+| `POST` | `/device/approve` |
+| `POST` | `/device/deny` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+**New tables:**
+
+- `deviceCode` — fields: id, deviceCode, userCode, userId, expiresAt, status, pollingInterval, clientId, scope, lastPolledAt, createdAt, updatedAt
 
 ## Usage
 
 ```python
-from kernia.plugins.device_authorization import DEVICE_AUTHORIZATION_ERROR_CODES
+from kernia.plugins.device_authorization import device_authorization
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -25,7 +33,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            DEVICE_AUTHORIZATION_ERROR_CODES(),
+            device_authorization(),
         ],
     )
 )

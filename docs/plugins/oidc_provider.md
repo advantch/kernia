@@ -3,9 +3,10 @@
 > Module: `kernia.plugins.oidc_provider`
 > Constructor: `oidc_provider`
 
-oidc_provider — see reference/packages/better-auth/src/plugins/oidc-provider/.
+OIDC provider plugin compatibility entry point.
 
-Implemented in Lane C/D/E/F per the parity plan.
+The implementation lives in the standalone ``kernia-oauth-provider`` package so
+projects that do not issue OAuth/OIDC tokens do not need those dependencies.
 
 ## Endpoints
 

@@ -5,7 +5,7 @@
 
 OAuth Proxy plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/oauth-proxy/` for a simpler
+Mirrors `Better Auth reference: plugins/oauth-proxy/` for a simpler
 use case: an SPA can't safely hold an OAuth client_secret, so the server proxies
 the entire flow.
 

@@ -47,6 +47,19 @@ class ResumeSubscriptionBody(BaseModel):
     subscriptionId: str
 
 
+class BillingCheckBody(BaseModel):
+    feature: str
+    referenceId: str | None = None
+    required: int = 1
+
+
+class BillingTrackBody(BaseModel):
+    feature: str
+    referenceId: str | None = None
+    quantity: int = 1
+    properties: dict[str, Any] | None = None
+
+
 # ----- helpers --------------------------------------------------------------
 
 
@@ -93,6 +106,39 @@ async def _ensure_customer(ctx: EndpointContext, opts: StripeOptions) -> str:
         update={"stripeCustomerId": customer_id},
     )
     return customer_id
+
+
+async def _upsert_by(
+    ctx: EndpointContext,
+    *,
+    model: str,
+    field: str,
+    value: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    existing = await ctx.auth.adapter.find_one(
+        model=model,
+        where=(Where(field=field, value=value),),
+    )
+    if existing is None:
+        return await ctx.auth.adapter.create(model=model, data=payload)
+    return await ctx.auth.adapter.update(
+        model=model,
+        where=(Where(field="id", value=existing["id"]),),
+        update=payload,
+    ) or existing
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value or {}, sort_keys=True)
+
+
+async def _billing_reference(ctx: EndpointContext, body_ref: str | None = None) -> str:
+    if body_ref:
+        return body_ref
+    if ctx.session is None:
+        raise APIError(401, "UNAUTHORIZED")
+    return ctx.session.user_id
 
 
 # ----- handlers -------------------------------------------------------------
@@ -207,6 +253,271 @@ def _build_list_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
     return create_auth_endpoint(
         "/stripe/list-subscriptions",
+        EndpointOptions(method="GET", requires_session=True),
+        handler,
+    )
+
+
+def _build_catalog_sync_endpoint(opts: StripeOptions) -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        products = (await opts.stripe_client.list_products()).get("data", [])
+        prices = (await opts.stripe_client.list_prices()).get("data", [])
+        now = int(time.time())
+        for product in products:
+            await _upsert_by(
+                ctx,
+                model="billingProduct",
+                field="stripeProductId",
+                value=product["id"],
+                payload={
+                    "stripeProductId": product["id"],
+                    "name": product.get("name") or product["id"],
+                    "active": bool(product.get("active", True)),
+                    "metadata": _json(product.get("metadata")),
+                    "createdAt": now,
+                    "updatedAt": now,
+                },
+            )
+        for price in prices:
+            recurring = price.get("recurring") or {}
+            await _upsert_by(
+                ctx,
+                model="billingPrice",
+                field="stripePriceId",
+                value=price["id"],
+                payload={
+                    "stripePriceId": price["id"],
+                    "stripeProductId": str(price.get("product") or ""),
+                    "currency": price.get("currency") or "usd",
+                    "unitAmount": price.get("unit_amount"),
+                    "interval": recurring.get("interval"),
+                    "lookupKey": price.get("lookup_key"),
+                    "active": bool(price.get("active", True)),
+                    "metadata": _json(price.get("metadata")),
+                    "createdAt": now,
+                    "updatedAt": now,
+                },
+            )
+        await _upsert_by(
+            ctx,
+            model="billingSyncState",
+            field="source",
+            value="stripe",
+            payload={
+                "source": "stripe",
+                "status": "success",
+                "message": f"Imported {len(products)} products and {len(prices)} prices.",
+                "syncedAt": now,
+            },
+        )
+        return {"products": len(products), "prices": len(prices)}
+
+    return create_auth_endpoint(
+        "/stripe/catalog/sync",
+        EndpointOptions(method="POST", requires_session=True),
+        handler,
+    )
+
+
+def _build_products_endpoint() -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        rows = await ctx.auth.adapter.find_many(model="billingProduct")
+        return {"products": list(rows)}
+
+    return create_auth_endpoint(
+        "/stripe/products",
+        EndpointOptions(method="GET", requires_session=True),
+        handler,
+    )
+
+
+def _build_prices_endpoint() -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        rows = await ctx.auth.adapter.find_many(model="billingPrice")
+        return {"prices": list(rows)}
+
+    return create_auth_endpoint(
+        "/stripe/prices",
+        EndpointOptions(method="GET", requires_session=True),
+        handler,
+    )
+
+
+def _build_billing_check_endpoint() -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        body: BillingCheckBody = ctx.body
+        reference = await _billing_reference(ctx, body.referenceId)
+        ent = await ctx.auth.adapter.find_one(
+            model="billingEntitlement",
+            where=(
+                Where(field="referenceId", value=reference),
+                Where(field="featureKey", value=body.feature),
+            ),
+        )
+        if ent is None:
+            return {
+                "allowed": False,
+                "referenceId": reference,
+                "feature": body.feature,
+                "reason": "missing_entitlement",
+            }
+        included = int(ent.get("included") or 0)
+        used = int(ent.get("used") or 0)
+        unlimited = bool(ent.get("unlimited"))
+        overage = bool(ent.get("overageAllowed"))
+        remaining = None if unlimited else max(included - used, 0)
+        allowed = unlimited or overage or (remaining is not None and remaining >= body.required)
+        return {
+            "allowed": allowed,
+            "referenceId": reference,
+            "feature": body.feature,
+            "included": included,
+            "used": used,
+            "remaining": remaining,
+            "unlimited": unlimited,
+            "overageAllowed": overage,
+        }
+
+    return create_auth_endpoint(
+        "/billing/check",
+        EndpointOptions(method="POST", body=BillingCheckBody, requires_session=True),
+        handler,
+    )
+
+
+def _build_billing_track_endpoint() -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        body: BillingTrackBody = ctx.body
+        reference = await _billing_reference(ctx, body.referenceId)
+        now = int(time.time())
+        event = await ctx.auth.adapter.create(
+            model="billingUsageEvent",
+            data={
+                "referenceId": reference,
+                "featureKey": body.feature,
+                "quantity": body.quantity,
+                "properties": _json(body.properties),
+                "createdAt": now,
+            },
+        )
+        ent = await ctx.auth.adapter.find_one(
+            model="billingEntitlement",
+            where=(
+                Where(field="referenceId", value=reference),
+                Where(field="featureKey", value=body.feature),
+            ),
+        )
+        if ent is not None:
+            used = int(ent.get("used") or 0) + body.quantity
+            await ctx.auth.adapter.update(
+                model="billingEntitlement",
+                where=(Where(field="id", value=ent["id"]),),
+                update={"used": used, "updatedAt": now},
+            )
+        check = await _call_check(ctx, reference=reference, feature=body.feature)
+        return {"event": event, "entitlement": check}
+
+    return create_auth_endpoint(
+        "/billing/track",
+        EndpointOptions(method="POST", body=BillingTrackBody, requires_session=True),
+        handler,
+    )
+
+
+async def _call_check(ctx: EndpointContext, *, reference: str, feature: str) -> dict[str, Any]:
+    ent = await ctx.auth.adapter.find_one(
+        model="billingEntitlement",
+        where=(
+            Where(field="referenceId", value=reference),
+            Where(field="featureKey", value=feature),
+        ),
+    )
+    if ent is None:
+        return {"allowed": False, "referenceId": reference, "feature": feature}
+    included = int(ent.get("included") or 0)
+    used = int(ent.get("used") or 0)
+    unlimited = bool(ent.get("unlimited"))
+    remaining = None if unlimited else max(included - used, 0)
+    return {
+        "allowed": unlimited or bool(ent.get("overageAllowed")) or (remaining or 0) > 0,
+        "referenceId": reference,
+        "feature": feature,
+        "included": included,
+        "used": used,
+        "remaining": remaining,
+        "unlimited": unlimited,
+    }
+
+
+def _build_billing_customer_endpoint(opts: StripeOptions) -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        assert ctx.session is not None
+        customer_id = await _ensure_customer(ctx, opts)
+        user = await ctx.auth.adapter.find_one(
+            model="user",
+            where=(Where(field="id", value=ctx.session.user_id),),
+        )
+        now = int(time.time())
+        row = await _upsert_by(
+            ctx,
+            model="billingCustomer",
+            field="referenceId",
+            value=ctx.session.user_id,
+            payload={
+                "referenceId": ctx.session.user_id,
+                "stripeCustomerId": customer_id,
+                "email": (user or {}).get("email"),
+                "name": (user or {}).get("name"),
+                "createdAt": now,
+                "updatedAt": now,
+            },
+        )
+        return {"customer": row}
+
+    return create_auth_endpoint(
+        "/billing/customer",
+        EndpointOptions(method="GET", requires_session=True),
+        handler,
+    )
+
+
+def _build_billing_portal_alias(opts: StripeOptions) -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        customer_id = await _ensure_customer(ctx, opts)
+        return_url = (
+            ctx.request.query.get("returnUrl")
+            if isinstance(ctx.request.query.get("returnUrl"), str)
+            else ctx.auth.base_url
+        )
+        portal = await opts.stripe_client.create_billing_portal_session(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        return {"url": portal["url"]}
+
+    return create_auth_endpoint(
+        "/billing/portal",
+        EndpointOptions(method="GET", requires_session=True),
+        handler,
+    )
+
+
+def _build_billing_usage_endpoint() -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        reference = await _billing_reference(
+            ctx,
+            ctx.request.query.get("referenceId")
+            if isinstance(ctx.request.query.get("referenceId"), str)
+            else None,
+        )
+        rows = await ctx.auth.adapter.find_many(
+            model="billingUsageEvent",
+            where=(Where(field="referenceId", value=reference),),
+        )
+        return {"usage": list(rows)}
+
+    return create_auth_endpoint(
+        "/billing/usage",
         EndpointOptions(method="GET", requires_session=True),
         handler,
     )
@@ -328,6 +639,14 @@ def build_endpoints(opts: StripeOptions) -> tuple[AuthEndpoint, ...]:
         _build_cancel_endpoint(opts),
         _build_resume_endpoint(opts),
         _build_list_endpoint(opts),
+        _build_catalog_sync_endpoint(opts),
+        _build_products_endpoint(),
+        _build_prices_endpoint(),
+        _build_billing_check_endpoint(),
+        _build_billing_track_endpoint(),
+        _build_billing_customer_endpoint(opts),
+        _build_billing_portal_alias(opts),
+        _build_billing_usage_endpoint(),
         _build_webhook_endpoint(opts),
     )
 

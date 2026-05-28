@@ -1,6 +1,8 @@
 # Getting started
 
 This walks you from zero to a running Better Auth-compatible server in five commands.
+Kernia is independent Python code; the compatibility point is the public HTTP
+and cookie contract used by Better Auth clients.
 
 ## 1. Install
 
@@ -86,3 +88,15 @@ You now have:
 | `kernia info --dry-run --json` | Just print library version/platform. |
 | `kernia generate --output path` | Write the migration to a custom path. |
 | `kernia migrate --db-url ...` | Override the resolved DB URL. |
+
+## Run the SaaS demo
+
+```bash
+uv run uvicorn examples.backend.app:app --host 127.0.0.1 --port 8000 --reload
+cd examples/frontend
+pnpm install
+pnpm dev
+```
+
+The demo exposes settings, API keys, sessions, admin configuration, Stripe
+catalog import, and billing entitlement screens over real Kernia routes.

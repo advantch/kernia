@@ -1,11 +1,11 @@
 # Open Api
 
 > Module: `kernia.plugins.open_api`
-> Constructor: `build_openapi_document`
+> Constructor: `open_api`
 
 OpenAPI 3.1 plugin — exposes `/openapi.json` and `/scalar` for the auth surface.
 
-Mirrors `reference/packages/better-auth/src/plugins/open-api/`.
+Mirrors `Better Auth reference: plugins/open-api/`.
 
 The plugin walks the router's registered endpoints (made available via
 `ctx.router` after `init()` builds the route table) and emits an OpenAPI 3.1
@@ -25,7 +25,10 @@ Endpoints (mounted under the auth base path, e.g. `/api/auth/openapi.json`):
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `GET` | `/openapi.json` |
+| `GET` | `/scalar` |
 
 ## Schema contributions
 
@@ -34,7 +37,7 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from kernia.plugins.open_api import build_openapi_document
+from kernia.plugins.open_api import open_api
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -43,7 +46,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            build_openapi_document(),
+            open_api(),
         ],
     )
 )

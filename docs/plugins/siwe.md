@@ -1,29 +1,36 @@
 # Siwe
 
 > Module: `kernia.plugins.siwe`
-> Constructor: `SIWE_ERROR_CODES`
+> Constructor: `siwe`
 
 siwe plugin — Sign-In With Ethereum.
 
-Port of `reference/packages/better-auth/src/plugins/siwe/`. Verifies an
+Port of `Better Auth reference: plugins/siwe/`. Verifies an
 EIP-4361 message + signature, consumes a server-issued nonce, then signs the
 user in (auto-creating the user with `walletAddress` if needed).
 
-Requires the optional `eth-account` dependency (declared via the
-`[project.optional-dependencies] siwe` extra on `kernia`).
+Requires the optional `eth-account` dependency. For ENS reverse-lookup, pass an
+`ENSResolver` (e.g. `web3_ens_resolver(rpc_url=...)`) — without one, ENS lookup
+is disabled even if `enable_ens=True`.
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `GET` | `/siwe/nonce` |
+| `POST` | `/siwe/verify` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+
+**Extends existing tables:**
+
+- `user` adds: walletAddress, ensName
 
 ## Usage
 
 ```python
-from kernia.plugins.siwe import SIWE_ERROR_CODES
+from kernia.plugins.siwe import siwe
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -32,7 +39,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            SIWE_ERROR_CODES(),
+            siwe(),
         ],
     )
 )

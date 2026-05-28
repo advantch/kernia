@@ -73,6 +73,12 @@ class StripeClient:
     async def get_customer(self, customer_id: str) -> dict[str, Any]:
         return await self._get(f"/v1/customers/{customer_id}")
 
+    async def list_products(self, *, limit: int = 100) -> dict[str, Any]:
+        return await self._get("/v1/products", params={"limit": limit})
+
+    async def list_prices(self, *, limit: int = 100) -> dict[str, Any]:
+        return await self._get("/v1/prices", params={"limit": limit})
+
     # ----- checkout sessions ------------------------------------------------
 
     async def create_checkout_session(self, **params: Any) -> dict[str, Any]:

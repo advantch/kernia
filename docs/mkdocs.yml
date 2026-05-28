@@ -1,8 +1,9 @@
 site_name: kernia
 site_description: A Python implementation compatible with Better Auth — authentication for ASGI apps.
 site_url: https://kernia.dev
-repo_url: https://github.com/better-auth/kernia
+repo_url: https://github.com/advantch/kernia
 docs_dir: .
+site_dir: ../site
 
 theme:
   name: material
@@ -49,6 +50,20 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - FastAPI SaaS demo: demo.md
+  - Admin config: admin-config.md
+  - Email clients: email-clients.md
+  - Billing and entitlements: billing.md
+  - Deployment: deployment.md
+  - Testing: testing.md
   - Plugins:
       - Overview: plugins/index.md
+      - Stripe: plugins/stripe.md
+      - API keys: plugins/api_key.md
+      - Passkeys: plugins/passkey.md
+      - SSO: plugins/sso.md
+      - SCIM: plugins/scim.md
+      - OAuth provider: plugins/oauth_provider.md
+      - Redis storage: plugins/redis_storage.md
+      - Adapters: plugins/adapters.md
   - OpenAPI: openapi.md

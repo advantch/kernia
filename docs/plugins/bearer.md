@@ -3,7 +3,7 @@
 > Module: `kernia.plugins.bearer`
 > Constructor: `bearer`
 
-bearer — see reference/packages/better-auth/src/plugins/bearer/.
+bearer — see Better Auth reference: plugins/bearer/.
 
 ## Endpoints
 

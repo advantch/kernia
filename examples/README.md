@@ -8,13 +8,13 @@ wire-compatible with the official JavaScript client.
 ```
 examples/
 ├── backend/
-│   ├── app.py          # FastAPI app: email/password + organization + open_api
+│   ├── app.py          # FastAPI app: auth, admin config, API keys, Stripe, OpenAPI
 │   └── run.sh          # boot helper
 └── frontend/
     ├── package.json
     ├── vite.config.ts  # /api → :8000 proxy (same-origin cookies)
     ├── src/
-    │   ├── App.tsx     # sign-up / sign-in / org list / org create UI
+    │   ├── App.tsx     # SaaS login, dashboard, settings, admin, billing UI
     │   └── auth-client.ts  # the official `better-auth` JS client
     └── scripts/
         └── wire-check.mjs  # headless protocol check driven by the JS client
@@ -38,8 +38,10 @@ pnpm dev       # serves http://localhost:5173
 ```
 
 Open <http://localhost:5173> in a browser. You can sign up, sign in, sign out,
-create organizations, see them listed. All cookies flow correctly because the
-vite dev proxy makes `/api/*` same-origin.
+create organizations, manage sessions and API keys, toggle auth methods, save
+redacted email/Stripe settings, import Stripe products/prices, and check billing
+entitlements. All cookies flow correctly because the vite dev proxy makes
+`/api/*` same-origin.
 
 ## Headless wire-protocol check
 
@@ -83,7 +85,7 @@ around the wrapped shape and didn't catch this — only an actual better-auth
 client did. The wire-check (and one-line fixes to the routes) are the visible
 result.
 
-## Optional: Google OAuth
+## Optional providers
 
 To enable Google sign-in in the demo, export real credentials before booting
 the backend:
@@ -93,11 +95,12 @@ export GOOGLE_CLIENT_ID="..."
 export GOOGLE_CLIENT_SECRET="..."
 ```
 
-The backend auto-registers `google` as a social provider whenever both vars
-are set. The `/api/auth/sign-in/social` route then accepts `provider: "google"`.
+The backend auto-registers `google` as a social provider whenever both vars are
+set. Other external methods appear in the UI as not configured until credentials
+or server-side plugins are provided.
 
 ## Visual click-through
 
 If you want to actually click through the flow rather than run the headless
-check, just open <http://localhost:5173> after both servers are up. The minimal
-demo UI ships sign-up, sign-in, sign-out, and an organization create+list flow.
+check, just open <http://localhost:5173> after both servers are up. The demo is
+intended to behave like a small SaaS control plane, not a mocked marketing page.

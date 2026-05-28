@@ -11,6 +11,9 @@ endpoints — wired for ASGI apps (FastAPI, Starlette) and Django.
 - **Plugins are first-class.** Drop-in support for email/password, OAuth, magic links,
   passkeys, organizations, SSO, SCIM, Stripe, and more — same constructor names as
   the JS reference.
+- **SaaS reference app.** The FastAPI + Vite demo includes login, logout,
+  settings, API keys, sessions, admin config, Stripe catalog import, and billing
+  entitlement screens backed by real Kernia APIs.
 - **One schema, many adapters.** Memory, SQLAlchemy (SQLite/Postgres/MySQL), MongoDB,
   Redis (storage), pluggable via the `CustomAdapter` protocol.
 - **Migrations via Alembic.** `kernia generate` emits an Alembic revision; the
@@ -56,5 +59,10 @@ in HttpOnly cookies, the same shape as the JS reference.
 ## Next
 
 - [Getting started](getting-started.md) — full quickstart with the CLI.
+- [FastAPI SaaS demo](demo.md) — real backend and frontend walkthrough.
+- [Admin config](admin-config.md) — persisted runtime config for login methods,
+  email clients, and Stripe settings.
+- [Billing and entitlements](billing.md) — Stripe import, features, balances, and
+  usage tracking.
 - [Plugins](plugins/index.md) — what each plugin contributes.
 - [OpenAPI](openapi.md) — auto-generated API docs.

@@ -80,6 +80,131 @@ SUBSCRIPTION_MODEL = ModelDef(
     ),
 )
 
+BILLING_PRODUCT_MODEL = ModelDef(
+    name="billingProduct",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("stripeProductId", "string", required=True),
+        FieldDef("name", "string", required=True),
+        FieldDef("active", "boolean", required=False),
+        FieldDef("metadata", "json", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_PRICE_MODEL = ModelDef(
+    name="billingPrice",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("stripePriceId", "string", required=True),
+        FieldDef("stripeProductId", "string", required=True),
+        FieldDef("currency", "string", required=True),
+        FieldDef("unitAmount", "number", required=False),
+        FieldDef("interval", "string", required=False),
+        FieldDef("lookupKey", "string", required=False),
+        FieldDef("active", "boolean", required=False),
+        FieldDef("metadata", "json", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_FEATURE_MODEL = ModelDef(
+    name="billingFeature",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("key", "string", required=True),
+        FieldDef("name", "string", required=True),
+        FieldDef("type", "string", required=True),  # boolean | metered | quantity
+        FieldDef("metadata", "json", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_PLAN_MODEL = ModelDef(
+    name="billingPlan",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("key", "string", required=True),
+        FieldDef("name", "string", required=True),
+        FieldDef("stripeProductId", "string", required=False),
+        FieldDef("stripePriceId", "string", required=False),
+        FieldDef("active", "boolean", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_PLAN_FEATURE_MODEL = ModelDef(
+    name="billingPlanFeature",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("planKey", "string", required=True),
+        FieldDef("featureKey", "string", required=True),
+        FieldDef("included", "number", required=False),
+        FieldDef("unlimited", "boolean", required=False),
+        FieldDef("resetPeriod", "string", required=False),
+        FieldDef("overageAllowed", "boolean", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_ENTITLEMENT_MODEL = ModelDef(
+    name="billingEntitlement",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("referenceId", "string", required=True),
+        FieldDef("featureKey", "string", required=True),
+        FieldDef("included", "number", required=False),
+        FieldDef("used", "number", required=False),
+        FieldDef("unlimited", "boolean", required=False),
+        FieldDef("resetPeriod", "string", required=False),
+        FieldDef("resetsAt", "number", required=False),
+        FieldDef("overageAllowed", "boolean", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_USAGE_EVENT_MODEL = ModelDef(
+    name="billingUsageEvent",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("referenceId", "string", required=True),
+        FieldDef("featureKey", "string", required=True),
+        FieldDef("quantity", "number", required=True),
+        FieldDef("properties", "json", required=False),
+        FieldDef("createdAt", "number", required=True),
+    ),
+)
+
+BILLING_CUSTOMER_MODEL = ModelDef(
+    name="billingCustomer",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("referenceId", "string", required=True),
+        FieldDef("stripeCustomerId", "string", required=False),
+        FieldDef("email", "string", required=False),
+        FieldDef("name", "string", required=False),
+        FieldDef("createdAt", "number", required=True),
+        FieldDef("updatedAt", "number", required=True),
+    ),
+)
+
+BILLING_SYNC_STATE_MODEL = ModelDef(
+    name="billingSyncState",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("source", "string", required=True),
+        FieldDef("status", "string", required=True),
+        FieldDef("message", "string", required=False),
+        FieldDef("syncedAt", "number", required=True),
+    ),
+)
+
 
 USER_EXTENSIONS: Mapping[str, tuple[FieldDef, ...]] = {
     "user": (FieldDef(name="stripeCustomerId", type="string", required=False),),
@@ -88,12 +213,35 @@ USER_EXTENSIONS: Mapping[str, tuple[FieldDef, ...]] = {
 
 def get_schema() -> PluginSchema:
     """Return the `PluginSchema` contributed by the stripe plugin."""
-    return PluginSchema(tables=(SUBSCRIPTION_MODEL,), extend=USER_EXTENSIONS)
+    return PluginSchema(
+        tables=(
+            SUBSCRIPTION_MODEL,
+            BILLING_PRODUCT_MODEL,
+            BILLING_PRICE_MODEL,
+            BILLING_FEATURE_MODEL,
+            BILLING_PLAN_MODEL,
+            BILLING_PLAN_FEATURE_MODEL,
+            BILLING_ENTITLEMENT_MODEL,
+            BILLING_USAGE_EVENT_MODEL,
+            BILLING_CUSTOMER_MODEL,
+            BILLING_SYNC_STATE_MODEL,
+        ),
+        extend=USER_EXTENSIONS,
+    )
 
 
 __all__ = [
     "SUBSCRIPTION_MODEL",
     "USER_EXTENSIONS",
+    "BILLING_CUSTOMER_MODEL",
+    "BILLING_ENTITLEMENT_MODEL",
+    "BILLING_FEATURE_MODEL",
+    "BILLING_PLAN_FEATURE_MODEL",
+    "BILLING_PLAN_MODEL",
+    "BILLING_PRICE_MODEL",
+    "BILLING_PRODUCT_MODEL",
+    "BILLING_SYNC_STATE_MODEL",
+    "BILLING_USAGE_EVENT_MODEL",
     "StripeOptions",
     "StripePlan",
     "SubscriptionFor",

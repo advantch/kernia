@@ -1,11 +1,11 @@
 # Generic Oauth
 
 > Module: `kernia.plugins.generic_oauth`
-> Constructor: `GENERIC_OAUTH_ERROR_CODES`
+> Constructor: `generic_oauth`
 
 Generic OAuth plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/generic-oauth/`. Lets users
+Mirrors `Better Auth reference: plugins/generic-oauth/`. Lets users
 plug in any OAuth2/OIDC provider by URL — discovery, code exchange, userinfo —
 without writing a dedicated provider module.
 
@@ -20,7 +20,7 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from kernia.plugins.generic_oauth import GENERIC_OAUTH_ERROR_CODES
+from kernia.plugins.generic_oauth import generic_oauth
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -29,7 +29,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            GENERIC_OAUTH_ERROR_CODES(),
+            generic_oauth(),
         ],
     )
 )

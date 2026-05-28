@@ -1,11 +1,11 @@
 # Organization
 
 > Module: `kernia.plugins.organization`
-> Constructor: `AccessControl`
+> Constructor: `organization`
 
 organization — multi-tenant orgs, members, invitations, teams, dynamic AC.
 
-Mirrors `reference/packages/better-auth/src/plugins/organization/`.
+Mirrors `Better Auth reference: plugins/organization/`.
 
 Public surface::
 
@@ -19,16 +19,41 @@ Public surface::
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/organization/create` |
+| `GET` | `/organization/list` |
+| `GET` | `/organization/get` |
+| `POST` | `/organization/update` |
+| `POST` | `/organization/delete` |
+| `POST` | `/organization/set-active` |
+| `POST` | `/organization/invite-member` |
+| `POST` | `/organization/cancel-invitation` |
+| `POST` | `/organization/accept-invitation` |
+| `POST` | `/organization/reject-invitation` |
+| `GET` | `/organization/list-invitations` |
+| `GET` | `/organization/list-members` |
+| `POST` | `/organization/remove-member` |
+| `POST` | `/organization/update-member-role` |
+| `POST` | `/organization/leave` |
+| `POST` | `/organization/has-permission` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+**New tables:**
+
+- `organization` — fields: id, name, slug, logo, metadata, createdAt, updatedAt
+- `member` — fields: id, organizationId, userId, role, createdAt, updatedAt
+- `invitation` — fields: id, organizationId, email, role, status, inviterId, expiresAt, createdAt, updatedAt
+
+**Extends existing tables:**
+
+- `session` adds: activeOrganizationId
 
 ## Usage
 
 ```python
-from kernia.plugins.organization import AccessControl
+from kernia.plugins.organization import organization
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -37,7 +62,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            AccessControl(),
+            organization(),
         ],
     )
 )

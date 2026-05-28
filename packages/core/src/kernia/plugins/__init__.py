@@ -39,6 +39,7 @@ _try_import("one_tap", "one_tap")
 # Optional and built-in plugins; pulled in when their constructors are importable.
 for _name, _attr in (
     ("admin", "admin"),
+    ("admin_config", "admin_config"),
     ("anonymous", "anonymous"),
     ("bearer", "bearer"),
     ("custom_session", "with_custom_session"),

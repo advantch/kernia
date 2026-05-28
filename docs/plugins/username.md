@@ -1,9 +1,9 @@
 # Username
 
 > Module: `kernia.plugins.username`
-> Constructor: `USERNAME_ERROR_CODES`
+> Constructor: `username`
 
-username plugin — port of `reference/packages/better-auth/src/plugins/username/`.
+username plugin — port of `Better Auth reference: plugins/username/`.
 
 Adds username-based sign-up/sign-in alongside the email/password credential rows.
 The username column is stored in normalized (lower-case) form; `displayUsername`
@@ -11,16 +11,22 @@ preserves the originally-supplied casing.
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/sign-up/username` |
+| `POST` | `/sign-in/username` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+
+**Extends existing tables:**
+
+- `user` adds: username, displayUsername
 
 ## Usage
 
 ```python
-from kernia.plugins.username import USERNAME_ERROR_CODES
+from kernia.plugins.username import username
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -29,7 +35,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            USERNAME_ERROR_CODES(),
+            username(),
         ],
     )
 )

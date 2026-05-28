@@ -5,7 +5,7 @@
 
 Have-I-Been-Pwned password compromise plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/haveibeenpwned/index.ts`.
+Mirrors `Better Auth reference: plugins/haveibeenpwned/index.ts`.
 Hashes the candidate password (SHA-1), sends the first 5 hex chars to the
 pwnedpasswords range API, and rejects the request if the remainder appears in
 the response.

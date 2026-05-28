@@ -5,8 +5,8 @@
 
 Email/password plugin.
 
-Built into Better Auth itself (not a third-party plugin). Mirrors
-`reference/packages/better-auth/src/api/routes/sign-up-email.ts`,
+Built into `Better Auth` itself (not a third-party plugin). Mirrors
+`Better Auth reference: api/routes/sign-up-email.ts`,
 `sign-in-email.ts`, `forget-password.ts`, `reset-password.ts`.
 
 Exposes the canonical routes:

@@ -5,7 +5,7 @@
 
 JWT plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/jwt/`. Issues JSON Web Tokens
+Mirrors `Better Auth reference: plugins/jwt/`. Issues JSON Web Tokens
 signed with a key managed in our `jwk` table; exposes a JWKS doc; supports key
 rotation.
 

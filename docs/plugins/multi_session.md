@@ -3,7 +3,7 @@
 > Module: `kernia.plugins.multi_session`
 > Constructor: `multi_session`
 
-multi_session — see reference/packages/better-auth/src/plugins/multi-session/.
+multi_session — see Better Auth reference: plugins/multi-session/.
 
 ## Endpoints
 

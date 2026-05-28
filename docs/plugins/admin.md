@@ -1,11 +1,11 @@
 # Admin
 
 > Module: `kernia.plugins.admin`
-> Constructor: `AdminOptions`
+> Constructor: `admin`
 
 admin plugin — user management surface gated on the `access` primitive.
 
-Mirrors `reference/packages/better-auth/src/plugins/admin/`.
+Mirrors `Better Auth reference: plugins/admin/`.
 
 Schema extensions:
   * `user.role: string`
@@ -19,16 +19,36 @@ Endpoints under `/admin/*`. All require an admin role (resolved via the
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/admin/list-users` |
+| `POST` | `/admin/get-user` |
+| `POST` | `/admin/create-user` |
+| `POST` | `/admin/update-user` |
+| `POST` | `/admin/set-role` |
+| `POST` | `/admin/ban-user` |
+| `POST` | `/admin/unban-user` |
+| `POST` | `/admin/impersonate-user` |
+| `POST` | `/admin/stop-impersonating` |
+| `POST` | `/admin/list-user-sessions` |
+| `POST` | `/admin/revoke-user-session` |
+| `POST` | `/admin/revoke-user-sessions` |
+| `POST` | `/admin/set-user-password` |
+| `POST` | `/admin/remove-user` |
+| `POST` | `/admin/has-permission` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+
+**Extends existing tables:**
+
+- `user` adds: role, banned, banReason, banExpires
+- `session` adds: impersonatedBy
 
 ## Usage
 
 ```python
-from kernia.plugins.admin import AdminOptions
+from kernia.plugins.admin import admin
 from kernia import KerniaOptions
 from kernia.auth import init
 
@@ -37,7 +57,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            AdminOptions(),
+            admin(),
         ],
     )
 )

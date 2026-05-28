@@ -71,6 +71,28 @@ def _make_driver() -> tuple[ASGIDriver, MockStripe]:
     return ASGIDriver(app=auth.router.mount()), mock
 
 
+def _make_driver_with_auth() -> tuple[ASGIDriver, MockStripe, object]:
+    mock = MockStripe()
+    client = StripeClient(api_key="sk_test_x", transport=mock.mock_transport())
+    plugin = stripe(
+        StripeOptions(
+            stripe_client=client,
+            webhook_secret=WEBHOOK_SECRET,
+            plans={"pro": StripePlan(name="pro", price_id="price_pro")},
+        )
+    )
+    auth = init(
+        KerniaOptions(
+            database=memory_adapter(),
+            secret="stripe-secret",
+            email_and_password=EmailPasswordOptions(enabled=True),
+            plugins=[email_and_password(), plugin],
+            rate_limit=RateLimitOptions(enabled=False),
+        )
+    )
+    return ASGIDriver(app=auth.router.mount()), mock, auth
+
+
 async def _sign_up(driver: ASGIDriver, email: str = "sub@example.com") -> dict[str, object]:
     r = await driver.request(
         "POST",
@@ -244,3 +266,81 @@ async def test_missing_signature_header_returns_400() -> None:
     )
     assert r.status == 400
     assert r.json()["code"] == "INVALID_SIGNATURE"
+
+
+async def test_catalog_sync_imports_products_and_prices() -> None:
+    driver, mock = _make_driver()
+    await _sign_up(driver)
+
+    r = await driver.request("POST", "/stripe/catalog/sync")
+    assert r.status == 200, r.json()
+    assert r.json() == {"products": 1, "prices": 1}
+
+    r = await driver.request("GET", "/stripe/products")
+    assert r.status == 200
+    assert r.json()["products"][0]["stripeProductId"] == "prod_starter"
+
+    r = await driver.request("GET", "/stripe/prices")
+    assert r.status == 200
+    assert r.json()["prices"][0]["stripePriceId"] == "price_starter_monthly"
+
+
+async def test_billing_check_track_and_usage() -> None:
+    driver, _mock, auth = _make_driver_with_auth()
+    user = await _sign_up(driver, email="usage@example.com")
+    user_id = user["user"]["id"]
+    await auth.context.adapter.create(
+        model="billingEntitlement",
+        data={
+            "referenceId": user_id,
+            "featureKey": "projects",
+            "included": 2,
+            "used": 0,
+            "unlimited": False,
+            "overageAllowed": False,
+            "createdAt": 1,
+            "updatedAt": 1,
+        },
+    )
+
+    r = await driver.request(
+        "POST",
+        "/billing/check",
+        json_body={"feature": "projects", "required": 1},
+    )
+    assert r.status == 200
+    assert r.json()["allowed"] is True
+    assert r.json()["remaining"] == 2
+
+    r = await driver.request(
+        "POST",
+        "/billing/track",
+        json_body={"feature": "projects", "quantity": 2, "properties": {"source": "test"}},
+    )
+    assert r.status == 200
+    assert r.json()["entitlement"]["remaining"] == 0
+
+    r = await driver.request(
+        "POST",
+        "/billing/check",
+        json_body={"feature": "projects", "required": 1},
+    )
+    assert r.status == 200
+    assert r.json()["allowed"] is False
+
+    r = await driver.request("GET", "/billing/usage")
+    assert r.status == 200
+    assert r.json()["usage"][0]["featureKey"] == "projects"
+
+
+async def test_billing_customer_and_portal_alias() -> None:
+    driver, _mock = _make_driver()
+    await _sign_up(driver, email="portal@example.com")
+
+    r = await driver.request("GET", "/billing/customer")
+    assert r.status == 200
+    assert r.json()["customer"]["stripeCustomerId"].startswith("cus_")
+
+    r = await driver.request("GET", "/billing/portal")
+    assert r.status == 200
+    assert r.json()["url"].startswith("https://billing.stripe.test/")
