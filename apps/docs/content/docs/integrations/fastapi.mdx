@@ -1,0 +1,29 @@
+---
+title: FastAPI
+description: Mount Kernia into a FastAPI application.
+icon: Zap
+---
+
+Install:
+
+```bash
+pip install kernia-fastapi
+```
+
+Mount:
+
+```python
+from fastapi import FastAPI
+from kernia_fastapi import mount_auth
+from auth import auth
+
+app = FastAPI()
+mount_auth(app, auth, prefix="/api/auth")
+```
+
+FastAPI is the primary reference integration and powers the SaaS demo.
+
+## CORS and proxies
+
+For browser apps, prefer a same-origin proxy during development. If you use CORS
+directly, include credentials and configure trusted origins in Kernia.

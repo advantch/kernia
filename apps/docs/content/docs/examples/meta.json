@@ -1,0 +1,4 @@
+{
+  "title": "Examples",
+  "pages": ["fastapi-saas-demo", "vite-client", "deployment"]
+}

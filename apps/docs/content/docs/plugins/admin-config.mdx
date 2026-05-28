@@ -1,0 +1,24 @@
+---
+title: Admin Config
+description: Persisted auth, email, and Stripe configuration.
+icon: SlidersHorizontal
+---
+
+```python
+from kernia.plugins.admin_config import admin_config
+
+plugins=[admin_config()]
+```
+
+Admin config adds:
+
+- `adminConfig` schema
+- public auth UI config
+- method toggles
+- email-client config
+- Stripe settings
+- secret redaction
+- disabled-method route gating
+
+The demo uses `allow_any_authenticated=True` only for local development. Use
+roles or admin IDs in production.

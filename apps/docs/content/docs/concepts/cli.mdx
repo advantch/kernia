@@ -1,0 +1,28 @@
+---
+title: CLI
+description: Scaffold, migrate, inspect, and manage Kernia apps.
+icon: Terminal
+---
+
+Install:
+
+```bash
+pip install kernia-cli
+```
+
+Commands:
+
+| Command | Purpose |
+| --- | --- |
+| `kernia init` | Scaffold auth configuration. |
+| `kernia generate` | Generate an Alembic migration from resolved schema. |
+| `kernia migrate` | Apply migrations. |
+| `kernia secret` | Generate a random secret. |
+| `kernia info` | Print configuration diagnostics. |
+
+Use the CLI in CI to make schema drift explicit:
+
+```bash
+kernia info --dry-run --json
+kernia generate
+```

@@ -1,0 +1,16 @@
+{
+  "title": "Concepts",
+  "pages": [
+    "architecture",
+    "database",
+    "sessions",
+    "cookies",
+    "client",
+    "plugins",
+    "hooks",
+    "security",
+    "cli",
+    "admin-config",
+    "billing"
+  ]
+}

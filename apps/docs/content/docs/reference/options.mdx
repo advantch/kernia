@@ -1,0 +1,31 @@
+---
+title: Options
+description: Core KerniaOptions fields.
+icon: Settings2
+---
+
+`KerniaOptions` is the top-level configuration object passed to `init`.
+
+```python
+KerniaOptions(
+    database=database,
+    secret="...",
+    base_url="https://api.example.com",
+    trusted_origins=["https://app.example.com"],
+    plugins=[...],
+)
+```
+
+Common fields:
+
+| Field | Purpose |
+| --- | --- |
+| `database` | Adapter used for core and plugin schema. |
+| `secret` | Signing/encryption secret. |
+| `base_url` | Public auth server URL. |
+| `trusted_origins` | Browser origins allowed for state-changing requests. |
+| `plugins` | Registered auth plugins. |
+| `advanced` | Plugin-specific callbacks and compatibility settings. |
+
+Use environment variables or your app config layer to keep secrets outside
+source control.

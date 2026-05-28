@@ -1,0 +1,21 @@
+---
+title: OpenAPI
+description: Serve an OpenAPI document and Scalar UI for auth routes.
+icon: FileJson
+---
+
+```python
+from kernia.plugins.open_api import open_api
+
+plugins=[open_api()]
+```
+
+Routes:
+
+```http
+GET /openapi.json
+GET /scalar
+```
+
+Use the OpenAPI document to generate typed clients for Kernia-specific admin and
+billing surfaces.

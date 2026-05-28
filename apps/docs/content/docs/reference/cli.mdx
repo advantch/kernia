@@ -1,0 +1,21 @@
+---
+title: CLI Reference
+description: Commands provided by kernia-cli.
+icon: SquareTerminal
+---
+
+```bash
+kernia init --adapter sqlite --framework fastapi
+kernia generate
+kernia migrate
+kernia secret
+kernia info
+```
+
+`kernia init` refuses to overwrite existing files unless you pass `--force`.
+
+`kernia generate` writes Alembic revisions based on the resolved schema.
+
+`kernia migrate` applies migrations with `alembic upgrade head`.
+
+`kernia info` prints loaded plugins, routes, adapter details, and diagnostics.

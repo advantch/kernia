@@ -1,0 +1,22 @@
+---
+title: Deployment
+description: Deploy Kernia-backed apps and the docs site.
+icon: Cloud
+---
+
+For a Kernia backend:
+
+- run migrations before releasing plugin schema changes
+- use a persistent database
+- configure trusted origins
+- keep secrets in your platform secret manager
+- test login/logout from the deployed browser origin
+
+For this docs site:
+
+```bash
+cd apps/docs
+pnpm build
+```
+
+The Vercel project should use `apps/docs` as the root directory.

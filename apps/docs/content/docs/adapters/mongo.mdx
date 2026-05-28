@@ -1,0 +1,18 @@
+---
+title: Mongo
+description: MongoDB adapter for document-backed deployments.
+icon: Leaf
+---
+
+```bash
+pip install kernia-mongo
+```
+
+```python
+from kernia_mongo import mongo_adapter
+
+database = mongo_adapter(client, database="auth")
+```
+
+Use Mongo when your product already stores auth-adjacent records in MongoDB or
+you want a document database deployment shape.

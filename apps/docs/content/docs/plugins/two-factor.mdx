@@ -1,0 +1,14 @@
+---
+title: Two Factor
+description: TOTP and backup-code verification.
+icon: ShieldCheck
+---
+
+```python
+from kernia.plugins.two_factor import two_factor
+
+plugins=[two_factor()]
+```
+
+Two-factor auth intercepts sign-in and requires a second verification step when
+enabled for the user.

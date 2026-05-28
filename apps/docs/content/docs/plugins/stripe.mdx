@@ -1,0 +1,49 @@
+---
+title: Stripe
+description: Checkout, portal, webhooks, catalog import, entitlements, and usage.
+icon: CreditCard
+---
+
+```bash
+pip install kernia-stripe
+```
+
+```python
+from kernia_stripe import StripeClient, StripeOptions, stripe
+
+plugins=[
+    stripe(
+        StripeOptions(
+            client=StripeClient(api_key="sk_live_..."),
+            webhook_secret="whsec_...",
+        )
+    )
+]
+```
+
+## Compatibility routes
+
+```http
+POST /stripe/checkout-session
+POST /stripe/billing-portal
+POST /stripe/webhook
+POST /stripe/cancel-subscription
+POST /stripe/resume-subscription
+GET  /stripe/list-subscriptions
+```
+
+## Billing routes
+
+```http
+POST /stripe/catalog/sync
+GET  /stripe/products
+GET  /stripe/prices
+POST /billing/check
+POST /billing/track
+GET  /billing/customer
+GET  /billing/portal
+GET  /billing/usage
+```
+
+Kernia imports Stripe products and prices first, then lets you map them to
+features, plans, balances, and usage policies.

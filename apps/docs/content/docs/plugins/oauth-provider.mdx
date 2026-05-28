@@ -1,0 +1,18 @@
+---
+title: OAuth Provider
+description: Turn your product into an OAuth/OIDC provider.
+icon: Network
+---
+
+```bash
+pip install kernia-oauth-provider
+```
+
+```python
+from kernia_oauth_provider import oauth_provider
+
+plugins=[oauth_provider()]
+```
+
+Adds discovery, authorization, token, userinfo, JWKS, consent, and client
+management routes.

@@ -1,0 +1,14 @@
+---
+title: Magic Link
+description: Passwordless email sign-in links.
+icon: WandSparkles
+---
+
+```python
+from kernia.plugins.magic_link import magic_link
+
+plugins=[magic_link()]
+```
+
+Configure the sender in `KerniaOptions.advanced` or through your own email
+delivery layer. The demo logs local links instead of sending real mail.

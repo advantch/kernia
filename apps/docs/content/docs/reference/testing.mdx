@@ -1,0 +1,39 @@
+---
+title: Testing
+description: Verification commands used by Kernia development.
+icon: TestTube
+---
+
+Run the backend suite:
+
+```bash
+uv run pytest e2e/ packages/ -q
+```
+
+Run the parity layout audit:
+
+```bash
+uv run python scripts/audit_layout.py
+```
+
+Run the demo frontend build:
+
+```bash
+cd examples/frontend
+pnpm build
+```
+
+Run the docs build:
+
+```bash
+cd apps/docs
+pnpm build
+```
+
+Run the wire check against a live FastAPI backend:
+
+```bash
+uv run uvicorn examples.backend.app:app --host 127.0.0.1 --port 8000
+cd examples/frontend
+node scripts/wire-check.mjs
+```

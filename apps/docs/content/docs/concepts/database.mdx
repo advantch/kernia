@@ -1,0 +1,41 @@
+---
+title: Database
+description: Core tables, plugin schema, adapters, and migrations.
+icon: Database
+---
+
+Kernia builds one resolved schema from core tables plus plugin contributions.
+
+Core tables:
+
+- `user`
+- `session`
+- `account`
+- `verification`
+
+Plugins can add tables or extend existing models. For example, organizations add
+organization/member/invitation records, and Stripe adds subscription and billing
+tables.
+
+## Adapters
+
+Adapters implement the same database contract:
+
+```python
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+database = sqlalchemy_adapter("sqlite+aiosqlite:///./auth.db")
+```
+
+The adapter contract covers CRUD, filtering, pagination, transactions, relation
+lookups, and plugin schema registration.
+
+## Migrations
+
+```bash
+kernia generate
+kernia migrate
+```
+
+`kernia generate` emits a deterministic Alembic revision for the resolved schema.
+If no plugin or field changed, the generated revision id remains stable.

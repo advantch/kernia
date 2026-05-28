@@ -1,0 +1,15 @@
+{
+  "title": "Kernia",
+  "pages": [
+    "index",
+    "installation",
+    "quick-start",
+    "basic-usage",
+    "concepts",
+    "integrations",
+    "plugins",
+    "adapters",
+    "reference",
+    "examples"
+  ]
+}

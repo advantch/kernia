@@ -1,0 +1,69 @@
+---
+title: Installation
+description: Install Kernia packages and choose a database adapter.
+icon: Package
+---
+
+Install the core package, one integration, and one adapter:
+
+```bash
+pip install kernia kernia-fastapi kernia-sqlalchemy
+```
+
+For local development you can use the memory adapter:
+
+```bash
+pip install kernia-memory-adapter
+```
+
+For production, use a persistent adapter:
+
+```bash
+pip install kernia-sqlalchemy
+pip install kernia-mongo
+```
+
+Optional standalone packages:
+
+```bash
+pip install kernia-api-key kernia-passkey kernia-sso kernia-scim kernia-stripe
+pip install kernia-oauth-provider kernia-redis-storage
+```
+
+## CLI
+
+The CLI is published separately:
+
+```bash
+pip install kernia-cli
+```
+
+It provides:
+
+```bash
+kernia init
+kernia generate
+kernia migrate
+kernia secret
+kernia info
+```
+
+## JavaScript client
+
+Kernia is server-side Python. Browser applications can use the official Better
+Auth JavaScript client when they need Better Auth-compatible flows:
+
+```bash
+pnpm add better-auth
+```
+
+```ts
+import { createAuthClient } from "better-auth/client";
+
+export const authClient = createAuthClient({
+  baseURL: "http://localhost:8000/api/auth"
+});
+```
+
+That client package name stays unchanged because it is the JavaScript client
+being tested for wire compatibility.

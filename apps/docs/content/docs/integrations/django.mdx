@@ -1,0 +1,18 @@
+---
+title: Django
+description: Use Kernia from Django projects.
+icon: PanelsTopLeft
+---
+
+Install:
+
+```bash
+pip install kernia-django
+```
+
+The Django integration wraps Kernia's async router for Django deployments. Use a
+persistent adapter and make sure migrations are generated and applied before
+enabling plugins in production.
+
+Django applications should still expose a stable `/api/auth` prefix so browser
+clients can use the same route contract as ASGI apps.

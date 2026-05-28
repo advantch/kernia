@@ -1,0 +1,37 @@
+---
+title: Admin Config
+description: Database-backed runtime configuration for SaaS control panels.
+icon: SlidersHorizontal
+---
+
+`kernia.plugins.admin_config` stores runtime-facing configuration in the auth
+database.
+
+It supports:
+
+- login method toggles
+- public login UI config
+- email clients
+- Stripe settings
+- write-only secret redaction
+- disabled-method route gating
+
+```python
+from kernia.plugins.admin_config import admin_config
+
+plugins=[admin_config()]
+```
+
+## Routes
+
+```http
+GET  /api/auth/admin/config/public-auth
+GET  /api/auth/admin/config/auth-methods
+POST /api/auth/admin/config/auth-methods
+GET  /api/auth/admin/config/email-clients
+POST /api/auth/admin/config/email-clients
+GET  /api/auth/admin/config/stripe
+POST /api/auth/admin/config/stripe
+```
+
+The SaaS demo uses these routes for its admin area.

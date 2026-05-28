@@ -1,0 +1,40 @@
+---
+title: FastAPI SaaS Demo
+description: Run the reference SaaS app with login, settings, admin, and billing.
+icon: AppWindow
+---
+
+The repository includes a real FastAPI + Vite app.
+
+Start the backend:
+
+```bash
+uv run uvicorn examples.backend.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Start the frontend:
+
+```bash
+cd examples/frontend
+pnpm install
+pnpm dev
+```
+
+Open `http://127.0.0.1:5173`.
+
+## What it covers
+
+- login and logout
+- Better Auth JS-client wire compatibility
+- organizations
+- profile/settings shell
+- linked accounts
+- sessions
+- API keys
+- admin login-method toggles
+- email-client config with redaction
+- Stripe settings with redaction
+- Stripe product/price import
+- billing checks and usage surfaces
+
+External providers without credentials are shown as not configured.

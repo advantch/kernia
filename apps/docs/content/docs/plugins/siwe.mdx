@@ -1,0 +1,14 @@
+---
+title: SIWE
+description: Sign in with Ethereum.
+icon: WalletCards
+---
+
+```python
+from kernia.plugins.siwe import siwe
+
+plugins=[siwe()]
+```
+
+SIWE verifies Ethereum signatures and can optionally resolve ENS when configured
+with an RPC resolver.

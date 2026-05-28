@@ -1,0 +1,26 @@
+{
+  "title": "Plugins",
+  "pages": [
+    "index",
+    "email-password",
+    "magic-link",
+    "email-otp",
+    "organization",
+    "admin",
+    "admin-config",
+    "api-key",
+    "stripe",
+    "passkey",
+    "sso",
+    "scim",
+    "oauth-provider",
+    "open-api",
+    "two-factor",
+    "username",
+    "phone-number",
+    "anonymous",
+    "one-tap",
+    "siwe",
+    "redis-storage"
+  ]
+}

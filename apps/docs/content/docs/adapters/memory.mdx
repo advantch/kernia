@@ -1,0 +1,18 @@
+---
+title: Memory
+description: In-memory adapter for tests and local demos.
+icon: MemoryStick
+---
+
+```bash
+pip install kernia-memory-adapter
+```
+
+```python
+from kernia_memory_adapter import memory_adapter
+
+database = memory_adapter()
+```
+
+Do not use the memory adapter for production. It is intended for tests, examples,
+and short-lived local demos.

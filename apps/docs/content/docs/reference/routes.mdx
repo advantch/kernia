@@ -1,0 +1,53 @@
+---
+title: Routes
+description: Common core and plugin route groups.
+icon: Route
+---
+
+All routes are relative to the mount prefix, usually `/api/auth`.
+
+Core:
+
+```http
+POST /sign-up/email
+POST /sign-in/email
+POST /sign-out
+GET  /get-session
+GET  /list-sessions
+POST /revoke-session
+GET  /list-accounts
+POST /unlink-account
+```
+
+Organizations:
+
+```http
+POST /organization/create
+GET  /organization/list
+```
+
+Admin config:
+
+```http
+GET  /admin/config/public-auth
+POST /admin/config/auth-methods
+POST /admin/config/email-clients
+POST /admin/config/stripe
+```
+
+Stripe billing:
+
+```http
+POST /stripe/catalog/sync
+GET  /stripe/products
+GET  /stripe/prices
+POST /billing/check
+POST /billing/track
+```
+
+Use the OpenAPI plugin for a generated route document:
+
+```http
+GET /api/auth/openapi.json
+GET /api/auth/scalar
+```

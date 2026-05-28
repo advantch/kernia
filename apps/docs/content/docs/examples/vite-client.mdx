@@ -1,0 +1,35 @@
+---
+title: Vite Client
+description: Use the Better Auth JavaScript client with a Kernia server.
+icon: PanelsTopLeft
+---
+
+Install the client in the frontend app:
+
+```bash
+pnpm add better-auth
+```
+
+Create the client:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [organizationClient()]
+});
+```
+
+Proxy auth calls during development:
+
+```ts
+server: {
+  proxy: {
+    "/api": "http://127.0.0.1:8000"
+  }
+}
+```
+
+This keeps auth cookies same-origin in development.

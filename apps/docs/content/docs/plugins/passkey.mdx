@@ -1,0 +1,19 @@
+---
+title: Passkey
+description: WebAuthn passkey registration and authentication.
+icon: Fingerprint
+---
+
+```bash
+pip install kernia-passkey
+```
+
+```python
+from kernia_passkey import passkey
+
+plugins=[passkey()]
+```
+
+Passkeys add WebAuthn credential records and registration/authentication routes.
+The test suite includes a software authenticator with real CBOR attestations and
+signature failure cases.

@@ -73,6 +73,7 @@ configured.
 │   ├── plugins/   # one file per plugin
 │   ├── integration/   # cross-plugin flows
 ├── docs/   # mkdocs site, plugin pages auto-built
+├── apps/docs/   # Fumadocs + Next.js documentation site deployed on Vercel
 ├── scripts/audit_layout.py   # CI gate: every upstream dir implemented or waived
 └── .github/workflows/ci.yml  # 4 adapters × py3.11/3.12
 ```
@@ -86,6 +87,19 @@ uv sync
 uv run pytest e2e/ packages/ -v
 python scripts/audit_layout.py
 ```
+
+## Docs site
+
+The public documentation site lives in `apps/docs` and uses Fumadocs + Next.js.
+
+```bash
+cd apps/docs
+pnpm install
+pnpm build
+pnpm dev
+```
+
+The Vercel project is `thembelanimahlangus-projects/docs`.
 
 ## Parity gates
 

@@ -1,0 +1,17 @@
+---
+title: Starlette
+description: Mount Kernia into Starlette.
+icon: Orbit
+---
+
+Install:
+
+```bash
+pip install kernia-starlette
+```
+
+Mount the auth router with the Starlette integration and keep the same
+`/api/auth` prefix you use from the browser.
+
+Starlette is useful when you want a smaller ASGI surface than FastAPI while
+keeping the same Kernia core behavior.

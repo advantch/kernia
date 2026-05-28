@@ -1,0 +1,34 @@
+---
+title: Client
+description: Use Better Auth-compatible clients with a Kernia server.
+icon: MonitorSmartphone
+---
+
+Kernia does not ship a browser SDK. Frontends can call the HTTP routes directly
+or use the official Better Auth JavaScript client:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+
+export const authClient = createAuthClient({
+  baseURL: "http://localhost:8000/api/auth"
+});
+```
+
+The repository includes a Vite demo that drives that client against a FastAPI
+Kernia backend.
+
+## Same-origin development
+
+Use a dev proxy so cookies are same-origin:
+
+```ts
+// vite.config.ts
+server: {
+  proxy: {
+    "/api": "http://127.0.0.1:8000"
+  }
+}
+```
+
+Then point the client to `/api/auth`.

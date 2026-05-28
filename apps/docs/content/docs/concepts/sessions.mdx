@@ -1,0 +1,29 @@
+---
+title: Sessions
+description: Signed cookie sessions and server-side session rows.
+icon: KeyRound
+---
+
+Kernia stores sessions in the database and sends signed HttpOnly cookies to the
+browser.
+
+```http
+GET /api/auth/get-session
+```
+
+The router verifies the cookie signature, loads the session row, checks expiry,
+and returns the session/user payload.
+
+## Sign out
+
+```http
+POST /api/auth/sign-out
+```
+
+Sign-out deletes or invalidates the current session and clears session cookies.
+
+## Session settings
+
+Session lifetime, refresh behavior, and cookie details are configured on
+`KerniaOptions`. Keep defaults unless your product has a specific security or
+compliance requirement.

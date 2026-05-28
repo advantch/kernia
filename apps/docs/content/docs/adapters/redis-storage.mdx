@@ -1,0 +1,18 @@
+---
+title: Redis Storage
+description: Secondary storage for shared rate limits and short-lived state.
+icon: DatabaseZap
+---
+
+```bash
+pip install kernia-redis-storage
+```
+
+```python
+from kernia_redis_storage import RedisStorage
+
+secondary_storage = RedisStorage.from_url("redis://localhost:6379/0")
+```
+
+Redis storage is not the primary auth database. It backs rate limits and other
+short-lived state that needs to be shared across processes.

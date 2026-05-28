@@ -1,0 +1,62 @@
+---
+title: Basic Usage
+description: Configure Kernia directly from Python.
+icon: Code
+---
+
+Kernia is initialized with `KerniaOptions` and mounted through your framework
+integration.
+
+```python
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia_memory_adapter import memory_adapter
+
+auth = init(
+    KerniaOptions(
+        database=memory_adapter(),
+        secret="replace-me",
+        plugins=[email_and_password()],
+    )
+)
+```
+
+## FastAPI
+
+```python
+from fastapi import FastAPI
+from kernia_fastapi import mount_auth
+
+app = FastAPI()
+mount_auth(app, auth, prefix="/api/auth")
+```
+
+## Sessions
+
+Use `GET /api/auth/get-session` from the browser. Kernia resolves the signed
+session cookie, loads the session row, and returns the user/session payload.
+
+## Trusted origins
+
+State-changing browser requests should come from trusted origins:
+
+```python
+KerniaOptions(
+    trusted_origins=[
+        "http://localhost:5173",
+        "https://app.example.com",
+    ],
+)
+```
+
+## Secrets
+
+Use a stable random secret in production:
+
+```bash
+kernia secret
+```
+
+Rotating secrets should preserve old secrets for verification until existing
+sessions naturally expire.

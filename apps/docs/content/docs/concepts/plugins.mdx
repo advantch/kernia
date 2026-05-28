@@ -1,0 +1,35 @@
+---
+title: Plugins
+description: How plugins add routes, hooks, schema, and behavior.
+icon: Puzzle
+---
+
+A Kernia plugin can contribute:
+
+- HTTP endpoints
+- database schema
+- before/after hooks
+- rate limits
+- secondary storage behavior
+- event handlers
+
+```python
+plugins=[
+    email_and_password(),
+    organization(),
+    api_key(),
+    stripe(...),
+]
+```
+
+Plugin order matters when hooks overlap. Keep core sign-in methods early and
+feature plugins after the methods they extend.
+
+## Standalone plugins
+
+Large plugins live in standalone packages so production applications install
+only what they need:
+
+```bash
+pip install kernia-stripe kernia-sso kernia-scim kernia-passkey
+```

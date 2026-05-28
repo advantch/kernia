@@ -1,0 +1,14 @@
+---
+title: Phone Number
+description: Phone-number auth and OTP flows.
+icon: Smartphone
+---
+
+```python
+from kernia.plugins.phone_number import phone_number
+
+plugins=[phone_number()]
+```
+
+Phone auth requires a real SMS delivery hook in production. Local demos should
+show not-configured states instead of pretending to send messages.

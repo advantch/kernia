@@ -1,0 +1,28 @@
+---
+title: Security
+description: Defaults and controls for production deployments.
+icon: ShieldCheck
+---
+
+Kernia is designed around server-owned auth state.
+
+Security-relevant defaults include:
+
+- Argon2id password hashing with legacy verification fallback.
+- HMAC-signed session cookies.
+- trusted-origin checks for state-changing browser requests.
+- OAuth state signing and PKCE verifier binding.
+- OAuth token encryption at rest.
+- rate limiting with in-memory or Redis-backed stores.
+- optional password breach checks.
+- captcha provider support.
+
+## Production checklist
+
+- Set `KERNIA_SECRET` from a secret manager.
+- Use HTTPS and secure cookies.
+- Configure trusted origins.
+- Run migrations before deploying plugin schema changes.
+- Keep OAuth, email, and Stripe secrets write-only in admin config.
+- Test login, logout, and session refresh through the same domain shape used in
+  production.

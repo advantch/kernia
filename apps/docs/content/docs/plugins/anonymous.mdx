@@ -1,0 +1,14 @@
+---
+title: Anonymous
+description: Anonymous sessions and account linking.
+icon: UserRoundX
+---
+
+```python
+from kernia.plugins.anonymous import anonymous
+
+plugins=[anonymous()]
+```
+
+Anonymous auth is useful for try-before-signup products. Link anonymous state to
+a real account as soon as the user commits.

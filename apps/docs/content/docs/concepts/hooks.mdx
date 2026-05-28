@@ -1,0 +1,22 @@
+---
+title: Hooks
+description: Extend auth behavior before and after endpoints.
+icon: Workflow
+---
+
+Hooks let plugins intercept or extend endpoint behavior. They are used for
+features such as two-factor sign-in, last login method tracking, organization
+seat sync, and route gating.
+
+## Before hooks
+
+Before hooks run after the endpoint is matched and before the handler executes.
+Use them for validation, guards, and request shaping.
+
+## After hooks
+
+After hooks run after the handler returns. Use them for response shaping, event
+emission, session interception, and side effects.
+
+Hooks should be small, deterministic, and covered by integration tests because
+they affect complete auth flows.

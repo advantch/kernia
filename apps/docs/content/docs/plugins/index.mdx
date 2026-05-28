@@ -1,0 +1,26 @@
+---
+title: Plugins
+description: Extend Kernia with auth methods, SaaS features, and protocol surfaces.
+icon: Puzzle
+---
+
+Plugins are how Kernia adds auth methods, account features, admin surfaces,
+billing, and enterprise protocols.
+
+<Cards>
+  <Card title="Email and password" href="/docs/plugins/email-password" description="Core sign-up, sign-in, password reset, and session routes." />
+  <Card title="Organization" href="/docs/plugins/organization" description="Teams, members, invitations, roles, and access control." />
+  <Card title="Stripe" href="/docs/plugins/stripe" description="Checkout, portal, webhooks, catalog import, entitlements, and usage." />
+  <Card title="SSO and SCIM" href="/docs/plugins/sso" description="Enterprise identity and provisioning workflows." />
+</Cards>
+
+## Install shape
+
+Built-in plugins import from `kernia.plugins.*`. Standalone plugins import from
+their package namespace.
+
+```python
+from kernia.plugins.organization import organization
+from kernia_api_key import api_key
+from kernia_stripe import stripe
+```

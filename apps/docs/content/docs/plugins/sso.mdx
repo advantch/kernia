@@ -1,0 +1,18 @@
+---
+title: SSO
+description: Enterprise SAML and OIDC sign-in.
+icon: Landmark
+---
+
+```bash
+pip install kernia-sso
+```
+
+```python
+from kernia_sso import sso
+
+plugins=[sso()]
+```
+
+Use SSO for enterprise identity-provider connections. Kernia supports SAML and
+OIDC provider configuration, callbacks, and account linkage.

@@ -1,0 +1,17 @@
+---
+title: Cookies
+description: Better Auth-compatible cookie defaults.
+icon: Cookie
+---
+
+Kernia keeps Better Auth-compatible cookie names where clients and plugins depend
+on them. This includes the default session token cookie.
+
+That compatibility is intentional: changing the Python import namespace should
+not break a browser client that expects Better Auth wire behavior.
+
+## Production settings
+
+Use HTTPS, set a stable base URL, and configure trusted origins. Cross-site
+deployments should be tested in the same browser context as production because
+SameSite and secure-cookie behavior depends on origin and scheme.
