@@ -1,15 +1,18 @@
 {
   "title": "Kernia",
   "pages": [
-    "index",
+    "introduction",
     "installation",
-    "quick-start",
     "basic-usage",
+    "comparison",
     "concepts",
-    "integrations",
-    "plugins",
+    "authentication",
     "adapters",
-    "reference",
-    "examples"
+    "plugins",
+    "integrations",
+    "examples",
+    "guides",
+    "infrastructure",
+    "reference"
   ]
 }

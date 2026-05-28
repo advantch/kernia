@@ -1,37 +1,60 @@
 ---
-title: Admin Config
-description: Database-backed runtime configuration for SaaS control panels.
-icon: SlidersHorizontal
+title: "Admin Config"
+description: "Persist auth-method, email-client, Stripe, and public UI configuration in the database."
 ---
 
-`kernia.plugins.admin_config` stores runtime-facing configuration in the auth
-database.
+The admin config plugin stores operational auth configuration in the same adapter as the rest of Kernia. It is meant for SaaS admin panels where an owner can turn login methods on or off, configure email delivery, review Stripe settings, and publish public login-screen state without editing Python code.
 
-It supports:
+## Installation
 
-- login method toggles
-- public login UI config
-- email clients
-- Stripe settings
-- write-only secret redaction
-- disabled-method route gating
+~~~bash
+uv add kernia
+~~~
 
-```python
-from kernia.plugins.admin_config import admin_config
+## Server configuration
 
-plugins=[admin_config()]
-```
+~~~python title="auth.py"
+from kernia.plugins.admin import admin
+from kernia.plugins.admin_config import AdminConfigOptions, admin_config
 
-## Routes
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    plugins=(
+        admin(),
+        admin_config(AdminConfigOptions(admin_roles=("admin", "owner"))),
+    ),
+))
+~~~
 
-```http
-GET  /api/auth/admin/config/public-auth
-GET  /api/auth/admin/config/auth-methods
-POST /api/auth/admin/config/auth-methods
-GET  /api/auth/admin/config/email-clients
-POST /api/auth/admin/config/email-clients
-GET  /api/auth/admin/config/stripe
-POST /api/auth/admin/config/stripe
-```
+## Stored model
 
-The SaaS demo uses these routes for its admin area.
+`adminConfig` rows store a string key, JSON value, optional `secretFields`, and timestamps. Secret fields are accepted on write and redacted on read so admin screens can show configured state without leaking credentials.
+
+## Auth-method gate
+
+Disabled methods fail before their normal handler runs. The gate covers email/password, magic link, email OTP, username, phone number, SIWE, anonymous, one-tap, passkey, and SSO route prefixes.
+
+<APIMethod method="GET" path="/api/auth/admin/config/auth-methods">
+  Returns enabled/disabled state and labels for public login methods.
+</APIMethod>
+
+<APIMethod method="PUT" path="/api/auth/admin/config/auth-methods">
+  Updates login method state. Secrets are not stored in this document.
+</APIMethod>
+
+## Email clients
+
+Email client config supports `smtp`, `resend`, and `postmark` records. Store API keys or SMTP passwords as secret fields and return only redacted values to the browser.
+
+## Stripe settings
+
+Stripe setup belongs in admin config when the SaaS app needs a database-backed setup screen. Keep webhook signing secrets write-only and verify the live webhook endpoint separately.
+
+## Public UI config
+
+A login screen can call the public config endpoint to decide which buttons to render. It should still handle server-side disabled errors because admin state may change while the page is open.
+
+## Testing
+
+Tests should cover CRUD, redaction, disabled method failures, admin-only access, and public config reads through mounted HTTP routes.

@@ -1,0 +1,60 @@
+---
+title: "Getting Started"
+description: "Bring up the infrastructure needed by a local Kernia SaaS demo."
+---
+
+Use this page when moving from docs snippets to a real local stack. The minimal stack is a Python backend, a database adapter, a Vite frontend, and an email sink.
+
+## Local services
+
+Install workspace dependencies:
+
+```bash
+uv sync
+pnpm install
+```
+
+For a database-backed demo, start PostgreSQL and Redis locally or through containers, then run migrations.
+
+## Environment
+
+```dotenv
+KERNIA_SECRET=dev-secret-change-me
+KERNIA_BASE_URL=http://localhost:8000/api/auth
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/kernia
+REDIS_URL=redis://localhost:6379/0
+VITE_AUTH_BASE_URL=http://localhost:8000/api/auth
+VITE_APP_BASE_URL=http://localhost:5173
+```
+
+## Backend
+
+Mount Kernia through FastAPI:
+
+```python title="main.py"
+from fastapi import FastAPI
+from kernia_fastapi import mount_kernia
+
+app = FastAPI()
+mount_kernia(app, auth)
+```
+
+Run the backend on port 8000.
+
+## Frontend
+
+Run the Vite app on port 5173. It should call `http://localhost:8000/api/auth` with credentials included.
+
+## Verification
+
+Create a user, sign in, refresh the dashboard, revoke the session, toggle one auth method in admin config, and confirm the login screen updates from real API state.
+
+## Provider setup
+
+External providers need real credentials. Until credentials are configured, the demo should render the provider as unavailable, not as a successful flow.
+
+## Troubleshooting
+
+- `get-session` returns `null`: check cookies, CORS credentials, and the API host.
+- OAuth redirects to localhost: set `KERNIA_BASE_URL` to the backend auth mount.
+- Admin config changes do not show in login UI: confirm the frontend reads public config from the backend.

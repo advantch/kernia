@@ -1,17 +1,77 @@
 ---
-title: Starlette
-description: Mount Kernia into Starlette.
-icon: Orbit
+title: "Starlette"
+description: "Mount Kernia in Starlette and resolve sessions in handlers."
 ---
 
-Install:
+Starlette uses the same ASGI router integration as FastAPI without FastAPI's dependency injection layer. The integration mounts Kernia at `auth.context.options.base_path` and exposes coroutine helpers for session lookup.
+
+## Installation
 
 ```bash
-pip install kernia-starlette
+uv add kernia kernia-starlette starlette uvicorn
 ```
 
-Mount the auth router with the Starlette integration and keep the same
-`/api/auth` prefix you use from the browser.
+## Server configuration
 
-Starlette is useful when you want a smaller ASGI surface than FastAPI while
-keeping the same Kernia core behavior.
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.types.init_options import EmailPasswordOptions
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ.get("KERNIA_BASE_URL", "http://localhost:8000/api/auth"),
+    base_path="/api/auth",
+    email_and_password=EmailPasswordOptions(enabled=True),
+))
+```
+
+## Mounting
+
+```python title="app.py"
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+
+from kernia_starlette import mount_kernia, require_session
+
+from .auth import auth
+
+async def me(request):
+    session = await require_session(request)
+    return JSONResponse({"user_id": session.user_id})
+
+app = Starlette(routes=[Route("/api/me", me)])
+mount_kernia(app, auth)
+```
+
+`mount_kernia` stores the auth handle on `app.state.kernia`. `get_session(request)` returns `None` when the request is anonymous; `require_session(request)` raises a Starlette `HTTPException(401)`.
+
+## Session cookie
+
+The helper resolves the compatibility cookie `better-auth.session_token` through the shared Kernia session resolver. Keep this cookie name unchanged when using compatible browser clients.
+
+## Routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/email">
+  Email/password sign-in when `EmailPasswordOptions(enabled=True)` is configured.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/get-session">
+  Reads the current browser session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Starts a configured OAuth provider flow.
+</APIMethod>
+
+## Troubleshooting
+
+- If handlers cannot find `request.app.state.kernia`, call `mount_kernia(app, auth)` once during application construction.
+- If mounted routes 404, check `base_path` and the public URL prefix are identical.
+- If cookies are ignored by a browser client, configure CORS and SameSite behavior at the Starlette or proxy layer.

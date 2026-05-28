@@ -1,0 +1,70 @@
+---
+title: "GitLab"
+description: "Configure GitLab OAuth for Kernia."
+---
+
+<ProviderHeading provider="GitLab" />
+
+GitLab OAuth works for GitLab.com and self-managed GitLab instances. Kernia exchanges the code on the Python backend and stores the GitLab user id as the provider account id.
+
+## Create the GitLab application
+
+In GitLab, open **Preferences** > **Applications** and create an OAuth application.
+
+```text
+http://localhost:8000/api/auth/callback/gitlab
+https://api.example.com/api/auth/callback/gitlab
+```
+
+Enable confidential mode for server-side web apps and copy the application ID and secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import gitlab
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "gitlab": gitlab(
+            client_id=env.GITLAB_CLIENT_ID,
+            client_secret=env.GITLAB_CLIENT_SECRET,
+            scopes=("read_user", "openid", "email"),
+        ),
+    },
+))
+```
+
+## Self-managed GitLab
+
+For self-managed instances, configure the provider with that instance's authorization, token, and userinfo URLs if the constructor supports overrides. Keep the callback path `/callback/gitlab` unless you register a different provider key.
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "gitlab", callback_url: appCallbackURL }),
+});
+```
+
+## Troubleshooting
+
+- Invalid redirect URI: GitLab requires an exact match.
+- Missing profile data: request `read_user` and `email`.
+- Self-managed failure: confirm the instance base URL and TLS certificate are reachable from the Python backend.
+
+## Test coverage
+
+Use a mock provider for CI. Live tests should cover GitLab.com and any self-managed instance you document as supported.

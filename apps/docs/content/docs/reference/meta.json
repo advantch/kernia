@@ -1,4 +1,16 @@
 {
   "title": "Reference",
-  "pages": ["options", "routes", "cli", "testing"]
+  "pages": [
+    "cli",
+    "contributing",
+    "faq",
+    "instrumentation",
+    "options",
+    "resources",
+    "routes",
+    "security",
+    "telemetry",
+    "testing",
+    "errors"
+  ]
 }

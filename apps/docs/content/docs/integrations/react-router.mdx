@@ -1,0 +1,64 @@
+---
+title: "React Router"
+description: "Use React Router routes and loaders against a Kernia Python backend."
+---
+
+React Router can render the SaaS app while Kernia runs in Python. The router's loaders and actions should call the mounted auth API with credentials included; protected data still belongs behind the Python backend session helpers.
+
+## Auth helper
+
+~~~ts title="app/lib/auth.ts"
+const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL ?? "http://localhost:8000/api/auth";
+
+export async function authRequest(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${authBaseURL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+~~~
+
+## Loader session check
+
+~~~ts title="app/routes/dashboard.tsx"
+import { redirect } from "react-router";
+import { authRequest } from "../lib/auth";
+
+export async function loader() {
+  try {
+    return { session: await authRequest("/get-session") };
+  } catch {
+    throw redirect("/login");
+  }
+}
+~~~
+
+## Action sign-in
+
+~~~ts title="app/routes/login.tsx"
+import { authRequest } from "../lib/auth";
+
+export async function action({ request }: { request: Request }) {
+  const form = await request.formData();
+  await authRequest("/sign-in/email", {
+    method: "POST",
+    body: JSON.stringify({
+      email: form.get("email"),
+      password: form.get("password"),
+      remember_me: true,
+    }),
+  });
+  return { ok: true };
+}
+~~~
+
+## OAuth redirect
+
+After `/sign-in/social` returns a redirect URL, set `window.location.href`. Use the React Router route URL as `callback_url` so the app lands on the right screen after the Python callback completes.
+
+## Backend protection
+
+React Router loaders improve UX but do not secure data by themselves. Every protected Python route should use FastAPI `require_session`, Starlette session helpers, or Django middleware/decorators.

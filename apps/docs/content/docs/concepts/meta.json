@@ -1,16 +1,20 @@
 {
   "title": "Concepts",
   "pages": [
-    "architecture",
-    "database",
-    "sessions",
-    "cookies",
-    "client",
-    "plugins",
-    "hooks",
-    "security",
-    "cli",
     "admin-config",
-    "billing"
+    "api",
+    "billing",
+    "cli",
+    "client",
+    "cookies",
+    "database",
+    "email",
+    "hooks",
+    "oauth",
+    "plugins",
+    "rate-limit",
+    "security",
+    "session-management",
+    "users-accounts"
   ]
 }

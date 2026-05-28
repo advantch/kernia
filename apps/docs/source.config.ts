@@ -1,17 +1,36 @@
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
-import { metaSchema, pageSchema } from "fumadocs-core/source/schema";
+import lastModified from "fumadocs-mdx/plugins/last-modified";
+import {
+  createFileSystemGeneratorCache,
+  createGenerator,
+  remarkAutoTypeTable,
+} from "fumadocs-typescript";
+import * as z from "zod";
 
 export const docs = defineDocs({
-  dir: "content/docs",
+  dir: "./content/docs",
   docs: {
-    schema: pageSchema,
     postprocess: {
-      includeProcessedMarkdown: true
-    }
+      includeProcessedMarkdown: true,
+    },
+    async: true,
   },
   meta: {
-    schema: metaSchema
-  }
+    schema: z.object({
+      title: z.string().optional(),
+      pages: z.array(z.string()).optional(),
+      root: z.boolean().optional(),
+    }),
+  },
 });
 
-export default defineConfig();
+const generator = createGenerator({
+  cache: createFileSystemGeneratorCache(".next/fumadocs-typescript"),
+});
+
+export default defineConfig({
+  mdxOptions: {
+    remarkPlugins: [[remarkAutoTypeTable, { generator }]],
+  },
+  plugins: [lastModified()],
+});

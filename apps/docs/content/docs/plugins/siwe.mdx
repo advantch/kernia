@@ -1,14 +1,64 @@
 ---
-title: SIWE
-description: Sign in with Ethereum.
-icon: WalletCards
+title: "SIWE"
+description: "Sign in with Ethereum wallets using nonce and signature verification."
 ---
 
-```python
+The SIWE plugin implements Sign-In with Ethereum. Kernia issues a nonce, verifies the signed message, resolves ENS metadata when configured, creates or updates the user, and sets a session cookie.
+
+## Installation
+
+~~~bash
+uv add kernia eth-account
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.siwe import siwe
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
 from kernia.plugins.siwe import siwe
 
-plugins=[siwe()]
-```
+from .db import adapter
 
-SIWE verifies Ethereum signatures and can optionally resolve ENS when configured
-with an RPC resolver.
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        siwe(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/siwe/nonce">
+  Returns a nonce for the wallet to include in the SIWE message.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/siwe/verify">
+  Verifies the signed message, creates or resolves the user, and creates a session.
+</APIMethod>
+
+## Schema impact
+
+Extends user data with wallet-oriented fields such as address and optional ENS name.
+
+## Behavior and options
+
+- Nonces must be single-use and short-lived.
+- Verify domain, URI, nonce, chain id, issued-at, and signature.
+- Treat ENS lookup as enrichment, not as the identity proof itself.
+
+## Test and demo coverage
+
+Test nonce issue, valid signature, wrong domain, replayed nonce, bad signature, ENS refresh, user creation, and session cookie behavior.

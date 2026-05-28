@@ -1,15 +1,56 @@
 ---
-title: Redis Storage
-description: Shared secondary storage for plugin state.
-icon: DatabaseZap
+title: "Redis Storage"
+description: "Kernia plugin documentation for Redis Storage."
 ---
 
+Redis Storage extends the Kernia auth server with feature-specific routes and schema.
+
+## Installation
+
 ```bash
-pip install kernia-redis-storage
+uv add kernia-redis-storage
 ```
+
+## Import path
 
 ```python
-from kernia_redis_storage import RedisStorage
+from kernia_redis_storage import redis_storage
 ```
 
-Use Redis for rate limits and other short-lived distributed state.
+## Server configuration
+
+```python
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+
+from kernia_redis_storage import redis_storage
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=(
+        redis_storage(redis_client),
+    ),
+))
+```
+
+## Routes
+
+This feature does not currently expose routes in the local package, or its routes are created dynamically. Document exact routes before marking a UI flow as live.
+
+## Schema changes
+
+Run `kernia generate` or `kernia migrate` after enabling this plugin. Plugin schema is merged with the core user, session, account, and verification tables.
+
+## Options and behavior
+
+- Configure the plugin constructor in Python.
+- Keep secrets in environment variables or write-only admin config.
+- Use integration tests against the mounted auth router.
+
+## Test and demo coverage
+
+The demo should call these routes through HTTP and show disabled or unconfigured states when required provider credentials or secrets are missing.

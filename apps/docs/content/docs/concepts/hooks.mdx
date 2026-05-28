@@ -1,22 +1,66 @@
 ---
-title: Hooks
-description: Extend auth behavior before and after endpoints.
-icon: Workflow
+title: "Hooks"
+description: "Use before hooks, after hooks, request hooks, and response hooks to extend Kernia behavior."
 ---
 
-Hooks let plugins intercept or extend endpoint behavior. They are used for
-features such as two-factor sign-in, last login method tracking, organization
-seat sync, and route gating.
+Hooks let plugins participate in the request lifecycle without replacing core route handlers. They mirror the Better Auth extension model, but handlers are async Python callables that receive an `EndpointContext`.
 
 ## Before hooks
 
-Before hooks run after the endpoint is matched and before the handler executes.
-Use them for validation, guards, and request shaping.
+Before hooks run after parsing and session resolution but before the endpoint handler. Use them to enforce policy, block requests, or attach derived state.
+
+~~~python title="company_domain.py"
+from kernia.error import APIError
+from kernia.types.hooks import BeforeHook, PluginHooks
+
+async def require_company_email(ctx):
+    body = ctx.body
+    if not body.email.endswith("@example.com"):
+        raise APIError(403, "FORBIDDEN", "Use your company email.")
+
+hooks = PluginHooks(before=(
+    BeforeHook(match="/sign-up/email", handler=require_company_email),
+))
+~~~
 
 ## After hooks
 
-After hooks run after the handler returns. Use them for response shaping, event
-emission, session interception, and side effects.
+After hooks run after a handler returns and before the response is serialized. They can observe results or replace the result. Two-factor auth uses an after hook to replace a successful password sign-in with a pending two-factor challenge.
 
-Hooks should be small, deterministic, and covered by integration tests because
-they affect complete auth flows.
+~~~python
+async def audit_sign_in(ctx, result):
+    if isinstance(result, dict) and result.get("session"):
+        await write_audit_event("sign_in", result["session"]["id"])
+    return None
+~~~
+
+Returning `None` keeps the handler result. Returning another value replaces it.
+
+## Global request hooks
+
+`on_request` runs for every request. Bearer auth uses it to resolve an `Authorization: Bearer` header into a session when no session cookie is present.
+
+## Global response hooks
+
+`on_response` runs before the final payload is returned. It is useful for localization, telemetry, or response decoration. Keep it deterministic and avoid slow network calls on every auth response.
+
+## Matching routes
+
+Hook matches can be literal paths, glob-style strings, or callables that inspect the request context.
+
+~~~python
+from kernia.types.hooks import BeforeHook
+
+def is_admin_route(ctx):
+    return ctx.request.path.startswith("/admin/")
+
+BeforeHook(match=is_admin_route, handler=admin_gate)
+~~~
+
+## Context
+
+`EndpointContext` contains the parsed body, query, request headers, cookies, auth context, optional session, response cookies, and shared plugin state. Treat `plugin_state` as per-auth-instance memory, not durable storage.
+
+## Testing
+
+Test hooks through mounted HTTP routes. Direct hook unit tests are useful for edge cases, but route tests prove the order: parse, session, before hooks, handler, after hooks, cookies, response.

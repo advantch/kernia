@@ -1,4 +1,11 @@
 {
   "title": "Examples",
-  "pages": ["fastapi-saas-demo", "vite-client", "deployment"]
+  "pages": [
+    "fastapi-saas-demo",
+    "vite-client",
+    "next-js",
+    "react-router",
+    "svelte-kit",
+    "deployment"
+  ]
 }

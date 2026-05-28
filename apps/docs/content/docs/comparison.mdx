@@ -1,0 +1,41 @@
+---
+title: "Comparison"
+description: "How Kernia positions itself against existing auth tools."
+---
+
+# Comparison
+
+Kernia is a Python auth package with Better Auth-compatible wire behavior where client interoperability requires it. It is not a hosted identity provider, not a vendored JavaScript server, and not a mock demo.
+
+## Kernia vs JavaScript-first auth
+
+| Topic | Kernia |
+|---|---|
+| Runtime | Python server runtime. |
+| Public API | `kernia`, `kernia-*`, `kernia_*`. |
+| Compatibility | Route, cookie, and JSON compatibility where clients depend on it. |
+| Integrations | FastAPI, Starlette, Django. |
+| Adapters | SQLAlchemy, Mongo, Redis storage, memory. |
+| SaaS demo | FastAPI backend and Vite frontend. |
+
+## Kernia vs hosted identity providers
+
+| Topic | Kernia |
+|---|---|
+| Data ownership | Your database and migrations. |
+| Deployment | Your Python backend. |
+| Customization | Python hooks, plugins, adapters, and admin config. |
+| Operations | You own uptime, email/SMS providers, keys, logs, and monitoring. |
+| Best fit | Teams that want auth inside their Python product platform. |
+
+## When to choose Kernia
+
+Choose Kernia when your backend is Python, you want local control of auth data, and you need SaaS features like organizations, sessions, admin settings, API keys, SSO, SCIM, passkeys, and Stripe billing.
+
+## When not to choose Kernia
+
+Do not choose Kernia if you want a fully managed hosted identity product, or if your backend is already fully JavaScript and you do not need Python packages.
+
+## Compatibility boundary
+
+Kernia preserves wire-level behavior where browser clients rely on it. That means route shapes, JSON payloads, callback behavior, and some cookie identifiers may intentionally match the established protocol. Python imports, package names, CLI commands, docs, and examples remain Kernia.

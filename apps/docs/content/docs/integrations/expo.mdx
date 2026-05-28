@@ -1,0 +1,67 @@
+---
+title: "Expo"
+description: "Use Expo clients with a Kernia Python backend."
+---
+
+Expo apps do not share browser cookies with a web app. Treat mobile auth as an HTTP API integration: use provider SDKs or web browser redirects, then store the resulting session or token according to your mobile security model.
+
+## Backend setup
+
+The Python backend owns provider secrets and callbacks:
+
+```dotenv
+KERNIA_BASE_URL=https://api.example.com/api/auth
+```
+
+Register provider callbacks against that backend URL, not the Expo app URL:
+
+```text
+https://api.example.com/api/auth/callback/google
+```
+
+## Email sign-in
+
+```ts title="auth.ts"
+export async function signInEmail(email: string, password: string) {
+  const response = await fetch(`${process.env.EXPO_PUBLIC_AUTH_BASE_URL}/sign-in/email`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, remember_me: true }),
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+```
+
+## Social sign-in
+
+Use Expo's browser auth session to open the URL returned by `/sign-in/social`. Configure the provider callback URL to the Python backend and use a mobile callback URL for the final app return.
+
+```ts title="social.ts"
+const result = await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    provider: "google",
+    callback_url: "kernia-demo://auth/callback",
+  }),
+});
+```
+
+## Token storage
+
+If you choose bearer-style auth for mobile API calls, use the bearer plugin and store tokens in platform secure storage. Do not put long-lived secrets in AsyncStorage.
+
+| Storage | Use |
+|---|---|
+| SecureStore | Bearer token or API token when mobile token auth is enabled. |
+| In-memory state | Current user/session display state. |
+| AsyncStorage | Non-secret UI preferences only. |
+
+## Passkeys
+
+Mobile passkeys require platform-specific WebAuthn support and should be tested separately from browser passkeys. Do not claim passkey support in the mobile UI until registration and assertion are tested on real devices.
+
+## Test coverage
+
+Test email sign-in, social redirect return, app restart, token refresh or reauth, logout, protected API rejection, unavailable providers, and secure storage deletion.

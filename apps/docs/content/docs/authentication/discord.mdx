@@ -1,0 +1,73 @@
+---
+title: "Discord"
+description: "Configure Discord OAuth for Kernia."
+---
+
+<ProviderHeading provider="Discord" />
+
+Discord OAuth is useful for communities, creator products, games, and support tooling. Kernia uses the Python backend for the code exchange and stores the Discord account link with the returned user id.
+
+## Create the Discord application
+
+In the Discord Developer Portal, create an application, open **OAuth2**, and add redirect URIs:
+
+```text
+http://localhost:8000/api/auth/callback/discord
+https://api.example.com/api/auth/callback/discord
+```
+
+Copy the client ID and client secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import discord
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "discord": discord(
+            client_id=env.DISCORD_CLIENT_ID,
+            client_secret=env.DISCORD_CLIENT_SECRET,
+            scopes=("identify", "email"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts title="src/lib/discord.ts"
+await fetch("http://localhost:8000/api/auth/sign-in/social", {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    provider: "discord",
+    callback_url: "http://localhost:5173/dashboard",
+  }),
+});
+```
+
+## Scopes
+
+Use `identify` for the Discord user id and display name. Add `email` only when your product requires email-based account linking or verified email policy.
+
+## Troubleshooting
+
+- Redirect URI errors usually mean the Discord developer portal URL does not exactly match `KERNIA_BASE_URL + /callback/discord`.
+- Missing email means the `email` scope was not granted or Discord did not return an email.
+- Guild membership checks are not part of basic sign-in. Implement them as app authorization after login.
+
+## Test coverage
+
+Use a mock OAuth provider in CI and a real Discord application only for live smoke tests. Cover missing email, denied consent, and existing-account linking.

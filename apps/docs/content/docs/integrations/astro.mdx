@@ -1,0 +1,64 @@
+---
+title: "Astro"
+description: "Use Astro pages and islands with a Kernia Python auth backend."
+---
+
+Astro can serve static pages, server-rendered routes, and client islands. Kernia remains a Python backend mounted at `/api/auth` or a separate API origin.
+
+## Environment
+
+```dotenv title=".env"
+PUBLIC_AUTH_BASE_URL=http://localhost:8000/api/auth
+AUTH_BASE_URL=http://localhost:8000/api/auth
+```
+
+Use the public value in browser islands and the private value in server-rendered routes.
+
+## Client island helper
+
+```ts title="src/lib/auth.ts"
+export const authBaseURL = import.meta.env.PUBLIC_AUTH_BASE_URL;
+
+export async function getSession() {
+  const response = await fetch(`${authBaseURL}/get-session`, {
+    credentials: "include",
+  });
+  return response.ok ? response.json() : null;
+}
+```
+
+## Login island
+
+```tsx title="src/components/Login.tsx"
+export async function signIn(email: string, password: string) {
+  const response = await fetch(`${authBaseURL}/sign-in/email`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, remember_me: true }),
+  });
+  if (!response.ok) throw await response.json();
+}
+```
+
+## Server-rendered pages
+
+For SSR pages, forward the incoming cookie header to `/get-session`:
+
+```ts title="src/pages/dashboard.astro"
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const response = await fetch(`${import.meta.env.AUTH_BASE_URL}/get-session`, {
+  headers: { cookie },
+});
+const session = response.ok ? await response.json() : null;
+```
+
+Static pages should treat auth state as client-side data because there is no request cookie during build.
+
+## OAuth
+
+Provider callbacks should point at the Python backend. Astro routes can receive the final `callback_url` after Kernia sets the session cookie.
+
+## Test coverage
+
+Test island sign-in, SSR session reads, logout, OAuth callback return, and protected backend API calls with credentials included.

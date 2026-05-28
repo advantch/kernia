@@ -1,14 +1,88 @@
 ---
-title: Email OTP
-description: One-time passcodes over email.
-icon: BadgeCheck
+title: "Email OTP"
+description: "Send one-time email codes for sign-in, verification, reset, and email changes."
 ---
 
-```python
+Email OTP is for flows where the user types a short code into the current screen. Kernia stores the OTP in the verification model, calls your `send_otp` function, and consumes the code during verification.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.email_otp import email_otp
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
 from kernia.plugins.email_otp import email_otp
 
-plugins=[email_otp()]
-```
+from .db import adapter
 
-Email OTP can be used for sign-in, email verification, and recovery flows. Pair
-it with admin-configured email clients for a SaaS control panel.
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        email_otp(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/email-otp">
+  Creates and sends an OTP for sign-in.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/verify">
+  Verifies a sign-in OTP and creates a session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/send-verification-otp">
+  Sends an OTP for email verification.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/verify-email">
+  Consumes a verification OTP for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/forget-password/email-otp">
+  Sends a password-reset OTP.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/reset-password">
+  Consumes the reset OTP and writes the new password hash.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/request-email-change">
+  Sends an OTP to confirm an email change.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/email-otp/change-email">
+  Consumes the email-change OTP and updates the email.
+</APIMethod>
+
+## Schema impact
+
+Reuses the core `verification` table. No plugin table is added.
+
+## Behavior and options
+
+- Configure `advanced["email-otp"]` with `send_otp`, `otp_length`, `expires_in`, and `disable_sign_up`.
+- Rate limits are intentionally tight on send and verify routes.
+- Treat OTP values as secrets and avoid logging them outside test fixtures.
+
+## Test and demo coverage
+
+Use `MockSMTP` or a fake send function. Cover send, verify, expiry, invalid code, too many attempts, reset password, email change, and disabled sign-up.

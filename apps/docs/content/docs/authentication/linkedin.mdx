@@ -1,0 +1,70 @@
+---
+title: "LinkedIn"
+description: "Configure LinkedIn OAuth for Kernia."
+---
+
+<ProviderHeading provider="LinkedIn" />
+
+LinkedIn sign-in is common for B2B products. Kernia handles the server-side code exchange and links the LinkedIn member id to the user account.
+
+## Create the LinkedIn app
+
+In the LinkedIn Developer Portal, create an app, enable sign-in products, and add redirect URLs:
+
+```text
+http://localhost:8000/api/auth/callback/linkedin
+https://api.example.com/api/auth/callback/linkedin
+```
+
+Copy the client ID and client secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import linkedin
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "linkedin": linkedin(
+            client_id=env.LINKEDIN_CLIENT_ID,
+            client_secret=env.LINKEDIN_CLIENT_SECRET,
+            scopes=("openid", "profile", "email"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "linkedin", callback_url: appCallbackURL }),
+});
+```
+
+## Provider notes
+
+LinkedIn's available scopes depend on enabled products and app review. Do not show LinkedIn as available in the demo until the app has the scopes your sign-in policy requires.
+
+## Troubleshooting
+
+- Product not enabled: enable the LinkedIn sign-in product in the developer portal.
+- Redirect mismatch: callback must match the Kernia backend URL exactly.
+- Missing email: request `email` or `email` through OpenID Connect scopes, depending on your app configuration.
+
+## Test coverage
+
+Test denied consent, missing email, existing-account linking, and app-review dependent unavailable states.

@@ -1,0 +1,88 @@
+---
+title: "GitHub"
+description: "Configure GitHub OAuth for Kernia."
+---
+
+<ProviderHeading provider="GitHub" />
+
+GitHub OAuth is a good default social provider for developer-facing SaaS apps. Kernia starts the authorization-code flow, exchanges the callback code on the Python backend, fetches the GitHub profile and verified emails, then creates or links the account.
+
+## Create the GitHub OAuth app
+
+In GitHub, open **Settings** > **Developer settings** > **OAuth Apps** and create an app.
+
+| Field | Value |
+|---|---|
+| Homepage URL | `https://app.example.com` |
+| Authorization callback URL | `https://api.example.com/api/auth/callback/github` |
+| Local callback URL | `http://localhost:8000/api/auth/callback/github` |
+
+Copy the client ID and generate a client secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.social_providers import github
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    social_providers={
+        "github": github(
+            client_id=os.environ["GITHUB_CLIENT_ID"],
+            client_secret=os.environ["GITHUB_CLIENT_SECRET"],
+            scopes=("read:user", "user:email"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts title="src/lib/github.ts"
+const response = await fetch("http://localhost:8000/api/auth/sign-in/social", {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    provider: "github",
+    callback_url: "http://localhost:5173/dashboard",
+  }),
+});
+
+const data = await response.json();
+if (data.redirect) window.location.href = data.url;
+```
+
+## GitHub email behavior
+
+GitHub profiles can omit a public email. Request `user:email` and have Kernia read verified emails from the GitHub emails endpoint before linking by email.
+
+## Routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Starts the GitHub OAuth flow.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/callback/github">
+  Handles the provider redirect, exchanges the code, resolves the profile, links or creates the user, and sets the session cookie.
+</APIMethod>
+
+## Troubleshooting
+
+- `PROVIDER_NOT_FOUND`: the configured key must be exactly `github`.
+- Missing email: request `user:email` and require a verified email before email-based account linking.
+- Callback failure: `KERNIA_BASE_URL` must include the mounted `/api/auth` path.
+- No refresh token: GitHub OAuth apps normally return access tokens, not refresh tokens.

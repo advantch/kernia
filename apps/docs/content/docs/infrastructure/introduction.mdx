@@ -1,0 +1,46 @@
+---
+title: "Infrastructure"
+description: "Plan the infrastructure around a production Kernia auth deployment."
+---
+
+Kernia is the auth package. Production auth also needs infrastructure: database migrations, secret storage, email delivery, SMS delivery, webhook ingress, audit logs, monitoring, backups, and restore procedures.
+
+## Required services
+
+| Service | Required for |
+|---|---|
+| Primary database | Users, sessions, accounts, verification rows, and plugin tables. |
+| Secret manager | `KERNIA_SECRET`, provider secrets, email credentials, Stripe keys, webhook secrets. |
+| Email provider | Verification, password reset, magic link, email OTP, invitations. |
+| Redis or shared storage | Distributed rate limits, secondary storage, token caches. |
+| Webhook ingress | Stripe and other provider events. |
+| Observability | Route latency, provider errors, webhook failures, admin changes. |
+
+## Optional services
+
+| Service | Use |
+|---|---|
+| SMS provider | Phone-number auth and SMS step-up. |
+| Object storage | Long-term audit export or compliance reports. |
+| Queue/worker | Email retries, billing sync, audit fanout, analytics aggregation. |
+
+## Operational boundaries
+
+Admin config can store redacted settings for UI-driven setup, but infrastructure secrets should still be governed by your deployment platform. Do not let a public admin screen replace auditability and access control in your secret manager.
+
+## Deployment sequence
+
+1. Provision database and secret manager.
+2. Apply migrations.
+3. Deploy the Python backend with `KERNIA_BASE_URL`.
+4. Configure provider callbacks to the backend auth mount.
+5. Deploy the frontend with the same auth base URL.
+6. Run smoke checks for login, session refresh, logout, admin rejection, and webhooks.
+
+## Monitoring
+
+Track auth route error rates, sign-in latency, email delivery failure, OAuth callback failure, webhook signature failures, migration drift, database pool saturation, Redis latency, and unexpected admin config changes.
+
+## Recovery
+
+Back up the primary database, document secret rotation, keep provider console access controlled, and rehearse restoring users, sessions, API keys, billing state, SSO providers, and SCIM directories.

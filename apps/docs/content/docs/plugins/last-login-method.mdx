@@ -1,0 +1,58 @@
+---
+title: "Last Login Method"
+description: "Remember the last successful sign-in method for login UI hints."
+---
+
+The last-login-method plugin writes a non-HTTP-only cookie after successful sign-in so the frontend can highlight the method a user last used. It only writes after a session cookie is emitted.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.last_login_method import last_login_method
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.last_login_method import last_login_method
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        last_login_method(),
+    ),
+))
+~~~
+
+## API routes
+
+
+
+## Schema impact
+
+No database changes. The plugin writes a browser-readable cookie named `better-auth.last_login_method` by default.
+
+## Behavior and options
+
+- The default cookie max age is 30 days.
+- The plugin recognizes email, social callback, SIWE, passkey, and magic-link paths.
+- Because the cookie is only a UI hint, do not use it for authorization.
+
+## Test and demo coverage
+
+Test that failed sign-ins do not write the cookie, successful email/social sign-ins write the expected method, custom cookie names work, and logout does not affect authorization.

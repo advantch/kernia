@@ -1,0 +1,88 @@
+---
+title: "Email"
+description: "Configure email verification, password reset, magic links, OTP, and provider-backed delivery."
+---
+
+Kernia treats email delivery as application infrastructure. The auth server decides when to send verification, password reset, magic-link, or OTP messages; your configured delivery function sends the actual email through SMTP, Resend, Postmark, or another provider.
+
+## Email verification
+
+Enable email/password and require verification when new accounts should prove mailbox ownership before they can sign in.
+
+~~~python title="auth.py"
+from kernia.types.init_options import EmailPasswordOptions
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    email_and_password=EmailPasswordOptions(
+        enabled=True,
+        require_email_verification=True,
+    ),
+    advanced={
+        "send_verification_email": send_verification_email,
+    },
+))
+~~~
+
+~~~python title="emails.py"
+async def send_verification_email(*, email: str, url: str, token: str) -> None:
+    await email_client.send(
+        to=email,
+        subject="Verify your email",
+        html=f'<a href="{url}">Verify email</a>',
+    )
+~~~
+
+## Password reset
+
+The email/password routes create a verification token and call the reset sender configured by the application. Treat reset URLs as secrets: short expiration, HTTPS, and single use.
+
+<APIMethod method="POST" path="/api/auth/forget-password">
+  Creates a password reset token and asks the configured sender to deliver it.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/reset-password">
+  Consumes the reset token and writes the new password hash.
+</APIMethod>
+
+## Magic link
+
+The magic-link plugin sends a one-click sign-in URL. It is useful for low-friction apps but should be paired with rate limits and clear device/session management.
+
+~~~python
+from kernia.plugins.magic_link import magic_link
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    plugins=(magic_link(),),
+    advanced={
+        "magic-link": {"send_magic_link": send_magic_link},
+    },
+))
+~~~
+
+## Email OTP
+
+Email OTP is better when a user is expected to type a code into an existing screen. Configure code length, expiration, and the send function.
+
+~~~python
+from kernia.plugins.email_otp import email_otp
+
+advanced={
+    "email-otp": {
+        "send_otp": send_email_otp,
+        "otp_length": 6,
+        "expires_in": 300,
+    },
+}
+~~~
+
+## Admin-configured clients
+
+The admin config plugin stores SMTP, Resend, and Postmark configuration in the database. Secret fields are write-only and redacted on read. This is for SaaS admin UX; production systems should still keep provider credentials restricted at the infrastructure layer.
+
+## Testing
+
+Use `kernia_test_utils.MockSMTP` for deterministic tests. Assert that the public HTTP route triggered the email and that the token can be consumed exactly once.

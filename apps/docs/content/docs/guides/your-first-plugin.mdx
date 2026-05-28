@@ -1,0 +1,88 @@
+---
+title: "Create your first plugin"
+description: "Build a small Kernia plugin with routes, schema, hooks, and tests."
+---
+
+A Kernia plugin can add routes, schema, hooks, middleware, options, rate-limit rules, and errors. Start with one small behavior and test it through the mounted HTTP app.
+
+## Plugin shape
+
+```python title="kernia_plugins/invite_code.py"
+from kernia.plugins import Plugin
+
+def invite_code(required: bool = True) -> Plugin:
+    async def before_sign_up(ctx):
+        code = ctx.body.get("invite_code")
+        if required and not await valid_invite_code(code):
+            raise AuthError("INVALID_INVITE_CODE", status=400)
+
+    return Plugin(
+        id="invite-code",
+        hooks={
+            "before:/sign-up/email": before_sign_up,
+        },
+        schema={
+            "invite_code": {
+                "fields": {
+                    "id": {"type": "string"},
+                    "code_hash": {"type": "string"},
+                    "used_at": {"type": "date", "nullable": True},
+                },
+            },
+        },
+    )
+```
+
+## Use the plugin
+
+```python title="auth.py"
+from kernia_plugins.invite_code import invite_code
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    plugins=[
+        invite_code(required=True),
+    ],
+))
+```
+
+## Add routes
+
+Plugins can also expose endpoints:
+
+```python
+Plugin(
+    id="invite-code",
+    routes=[
+        Endpoint("POST", "/invite-code/validate", validate_invite_code),
+    ],
+)
+```
+
+Routes are mounted under the auth base path, so `/invite-code/validate` becomes `/api/auth/invite-code/validate` in the common FastAPI setup.
+
+## Schema changes
+
+After adding plugin schema, generate and review migrations:
+
+```bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0002_invite_code.py
+```
+
+## Test the plugin
+
+```python title="test_invite_code.py"
+async def test_invite_code_required(driver):
+    response = await driver.post("/api/auth/sign-up/email", json={
+        "email": "user@example.com",
+        "password": "correct-password",
+        "name": "User",
+    })
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_INVITE_CODE"
+```
+
+## Documentation checklist
+
+Plugin docs should include install command, import path, server configuration, contributed routes, schema changes, options, examples, troubleshooting, and test/demo coverage.

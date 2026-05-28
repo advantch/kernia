@@ -1,39 +1,77 @@
 ---
-title: Testing
-description: Verification commands used by Kernia development.
-icon: TestTube
+title: "Testing"
+description: "Test Kernia through mounted HTTP routes and real adapter behavior."
 ---
 
-Run the backend suite:
+Kernia tests should prioritize public behavior: HTTP requests, cookies, database writes, OAuth callbacks, emails, webhooks, and route authorization. Helper unit tests are useful, but they do not prove the auth surface works.
 
-```bash
-uv run pytest e2e/ packages/ -q
+## Test layers
+
+| Layer | Purpose |
+|---|---|
+| Unit | Hashing, token parsing, option normalization, small helpers. |
+| Route | Mounted HTTP behavior, cookies, errors, sessions, and payloads. |
+| Adapter | Real database behavior for each supported adapter. |
+| Provider | Mock OAuth, SAML, Stripe, email, SMS, and passkey flows. |
+| Browser | Demo login, settings, admin, billing, and session flows. |
+
+## ASGI driver
+
+Use `kernia_test_utils.ASGIDriver` to call a mounted FastAPI or Starlette app without a live network port.
+
+```python title="test_auth.py"
+from kernia_test_utils import ASGIDriver
+
+async def test_email_sign_in(app):
+    driver = ASGIDriver(app)
+    response = await driver.post("/api/auth/sign-in/email", json={
+        "email": "user@example.com",
+        "password": "correct-password",
+    })
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
 ```
 
-Run the parity layout audit:
+## Mock providers
+
+Use deterministic provider fakes instead of live credentials in normal CI:
+
+| Helper | Use |
+|---|---|
+| `MockIdP` | OAuth/OIDC redirect and callback tests. |
+| `MockSAMLIdP` | Enterprise SSO tests. |
+| `MockSMTP` | Verification, reset, magic link, and OTP email tests. |
+| `MockSMS` | Phone verification tests. |
+| `MockStripe` | Catalog sync, portal, checkout, webhook, usage tests. |
+| `SoftAuthenticator` | Passkey registration and assertion tests. |
+
+## Adapter matrix
+
+Run critical flows against memory, SQLAlchemy, Mongo, Redis-backed secondary storage, and containerized databases when the feature depends on storage semantics.
 
 ```bash
-uv run python scripts/audit_layout.py
+uv run pytest packages/ e2e/ -q
 ```
 
-Run the demo frontend build:
+## Browser tests
+
+The SaaS demo should have Playwright tests for login, logout, settings/profile, linked accounts, sessions revoke, API key create/revoke, admin method toggles, email client config, Stripe import, billing checks, and usage display.
 
 ```bash
-cd examples/frontend
-pnpm build
+cd apps/demo-web
+pnpm test:e2e
 ```
 
-Run the docs build:
+## Assertions that matter
 
-```bash
-cd apps/docs
-pnpm build
-```
+- HTTP status and stable error code.
+- Cookie name, flags, domain, path, and expiration.
+- Database rows created, updated, or deleted.
+- Secret redaction on reads.
+- Webhook signature verification.
+- Disabled or not-configured provider behavior.
+- Browser-visible state after real route calls.
 
-Run the wire check against a live FastAPI backend:
+## Test data
 
-```bash
-uv run uvicorn examples.backend.app:app --host 127.0.0.1 --port 8000
-cd examples/frontend
-node scripts/wire-check.mjs
-```
+Keep test users and organizations explicit. Do not reuse provider secrets or production-like emails. For OAuth and SAML, generate deterministic keys in fixtures and keep them scoped to the test process.

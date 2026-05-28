@@ -1,40 +1,58 @@
 ---
-title: FastAPI SaaS Demo
-description: Run the reference SaaS app with login, settings, admin, and billing.
-icon: AppWindow
+title: "FastAPI SaaS Demo"
+description: "Run and test the Kernia FastAPI backend with the Vite SaaS frontend."
 ---
 
-The repository includes a real FastAPI + Vite app.
+The SaaS demo should be the proof that the docs are real: a FastAPI backend mounted with Kernia, a Vite frontend that calls the backend, and screens for login, logout, profile, linked accounts, sessions, API keys, admin configuration, email clients, Stripe catalog import, entitlements, and usage.
 
-Start the backend:
+## Backend
 
 ```bash
-uv run uvicorn examples.backend.app:app --host 127.0.0.1 --port 8000 --reload
+cd examples/fastapi-saas/backend
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-Start the frontend:
+The backend should mount Kernia at `/api/auth`, enable email/password, admin, admin-config, API keys, Stripe, organization, magic link, email OTP, and OpenAPI routes where those packages are installed.
+
+## Frontend
 
 ```bash
-cd examples/frontend
+cd examples/fastapi-saas/web
 pnpm install
-pnpm dev
+pnpm dev --host 0.0.0.0 --port 5173
 ```
 
-Open `http://127.0.0.1:5173`.
+The frontend should call the backend with `credentials: "include"`. Provider buttons must come from the public auth config and display disabled or not-configured states when credentials are missing.
 
-## What it covers
+## Required screens
 
-- login and logout
-- Better Auth JS-client wire compatibility
-- organizations
-- profile/settings shell
-- linked accounts
-- sessions
-- API keys
-- admin login-method toggles
-- email-client config with redaction
-- Stripe settings with redaction
-- Stripe product/price import
-- billing checks and usage surfaces
+| Area | Required behavior |
+|---|---|
+| Login | Email/password, OAuth provider list, magic link, OTP, passkey, SSO, and disabled states. |
+| Logout | Calls `/api/auth/sign-out` and clears local UI state. |
+| Settings / Profile | Calls `/api/auth/update-user` and displays current user data from `/api/auth/get-session`. |
+| Linked Accounts | Calls `/api/auth/list-accounts`, `/api/auth/unlink-account`, and provider linking routes when implemented. |
+| Sessions | Calls `/api/auth/list-sessions`, `/api/auth/revoke-session`, and `/api/auth/revoke-other-sessions`. |
+| API Keys | Calls `/api/auth/api-key/create`, `/api/auth/api-key/list`, and `/api/auth/api-key/revoke`. |
+| Admin / Auth Methods | Calls `/api/auth/admin/config/public-auth` for public config and admin routes for updates. |
+| Admin / Email Clients | Supports SMTP, Resend, and Postmark config with secrets redacted after save. |
+| Admin / Stripe | Saves Stripe settings, runs `/api/auth/stripe/catalog/sync`, lists products/prices, and shows sync state. |
+| Billing | Calls `/api/auth/billing/customer`, `/api/auth/billing/check`, `/api/auth/billing/track`, `/api/auth/billing/usage`, and `/api/auth/billing/portal`. |
 
-External providers without credentials are shown as not configured.
+## Browser test checklist
+
+1. Create a user with email/password.
+2. Refresh the page and prove `/api/auth/get-session` restores the session.
+3. Update the profile and verify the database row changes.
+4. Create an API key, copy it once, refresh, and confirm only the prefix remains.
+5. Revoke another session and confirm it disappears.
+6. Toggle a login method in admin config and confirm the login page changes.
+7. Save an email client secret and confirm reads are redacted.
+8. Run Stripe catalog sync against mock Stripe and verify imported products/prices render.
+9. Call `billing/check`, then `billing/track`, then `billing/usage` and verify usage increments.
+10. Sign out and confirm protected routes return `401`.
+
+## Not configured states
+
+External providers without credentials are not failures in the demo. The UI should display them as unavailable, with setup links or admin prompts, and should never fake a successful OAuth, email, or Stripe flow.

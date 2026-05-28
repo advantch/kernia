@@ -1,0 +1,75 @@
+---
+title: "Nuxt"
+description: "Use Nuxt with a Kernia Python auth backend."
+---
+
+Nuxt applications should call Kernia over HTTP rather than mounting a JavaScript auth server. Use runtime config for the auth base URL and forward cookies from server routes when reading sessions during SSR.
+
+## Runtime config
+
+```ts title="nuxt.config.ts"
+export default defineNuxtConfig({
+  runtimeConfig: {
+    authBaseURL: process.env.AUTH_BASE_URL,
+    public: {
+      authBaseURL: process.env.NUXT_PUBLIC_AUTH_BASE_URL,
+    },
+  },
+});
+```
+
+## Client composable
+
+```ts title="composables/useAuthAPI.ts"
+export function useAuthAPI() {
+  const config = useRuntimeConfig();
+  return async function authRequest(path: string, init: any = {}) {
+    return $fetch(`${config.public.authBaseURL}${path}`, {
+      ...init,
+      credentials: "include",
+    });
+  };
+}
+```
+
+## Login page
+
+```vue title="pages/login.vue"
+<script setup lang="ts">
+const authRequest = useAuthAPI();
+
+async function signIn(email: string, password: string) {
+  await authRequest("/sign-in/email", {
+    method: "POST",
+    body: { email, password, remember_me: true },
+  });
+  await navigateTo("/dashboard");
+}
+</script>
+```
+
+## Server session
+
+In server handlers, pass the request cookie to the Python backend. Do not trust client-side route middleware for authorization.
+
+```ts title="server/utils/session.ts"
+export async function getServerSession(event: any) {
+  const config = useRuntimeConfig();
+  const cookie = getHeader(event, "cookie") ?? "";
+  return await $fetch(`${config.authBaseURL}/get-session`, {
+    headers: { cookie },
+  });
+}
+```
+
+## OAuth callbacks
+
+Register provider callback URLs against the Python mount, for example:
+
+```text
+https://api.example.com/api/auth/callback/google
+```
+
+## Test coverage
+
+Test client sign-in, SSR session reads, route middleware redirects, logout, OAuth callback return, and CORS/cookie behavior between Nuxt and the Python backend.

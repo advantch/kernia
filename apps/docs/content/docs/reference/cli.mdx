@@ -1,21 +1,89 @@
 ---
-title: CLI Reference
-description: Commands provided by kernia-cli.
-icon: SquareTerminal
+title: "CLI Reference"
+description: "Reference for the kernia command line interface."
 ---
 
+The `kernia` command operates on the same Python auth object your server mounts. Commands that inspect schema need `--app module:attr` so the CLI can import the configured `auth` instance, discover adapters and plugins, and generate the same database shape your app will run.
+
+## Install
+
 ```bash
-kernia init --adapter sqlite --framework fastapi
-kernia generate
-kernia migrate
-kernia secret
-kernia info
+uv add kernia kernia-cli
 ```
 
-`kernia init` refuses to overwrite existing files unless you pass `--force`.
+Check the command:
 
-`kernia generate` writes Alembic revisions based on the resolved schema.
+```bash
+kernia --help
+```
 
-`kernia migrate` applies migrations with `alembic upgrade head`.
+## App target
 
-`kernia info` prints loaded plugins, routes, adapter details, and diagnostics.
+Use `--app` anywhere the command needs your auth instance:
+
+```bash
+kernia info --app app.auth:auth
+```
+
+The value is `python.module:attribute`. The module must be importable from the current working directory or installed environment.
+
+## `kernia init`
+
+Scaffolds local setup files and prints next steps. Use it for new apps, not for overwriting an existing backend.
+
+```bash
+kernia init --framework fastapi --adapter sqlalchemy
+```
+
+The command should create an auth module, environment template, and starter migration instructions. If files already exist, review the diff before accepting any overwrite.
+
+## `kernia generate`
+
+Generates migrations from the configured core schema and plugin schema contributors.
+
+```bash
+kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+```
+
+Use this after adding plugins such as organization, API key, passkey, SSO, SCIM, Stripe, or admin config.
+
+## `kernia migrate`
+
+Applies migrations for local or simple deployments.
+
+```bash
+kernia migrate --app app.auth:auth
+```
+
+Production teams should usually run committed migrations through their deployment pipeline instead of calling this command from application startup.
+
+## `kernia secret`
+
+Prints a strong random secret:
+
+```bash
+kernia secret
+```
+
+Store the value in a secret manager as `KERNIA_SECRET`. Do not commit it to `.env`, examples, tests, or docs.
+
+## `kernia info`
+
+Prints resolved app metadata:
+
+```bash
+kernia info --app app.auth:auth
+```
+
+Expected output includes base URL, base path, adapter type, plugin ids, cookie settings, trusted origins, and schema contributors. Secret values should be redacted.
+
+## Troubleshooting
+
+- `ModuleNotFoundError`: run from the project root or install your app package into the environment.
+- `AttributeError`: confirm the part after `:` points to the actual `auth` object.
+- Missing plugin tables: run `kernia info` and confirm the plugin is registered before generating migrations.
+- Wrong database URL: make sure the CLI environment matches the server environment.
+
+## Test coverage
+
+CLI tests should run commands in a clean environment, assert import failures are readable, assert generated migration output is deterministic, and verify all secret fields are redacted in `kernia info`.

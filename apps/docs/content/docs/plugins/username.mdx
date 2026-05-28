@@ -1,14 +1,64 @@
 ---
-title: Username
-description: Username sign-up and sign-in.
-icon: AtSign
+title: "Username"
+description: "Add username sign-up and username/password sign-in."
 ---
 
-```python
+The username plugin stores a normalized username for uniqueness and an optional display username for preserving user-preferred casing. It shares the password storage path with email/password accounts.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.username import username
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
 from kernia.plugins.username import username
 
-plugins=[username()]
-```
+from .db import adapter
 
-Use the username plugin when accounts need stable public handles or login by
-username.
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        username(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-up/username">
+  Creates a user with username, display username, email, and password.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/username">
+  Signs in with username and password and sets the session cookie.
+</APIMethod>
+
+## Schema impact
+
+Extends `user` with `username` and `displayUsername` fields. Generate a migration before enabling it in a persistent database.
+
+## Behavior and options
+
+- Usernames are normalized for uniqueness.
+- Display usernames preserve casing for UI.
+- Combine with admin config if username should be toggled at runtime.
+
+## Test and demo coverage
+
+Test normalization, duplicate usernames, invalid length, invalid characters, sign-in, wrong password, migration fields, and login-screen availability.

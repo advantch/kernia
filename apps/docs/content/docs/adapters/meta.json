@@ -1,4 +1,15 @@
 {
   "title": "Adapters",
-  "pages": ["memory", "sqlalchemy", "mongo", "redis-storage"]
+  "pages": [
+    "community-adapters",
+    "memory",
+    "mongo",
+    "mssql",
+    "mysql",
+    "other-relational-databases",
+    "postgresql",
+    "redis-storage",
+    "sqlalchemy",
+    "sqlite"
+  ]
 }

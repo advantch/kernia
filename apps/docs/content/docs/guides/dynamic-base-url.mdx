@@ -1,0 +1,61 @@
+---
+title: "Dynamic Base URL"
+description: "Configure Kernia for preview deployments, multiple domains, and per-request URL resolution."
+---
+
+Use a dynamic base URL when your app is served from more than one hostname, such as preview deployments, customer domains, regional domains, or separate app/API domains.
+
+## The rule
+
+Kernia must be able to compute the public auth URL that users and providers can reach. OAuth callbacks, email links, password reset URLs, and cookie settings all depend on that value.
+
+For a standard FastAPI deployment, prefer an explicit value:
+
+```dotenv
+KERNIA_BASE_URL=https://api.example.com/api/auth
+```
+
+## Server configuration
+
+```python title="auth.py"
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    trusted_origins=(
+        "https://app.example.com",
+        "https://preview.example.com",
+    ),
+))
+```
+
+## Preview deployments
+
+Preview frontends can call a stable API domain:
+
+```dotenv
+VITE_AUTH_BASE_URL=https://api-preview.example.com/api/auth
+VITE_APP_BASE_URL=https://pr-123.example.dev
+```
+
+Add preview frontend origins to trusted origins through deployment configuration. Do not blindly trust every `*.example.dev` origin unless your platform controls all subdomains.
+
+## Multiple production domains
+
+If customers use custom domains, store the allowed origins in your app database and validate them before accepting redirects. Do not derive allowed redirect targets only from a request header.
+
+## Proxy headers
+
+Only use forwarded host and proto headers when they are set by a trusted proxy. Otherwise an attacker can influence generated links or redirect validation.
+
+## Cookies across subdomains
+
+For `app.example.com` and `api.example.com`, keep the API base URL stable and configure cookie domain behavior deliberately. Cross-site cookies require `SameSite=None` and `Secure`, but same-site subdomains can often keep stricter defaults.
+
+## Troubleshooting
+
+- OAuth `redirect_uri_mismatch`: provider console callback does not match `base_url + /callback/:provider`.
+- Email links use localhost: the runtime `KERNIA_BASE_URL` is missing or wrong.
+- Cookies are not set in preview: check HTTPS, cookie domain, SameSite, and CORS credentials.
+- Redirect rejected: add the frontend origin to trusted origins or admin config.

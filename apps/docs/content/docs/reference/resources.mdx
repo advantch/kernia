@@ -1,0 +1,61 @@
+---
+title: "Resources"
+description: "Useful packages, examples, and test utilities in the Kernia repository."
+---
+
+Use this page as a map to the local Kernia docs. It intentionally points to Kernia packages and examples rather than external tutorials.
+
+## Core packages
+
+| Package | Purpose |
+|---|---|
+| `kernia` | Framework-agnostic auth core. |
+| `kernia-cli` | `kernia` command line interface. |
+| `kernia-fastapi` | FastAPI route mounting and session dependencies. |
+| `kernia-starlette` | Starlette/ASGI route mounting. |
+| `kernia-django` | Django integration. |
+
+## Adapters and storage
+
+| Package | Purpose |
+|---|---|
+| `kernia-sqlalchemy` | Relational databases through SQLAlchemy. |
+| `kernia-mongo` | MongoDB adapter. |
+| `kernia-memory-adapter` | In-memory tests and examples. |
+| `kernia-redis-storage` | Secondary storage for sessions, rate limits, and ephemeral data. |
+
+## Plugin packages
+
+| Package | Docs |
+|---|---|
+| `kernia-api-key` | [API key](/docs/plugins/api-key) |
+| `kernia-passkey` | [Passkey](/docs/plugins/passkey) |
+| `kernia-sso` | [SSO](/docs/plugins/sso) |
+| `kernia-scim` | [SCIM](/docs/plugins/scim) |
+| `kernia-stripe` | [Stripe](/docs/plugins/stripe) |
+| `kernia-oauth-provider` | [OAuth provider](/docs/plugins/oauth-provider) |
+| `kernia-test-utils` | [Test utils](/docs/plugins/test-utils) |
+
+## Examples
+
+Start with the [FastAPI SaaS demo](/docs/examples/fastapi-saas-demo), then use the frontend page that matches your app:
+
+- [Vite client](/docs/examples/vite-client)
+- [Next.js](/docs/examples/next-js)
+- [React Router](/docs/examples/react-router)
+- [SvelteKit](/docs/examples/svelte-kit)
+- [Deployment](/docs/examples/deployment)
+
+## Operational references
+
+- [Routes](/docs/reference/routes)
+- [Options](/docs/reference/options)
+- [Security](/docs/reference/security)
+- [Testing](/docs/reference/testing)
+- [Instrumentation](/docs/reference/instrumentation)
+- [Telemetry](/docs/reference/telemetry)
+
+## Repository links
+
+- GitHub repository: `https://github.com/advantch/kernia`
+- Issue reports should include package version, adapter, framework, plugin list, route, expected behavior, actual behavior, and a minimal reproduction.

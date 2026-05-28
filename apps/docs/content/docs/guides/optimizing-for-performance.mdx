@@ -1,0 +1,63 @@
+---
+title: "Optimizing for Performance"
+description: "Tune Kernia route latency, database access, caching, and frontend session reads."
+---
+
+Auth routes sit on the critical path for every signed-in user. Optimize the slow parts deliberately: session lookup, database indexes, provider HTTP calls, email/SMS delivery, webhooks, and frontend session refreshes.
+
+## Measure first
+
+Instrument endpoint latency, adapter operations, provider calls, and webhook processing before changing architecture. A good trace for `/get-session` should show framework routing, cookie verification, session lookup, optional user lookup, and response serialization.
+
+## Session lookup
+
+Keep session lookup fast:
+
+- Index session token or token hash.
+- Index `session.user_id`.
+- Avoid loading organization, billing, and profile aggregates on every `/get-session`.
+- Cache safe session reads only when invalidation is clear.
+
+## Database indexes
+
+Recommended indexes:
+
+| Model | Indexes |
+|---|---|
+| `user` | `id`, `email` |
+| `session` | `token`, `user_id`, `expires_at` |
+| `account` | `user_id`, `(provider_id, account_id)` |
+| `verification` | `(identifier, token)`, `expires_at` |
+| `api_key` | `key_hash`, `user_id`, `organization_id` |
+| `organization_member` | `user_id`, `organization_id` |
+| `usage_event` | `customer_id`, `feature_id`, `created_at` |
+
+## Background work
+
+Move non-critical work out of request handling:
+
+- Audit-log fanout.
+- Analytics aggregation.
+- Email/SMS retries.
+- Stripe catalog sync.
+- Webhook side effects that do not need to block the response.
+
+## Provider calls
+
+Cache OAuth discovery documents and JWKS responses according to provider cache headers. Keep token exchange and userinfo calls traced separately so callback failures are diagnosable.
+
+## Frontend behavior
+
+Do not call `/get-session` from every component. Centralize session state, refresh it after auth mutations, and use server-side session reads only where the page needs authenticated data before render.
+
+## Rate limits
+
+Rate limiting protects performance as much as security. Use Redis or another shared store when running multiple workers.
+
+## Load testing
+
+Load test sign-in, get-session, logout, API key lookup, Stripe webhook ingestion, and admin list pages. Include cold-cache provider callback tests separately from steady-state session tests.
+
+## Test coverage
+
+Performance tests should assert query counts and route budgets for representative flows. Regression tests should fail when a simple session read starts loading unrelated billing or organization data.

@@ -1,0 +1,72 @@
+---
+title: "OIDC Provider"
+description: "Expose OpenID Connect issuer behavior through the OAuth provider package."
+---
+
+The OIDC provider entry point is an alias over the standalone OAuth provider package. Use it when the docs or codebase prefer OIDC naming, but install and configure the same issuer package.
+
+## Installation
+
+~~~bash
+uv add kernia-oauth-provider
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.oidc_provider import OAuthProviderOptions, oidc_provider
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.oidc_provider import OAuthProviderOptions, oidc_provider
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        oidc_provider(OAuthProviderOptions(issuer=os.environ["KERNIA_BASE_URL"])),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/.well-known/openid-configuration">
+  Publishes issuer, authorization endpoint, token endpoint, JWKS URI, scopes, and response types.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/oauth2/authorize">
+  Starts the OIDC authorization-code flow.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/token">
+  Returns access, refresh, and ID tokens when allowed.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/oauth2/userinfo">
+  Returns userinfo claims for a valid access token.
+</APIMethod>
+
+## Schema impact
+
+Uses the OAuth provider schema. Generate the same migrations as `/docs/plugins/oauth-provider`.
+
+## Behavior and options
+
+- Prefer the OAuth provider page for complete option details.
+- OIDC clients must validate issuer, audience, expiration, nonce, and signature.
+- Keep dynamic client registration disabled unless your product explicitly needs it.
+
+## Test and demo coverage
+
+Run the OAuth provider test suite plus OIDC-specific ID token, nonce, discovery, JWKS, and userinfo checks.

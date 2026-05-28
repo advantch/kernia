@@ -1,27 +1,30 @@
-import { RootProvider } from "fumadocs-ui/provider/next";
+import { GeistPixelSquare } from "geist/font/pixel";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
-import "./global.css";
+import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
+import { Providers } from "@/components/providers";
+import { createMetadata } from "@/lib/metadata";
 
-const inter = Inter({
-  subsets: ["latin"]
+const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
+
+export const metadata: Metadata = createMetadata({
+  title: { template: "%s | Kernia", default: "Kernia" },
+  description: "Python authentication for modern SaaS apps.",
 });
-
-export const metadata: Metadata = {
-  title: {
-    template: "%s | Kernia",
-    default: "Kernia"
-  },
-  description: "Python authentication compatible with Better Auth.",
-  metadataBase: new URL("https://kernia.dev")
-};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={inter.className} suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col">
-        <RootProvider>{children}</RootProvider>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+      <body className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`} suppressHydrationWarning>
+        <Providers>
+          <div className="relative min-h-dvh">
+            <StaggeredNavFiles />
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

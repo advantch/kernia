@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import {
   DocsBody,
@@ -7,26 +8,28 @@ import {
   DocsPage,
   DocsTitle,
   MarkdownCopyButton,
-  ViewOptionsPopover
+  ViewOptionsPopover,
 } from "fumadocs-ui/layouts/docs/page";
-import { getMDXComponents } from "@/components/mdx";
+import { getMDXComponents } from "@/components/docs/mdx-components";
 import { getPageImage, getPageMarkdownUrl, source } from "@/lib/source";
 import { gitConfig } from "@/lib/shared";
 
-type PageProps = {
-  params: Promise<{ slug?: string[] }>;
-};
+type PageProps = { params: Promise<{ slug?: string[] }> };
 
 export default async function Page(props: PageProps) {
   const params = await props.params;
+  if (!params.slug || params.slug.length === 0) {
+    redirect("/docs/introduction");
+  }
+
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
-  const MDX = page.data.body;
+  const { body: MDX, toc } = await page.data.load();
   const markdownUrl = getPageMarkdownUrl(page).url;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage toc={toc} full={page.data.full}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="mb-6 flex items-center gap-2 border-b pb-6">
@@ -51,12 +54,9 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
   const params = await props.params;
   const page = source.getPage(params.slug);
   if (!page) notFound();
-
   return {
     title: page.data.title,
     description: page.data.description,
-    openGraph: {
-      images: getPageImage(page).url
-    }
+    openGraph: { images: getPageImage(page).url },
   };
 }

@@ -1,29 +1,62 @@
 ---
-title: Billing
-description: Stripe catalog import, feature checks, usage, and balances.
-icon: CreditCard
+title: "Billing"
+description: "Model Stripe-backed products, prices, plans, entitlements, usage, and customer billing state."
 ---
 
-`kernia-stripe` keeps Better Auth-compatible subscription routes and adds a
-Kernia billing layer for SaaS products.
+Kernia billing is centered on Stripe import plus application entitlements. Stripe owns products, prices, checkout, portals, invoices, and subscription webhooks. Kernia stores the imported catalog, maps prices to internal plans and features, and exposes `check` and `track` APIs for product enforcement.
 
-The model is Stripe-import-first:
+## Stripe catalog import
 
-```http
-POST /api/auth/stripe/catalog/sync
-```
+Use `/stripe/catalog/sync` to import products and prices from Stripe into Kernia. Imported records should be reviewed before they are mapped to plans.
 
-Kernia imports Stripe products and prices, then lets your application map those
-records to plans, features, entitlements, and usage rules.
+<APIMethod method="POST" path="/api/auth/stripe/catalog/sync">
+  Pulls Stripe products and prices into Kernia billing tables.
+</APIMethod>
 
-## Runtime checks
+## Features
 
-```http
-POST /api/auth/billing/check
-POST /api/auth/billing/track
-GET  /api/auth/billing/usage
-```
+Features describe what the application can enforce: boolean access, metered usage, seats, non-consumable quantities, included grants, reset periods, and optional overage behavior.
 
-Supported feature types include boolean features, metered consumables,
-non-consumable quantities, included grants, reset periods, overage flags, and
-seat-style quantities.
+~~~json
+{
+  "key": "messages",
+  "kind": "metered",
+  "included": 10000,
+  "resetPeriod": "month",
+  "allowOverage": false
+}
+~~~
+
+## Plans and prices
+
+A plan maps one or more Stripe prices to a set of plan features. A single product can have monthly and annual prices that share the same entitlement set.
+
+## Customer state
+
+Billing customer state connects a Kernia user or organization to a Stripe customer and subscription. Webhooks should be the source of truth for subscription status.
+
+<APIMethod method="GET" path="/api/auth/billing/customer">
+  Returns customer id, subscription state, active plan, and billing portal availability.
+</APIMethod>
+
+## Check and track
+
+<APIMethod method="POST" path="/api/auth/billing/check">
+  Checks whether a user or organization has access to a feature and returns remaining balance where relevant.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/billing/track">
+  Records usage and updates entitlement balance for metered features.
+</APIMethod>
+
+## Usage events
+
+Track usage at the point where the product action succeeds. Do not count failed actions unless the product explicitly bills attempts.
+
+## Webhooks
+
+Stripe webhooks should update subscription rows, billing customer state, period boundaries, and entitlement resets. Tests should use signed mock webhook events.
+
+## Demo coverage
+
+The SaaS demo should show current plan, imported products/prices, mapped features, `check` output, usage history, portal link creation, and webhook health.

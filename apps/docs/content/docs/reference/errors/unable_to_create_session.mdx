@@ -1,0 +1,41 @@
+---
+title: "Unable To Create Session"
+description: "Kernia could not create the session after authentication succeeded."
+---
+
+# Unable To Create Session
+
+`UNABLE_TO_CREATE_SESSION` means the user or account step succeeded, but Kernia could not persist or issue the session. The user should not be considered signed in until this step succeeds.
+
+## Response shape
+
+```json
+{
+  "code": "UNABLE_TO_CREATE_SESSION",
+  "message": "Unable to create session",
+  "status": 500
+}
+```
+
+## Common causes
+
+- The `session` table or collection is missing.
+- Database migrations are not applied.
+- The adapter cannot write the session record.
+- A unique constraint or token generation conflict failed repeatedly.
+- A before/after hook raised during session creation.
+- Database connection pool is exhausted.
+- Cookie serialization failed because of invalid domain or path configuration.
+
+## How to fix
+
+- Run migrations and confirm the session model exists.
+- Check adapter logs for the failing write.
+- Verify session token length and column size.
+- Temporarily disable custom hooks to isolate hook failures.
+- Check database pool and timeout metrics.
+- Confirm cookie configuration matches the public auth base URL.
+
+## Tests
+
+Route tests should simulate adapter write failure and assert Kernia returns this code without setting a session cookie. Integration tests should prove a normal sign-in creates the database session and browser cookie together.

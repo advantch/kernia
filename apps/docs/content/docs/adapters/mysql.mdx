@@ -1,0 +1,55 @@
+---
+title: "MySQL"
+description: "Use MySQL-compatible databases through the SQLAlchemy async adapter."
+---
+
+MySQL works through SQLAlchemy's async dialects. Kernia does not need a separate MySQL adapter package; install `kernia-sqlalchemy` and the async driver that matches your deployment.
+
+## Installation
+
+```bash
+uv add kernia kernia-sqlalchemy sqlalchemy asyncmy alembic
+```
+
+Use `aiomysql` instead of `asyncmy` if that is the driver your platform supports.
+
+## Configuration
+
+```python title="auth.py"
+from sqlalchemy.ext.asyncio import create_async_engine
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+engine = create_async_engine(
+    "mysql+asyncmy://user:password@localhost:3306/app",
+    pool_pre_ping=True,
+)
+adapter = sqlalchemy_adapter(engine)
+```
+
+## Schema details
+
+Review generated column sizes for tokens, provider IDs, email fields, and JSON fields. Some MySQL-compatible services differ in JSON support, index length behavior, collation defaults, and timestamp precision.
+
+Use UTC consistently. If your driver or database has timezone options, set them explicitly and test session expiration around daylight-saving changes.
+
+## Migrations
+
+Generate through `kernia generate`, commit the Alembic migration, and run it through your normal migration process:
+
+```bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+alembic upgrade head
+```
+
+## Production notes
+
+- Use a case-insensitive email strategy deliberately. Do not rely on accidental collation behavior.
+- Keep API key hashes, session tokens, and verification tokens indexed.
+- Test JSON plugin fields on your exact MySQL-compatible service.
+- Monitor slow queries on session lookup and account linking.
+
+## Troubleshooting
+
+- If JSON fields fail, confirm your target MySQL version supports JSON columns.
+- If unique indexes fail on long strings, adjust generated migration column lengths before applying.
+- If sessions expire unexpectedly, check timezone conversion and integer timestamp handling.

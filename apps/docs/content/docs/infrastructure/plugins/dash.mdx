@@ -1,0 +1,127 @@
+---
+title: "Dash"
+description: "Map Better Auth Dash concepts to Kernia admin, analytics, and audit APIs."
+---
+
+Dash in Better Auth is an infrastructure plugin that connects an auth instance to hosted dashboard APIs, analytics, audit events, and activity tracking. Kernia does not ship that hosted Better Auth Infrastructure service. The Kernia equivalent is a self-hosted dashboard built from the admin, admin-config, API key, organization, SSO, SCIM, Stripe, hook, and audit-log surfaces.
+
+Use this page when you want the same operational shape as Dash without claiming a managed Kernia Dash service exists.
+
+## Installation
+
+Install the packages that expose the data your dashboard needs:
+
+```bash
+uv add kernia kernia-fastapi kernia-api-key kernia-stripe kernia-sso kernia-scim
+```
+
+Then enable the admin-facing plugins in your auth instance:
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.admin import admin
+from kernia.plugins.admin_config import admin_config
+from kernia.plugins.api_key import api_key
+from kernia.plugins.organization import organization
+from kernia_stripe import stripe
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    plugins=[
+        admin(),
+        admin_config(),
+        organization(),
+        api_key(),
+        stripe(),
+    ],
+))
+```
+
+## What Dash maps to
+
+| Better Auth Dash area | Kernia equivalent |
+|---|---|
+| User management | Admin plugin user routes. |
+| Session monitoring | Session management routes and admin session list. |
+| Organization management | Organization, SSO, and SCIM plugin routes. |
+| Activity tracking | Hooks that write `last_active_at` or audit events. |
+| Event history | Application audit log table or event sink. |
+| Hosted dashboard API | Your FastAPI admin backend. |
+| Analytics graphs | Queries over users, sessions, organizations, and audit events. |
+
+## Activity tracking
+
+Dash updates activity fields at a configured interval. Kernia should do this explicitly in your app, because the write rate depends on traffic and database size.
+
+```python title="activity.py"
+from datetime import datetime, timezone
+
+async def mark_session_active(ctx):
+    session = ctx.session
+    if session is None:
+        return
+
+    await ctx.adapter.update("session", session.id, {
+        "last_active_at": datetime.now(timezone.utc),
+    })
+```
+
+Wire that hook only for routes where activity matters. For high traffic apps, write at most once every few minutes per session.
+
+## Dashboard endpoints
+
+A Kernia dashboard should read the same classes of data as Dash:
+
+| Area | Route family |
+|---|---|
+| Users | `/admin/users`, `/admin/user`, `/admin/user/ban`, `/admin/user/unban` |
+| Sessions | `/admin/sessions`, `/admin/session/revoke`, `/admin/sessions/revoke-all` |
+| Auth methods | `/admin/config/auth-methods` |
+| Email clients | `/admin/config/email-clients` |
+| Organizations | `/organization/*`, `/admin/organizations` |
+| SSO and SCIM | `/sso/*`, `/scim/*` |
+| API keys | `/api-key/*` |
+| Billing | `/stripe/*`, `/billing/*` |
+
+## Schema changes
+
+The Dash concept usually needs these application-owned fields or tables:
+
+| Model | Fields |
+|---|---|
+| `session` | `last_active_at`, `ip_address`, `user_agent` |
+| `audit_event` | `id`, `actor_id`, `event`, `subject_type`, `subject_id`, `metadata`, `created_at` |
+| `admin_config` | persisted login, email, provider, and billing settings |
+
+## Examples
+
+The FastAPI SaaS demo should use this pattern:
+
+```python title="admin_routes.py"
+from fastapi import APIRouter, Depends
+from kernia_fastapi import require_session
+
+router = APIRouter(prefix="/api/admin")
+
+@router.get("/overview")
+async def overview(session=Depends(require_session)):
+    await require_admin(session)
+    return {
+        "users": await count_users(),
+        "active_sessions": await count_active_sessions(),
+        "pending_webhooks": await count_pending_webhooks(),
+    }
+```
+
+## Troubleshooting
+
+- If dashboard numbers differ from production, check whether background workers and webhooks write to the same database.
+- If admin routes are visible to normal users, fix backend authorization first. Hiding navigation is not access control.
+- If activity writes create too much load, throttle updates by session and move aggregation to a worker.
+
+## Test and demo coverage
+
+Tests should assert that admin-only endpoints reject normal users, dashboard counters are database-backed, secret fields are redacted, and audit events are written for admin actions. The demo should show real unavailable states for optional SSO, SCIM, and Stripe setup instead of rendering fake success.

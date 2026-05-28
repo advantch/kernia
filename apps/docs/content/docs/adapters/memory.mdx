@@ -1,18 +1,51 @@
 ---
-title: Memory
-description: In-memory adapter for tests and local demos.
-icon: MemoryStick
+title: "Memory"
+description: "Use the in-memory adapter for tests, examples, and local experiments."
 ---
 
+The memory adapter stores Kernia records in Python data structures. It is deterministic and useful for examples, but it is not durable and should not be used for production auth.
+
+## Installation
+
 ```bash
-pip install kernia-memory-adapter
+uv add kernia-memory-adapter
 ```
 
-```python
+## Configuration
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
 from kernia_memory_adapter import memory_adapter
 
-database = memory_adapter()
+adapter = memory_adapter()
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret="dev-only-secret",
+))
 ```
 
-Do not use the memory adapter for production. It is intended for tests, examples,
-and short-lived local demos.
+## Behavior
+
+The adapter implements the normal `CustomAdapter` CRUD contract. Queries are evaluated in memory, so large data sets are slow and process-local only. Restarting the process loses users, sessions, accounts, verification tokens, plugin tables, and billing state.
+
+## Good uses
+
+- Documentation snippets.
+- Isolated unit tests.
+- Route tests that reset all data per test.
+- Demos that intentionally reset on restart.
+- Adapter contract tests for expected query behavior.
+
+## Bad uses
+
+Do not use the memory adapter for production, multi-process development, OAuth provider testing that must survive restarts, billing/webhook state, or any demo that claims persistent SaaS behavior.
+
+## Schema changes
+
+No migrations are generated for memory storage. The adapter creates collections lazily from the resolved Kernia schema.
+
+## Test coverage
+
+Memory tests should verify CRUD behavior, filter semantics, deterministic resets, and plugin table creation. Storage-sensitive flows must also run against a durable adapter before they are documented as production-ready.

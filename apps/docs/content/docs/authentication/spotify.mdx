@@ -1,0 +1,70 @@
+---
+title: "Spotify"
+description: "Configure Spotify OAuth for Kernia."
+---
+
+<ProviderHeading provider="Spotify" />
+
+Spotify OAuth can be used for music-related products or account personalization. Kernia handles the sign-in flow, but product access to Spotify APIs should request only the scopes your app actually needs.
+
+## Create the Spotify app
+
+In the Spotify Developer Dashboard, create an app and add redirect URIs:
+
+```text
+http://localhost:8000/api/auth/callback/spotify
+https://api.example.com/api/auth/callback/spotify
+```
+
+Copy the client ID and client secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import spotify
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "spotify": spotify(
+            client_id=env.SPOTIFY_CLIENT_ID,
+            client_secret=env.SPOTIFY_CLIENT_SECRET,
+            scopes=("user-read-email",),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "spotify", callback_url: appCallbackURL }),
+});
+```
+
+## Scopes
+
+Use `user-read-email` for email-based sign-in. Add playback, library, or playlist scopes only for product features and document those separately.
+
+## Troubleshooting
+
+- Redirect mismatch: the Spotify dashboard URL must exactly match the Kernia callback URL.
+- Missing email: request `user-read-email`.
+- Token unavailable for product API: request the product scope and store provider tokens according to your security policy.
+
+## Test coverage
+
+Test normal sign-in, denied consent, missing email, account linking, and product-scope behavior separately from auth.

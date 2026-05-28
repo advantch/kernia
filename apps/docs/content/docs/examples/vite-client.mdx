@@ -1,35 +1,54 @@
 ---
-title: Vite Client
-description: Use the Better Auth JavaScript client with a Kernia server.
-icon: PanelsTopLeft
+title: "Vite Client"
+description: "Build a Vite frontend that talks to the Kernia FastAPI demo backend."
 ---
 
-Install the client in the frontend app:
+The Vite example is the simplest browser client for Kernia. It calls the Python backend at `/api/auth`, includes credentials, and renders provider availability from real server/admin configuration.
 
-```bash
-pnpm add better-auth
+## Environment
+
+```dotenv title=".env.local"
+VITE_AUTH_BASE_URL=http://localhost:8000/api/auth
+VITE_APP_BASE_URL=http://localhost:5173
 ```
 
-Create the client:
+## API helper
 
-```ts
-import { createAuthClient } from "better-auth/client";
-import { organizationClient } from "better-auth/client/plugins";
+```ts title="src/lib/auth-api.ts"
+const baseURL = import.meta.env.VITE_AUTH_BASE_URL;
 
-export const authClient = createAuthClient({
-  baseURL: "/api/auth",
-  plugins: [organizationClient()]
-});
-```
-
-Proxy auth calls during development:
-
-```ts
-server: {
-  proxy: {
-    "/api": "http://127.0.0.1:8000"
-  }
+export async function authAPI(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${baseURL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
 }
 ```
 
-This keeps auth cookies same-origin in development.
+## Login methods
+
+Render buttons from the admin public config endpoint. If Google, passkey, SSO, phone, SIWE, or another method is not configured, show a disabled state instead of pretending the flow works.
+
+## Settings pages
+
+Use Kernia APIs for:
+
+- Profile.
+- Linked accounts.
+- Sessions.
+- API keys.
+- Security.
+- Billing.
+
+Settings pages should refresh `/get-session` after profile and security mutations.
+
+## Admin pages
+
+Admin pages should call backend admin routes for auth methods, email clients, Stripe setup, products, prices, entitlements, usage, users, and webhooks. Secrets must be write-only and redacted on read.
+
+## Browser test
+
+Use Playwright against the running Vite app and FastAPI backend. Cover email sign-in, logout, session refresh, API key create/revoke, admin method toggles, email provider config, Stripe import, and unavailable provider states.

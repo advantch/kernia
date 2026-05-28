@@ -1,17 +1,71 @@
 ---
-title: Cookies
-description: Better Auth-compatible cookie defaults.
-icon: Cookie
+title: "Cookies"
+description: "Understand Kernia session cookies, compatibility names, secure settings, and cross-origin deployment."
 ---
 
-Kernia keeps Better Auth-compatible cookie names where clients and plugins depend
-on them. This includes the default session token cookie.
+Kernia deliberately keeps Better Auth-compatible cookie names where browser clients rely on them. Branding changes Python packages and commands; cookie names are wire protocol and stay compatible.
 
-That compatibility is intentional: changing the Python import namespace should
-not break a browser client that expects Better Auth wire behavior.
+## Cookie prefix
 
-## Production settings
+The session token cookie is named `better-auth.session_token`. The multi-session plugin adds `better-auth.session_list`, and the session cache uses a short-lived session data cookie when enabled.
 
-Use HTTPS, set a stable base URL, and configure trusted origins. Cross-site
-deployments should be tested in the same browser context as production because
-SameSite and secure-cookie behavior depends on origin and scheme.
+<Callout type="info">
+  These names are not public Python package names. They are protocol identifiers used by existing browser clients and conformance tests.
+</Callout>
+
+## Session token cookie
+
+The cookie value is the random session token plus an HMAC signature rendered as `value.signature`. Kernia verifies the signature before looking up the session row.
+
+~~~python
+from kernia.cookies import sign, verify
+
+signed = sign(session_token, secret=os.environ["KERNIA_SECRET"])
+assert verify(signed, secret=os.environ["KERNIA_SECRET"]) == session_token
+~~~
+
+The cookie is HTTP-only, uses `SameSite=Lax` by default, and is marked secure when `base_url` uses HTTPS.
+
+## Remember me
+
+When an email/password sign-in uses `remember_me: false`, Kernia omits the persistent `Max-Age` on the session cookie and also writes the dont-remember marker. The session row still has a server-side expiration.
+
+## Cross-origin local development
+
+A Vite app on `http://localhost:5173` and a FastAPI backend on `http://localhost:8000` are different origins. Configure CORS on the Python server and use credentialed requests in the browser.
+
+~~~python title="main.py"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+~~~
+
+~~~ts
+await fetch("http://localhost:8000/api/auth/get-session", {
+  credentials: "include",
+});
+~~~
+
+## Cross-subdomain deployment
+
+For `app.example.com` calling `api.example.com`, terminate TLS before the app and ensure the backend sees the public scheme. If you customize the cookie domain, set it to the shared parent domain only when all subdomains are trusted.
+
+## Reverse proxies
+
+If cookies are missing only in production, inspect the forwarded scheme and host. A backend that thinks it is serving HTTP may emit non-secure cookies while the browser expects HTTPS behavior.
+
+## Safari and strict tracking behavior
+
+Avoid putting the auth API on an unrelated third-party domain. Safari and privacy-focused browsers are stricter about third-party cookies. A shared parent domain or a reverse proxy under the app domain is more reliable.
+
+## Debug checklist
+
+- Confirm `Set-Cookie` appears on sign-in responses.
+- Confirm frontend requests include credentials.
+- Confirm CORS allows credentials and the exact frontend origin.
+- Confirm `KERNIA_BASE_URL` uses HTTPS in production.
+- Confirm the proxy forwards host and scheme consistently.

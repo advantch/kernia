@@ -1,0 +1,68 @@
+---
+title: "Migrating from Clerk to Kernia"
+description: "Move Clerk users, organizations, sessions, social accounts, and MFA into Kernia."
+---
+
+A Clerk migration usually involves users, organizations, memberships, invitations, social accounts, phone numbers, email verification, and MFA state. Treat it as a staged data migration with a frontend cutover, not a find-and-replace of SDK calls.
+
+## Inventory
+
+Export or enumerate:
+
+- Users, primary email, verified emails, usernames, and phone numbers.
+- External accounts and provider account ids.
+- Organizations, memberships, roles, and invitations.
+- MFA methods and whether they can be migrated safely.
+- Active sessions and device state.
+- Webhook consumers that currently depend on Clerk events.
+
+## Kernia setup
+
+```python title="auth.py"
+from kernia.plugins.organization import organization
+from kernia.plugins.username import username
+from kernia.plugins.phone_number import phone_number
+from kernia.plugins.two_factor import two_factor
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    plugins=[
+        organization(),
+        username(),
+        phone_number(send_sms=sms_client.send),
+        two_factor(),
+    ],
+))
+```
+
+## Mapping
+
+| Clerk | Kernia |
+|---|---|
+| User | `user` row. |
+| Email address | User email and verification state. |
+| External account | `account` row. |
+| Organization | Organization plugin tables. |
+| Membership | Membership rows with role mapping. |
+| Invitation | Organization invitation rows. |
+| MFA | Two-factor and passkey plugins where supported. |
+
+## Passwords and sessions
+
+If password hashes are not exportable in a supported format, require password reset or staged reauthentication. Do not claim silent password migration unless you can verify the exported hash format and rewrite it into Kernia after sign-in.
+
+Active Clerk sessions usually should not be imported. Plan a sign-in cutover and keep the old system available only long enough to finish migration.
+
+## Frontend changes
+
+Replace Clerk UI components with calls to Kernia routes or the compatible JS client. Keep protected backend data behind Python route checks, not frontend-only auth guards.
+
+## Webhooks
+
+Replace Clerk webhook consumers with Kernia hooks or audit events. If billing, provisioning, or CRM sync depends on Clerk user events, replay the equivalent Kernia events in staging.
+
+## Validation
+
+Test email sign-in, social sign-in, organization switching, role checks, invitation accept, phone verification, MFA enrollment, logout, and account deletion before production cutover.

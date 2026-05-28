@@ -1,0 +1,76 @@
+---
+title: "Two Factor"
+description: "Add TOTP and backup-code challenges after password or username sign-in."
+---
+
+The two-factor plugin adds a second step to credential sign-in. When a user with two-factor enabled signs in with email/password or username/password, Kernia removes the provisional session and returns a pending confirmation id. The user must verify a TOTP code or backup code before a real session is issued.
+
+## Installation
+
+~~~bash
+uv add kernia pyotp
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.two_factor import two_factor
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.two_factor import two_factor
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        two_factor(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/two-factor/enable">
+  Creates a TOTP secret for the active user and returns setup data for an authenticator app.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/two-factor/verify-totp">
+  Verifies the TOTP code during setup or sign-in and issues a session when a confirmation id is supplied.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/two-factor/disable">
+  Disables two-factor auth for the active user after password or code verification.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/two-factor/generate-backup-codes">
+  Creates fresh backup codes for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/two-factor/verify-backup-code">
+  Consumes one backup code and issues a session for a pending two-factor confirmation.
+</APIMethod>
+
+## Schema impact
+
+Adds `twoFactorConfirmation` and `twoFactorBackupCode` tables and extends `user` with `twoFactorEnabled` and `twoFactorSecret` fields. Run `kernia generate` after enabling it.
+
+## Behavior and options
+
+- Sign-in interception is implemented as an after hook on `/sign-in/email` and `/sign-in/username`.
+- Backup codes are single-use and stored hashed.
+- TOTP confirmation ids expire; stale confirmations should be treated as a fresh sign-in requirement.
+
+## Test and demo coverage
+
+Route tests should cover enable, verify setup, intercepted sign-in, invalid code, backup-code sign-in, backup-code reuse, disable, and session cookie behavior after the second step.

@@ -1,22 +1,60 @@
 ---
-title: Deployment
-description: Deploy Kernia-backed apps and the docs site.
-icon: Cloud
+title: "Deployment"
+description: "Deploy a Kernia backend and frontend with correct URLs, cookies, migrations, and provider callbacks."
 ---
 
-For a Kernia backend:
+Deployment problems usually come from URL mismatches. Kernia needs one public auth base URL, provider consoles must use that callback URL, and the frontend must call the same mounted auth API with credentials.
 
-- run migrations before releasing plugin schema changes
-- use a persistent database
-- configure trusted origins
-- keep secrets in your platform secret manager
-- test login/logout from the deployed browser origin
+## Backend environment
 
-For this docs site:
-
-```bash
-cd apps/docs
-pnpm build
+```dotenv
+KERNIA_SECRET=<32-plus-random-bytes>
+KERNIA_BASE_URL=https://api.example.com/api/auth
+DATABASE_URL=postgresql+asyncpg://...
+REDIS_URL=rediss://...
 ```
 
-The Vercel project should use `apps/docs` as the root directory.
+## Frontend environment
+
+```dotenv
+VITE_AUTH_BASE_URL=https://api.example.com/api/auth
+VITE_APP_BASE_URL=https://app.example.com
+```
+
+## Migrations
+
+Run `kernia generate` in CI when plugin/schema changes happen, commit the migration, then apply it before deploying code that depends on new tables.
+
+```bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+alembic upgrade head
+```
+
+## Provider callbacks
+
+Register callbacks such as:
+
+```text
+https://api.example.com/api/auth/callback/google
+https://api.example.com/api/auth/callback/github
+```
+
+Apple requires HTTPS even for development.
+
+## Proxy and cookies
+
+Forward scheme and host headers to the Python backend. Preserve all `Set-Cookie` response headers if you proxy through the frontend domain. Configure CORS to allow credentials only from your real frontend origins.
+
+## Webhooks
+
+Stripe webhooks should hit the Python backend directly. Verify signatures before processing events and store processed event ids to avoid replay.
+
+## Smoke checks
+
+- `GET /api/auth/ok` returns success.
+- Email sign-in sets `Set-Cookie`.
+- `/get-session` returns a session after sign-in.
+- OAuth callback URLs match provider configuration.
+- Admin and billing routes reject non-admin users.
+- Stripe webhook signature failures are rejected.
+- Password reset and verification links use the production auth base URL.

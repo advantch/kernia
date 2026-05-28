@@ -4,21 +4,37 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "fumadocs-mdx",
     "dev": "next dev --port 3000",
-    "build": "fumadocs-mdx && next build",
+    "build": "next build",
     "start": "next start",
-    "typecheck": "fumadocs-mdx && tsc --noEmit"
+    "typecheck": "fumadocs-mdx && tsc --noEmit",
+    "format:check": "remark . --ext md,mdx --quiet --frail",
+    "docs:quality": "node scripts/check-docs-quality.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.12",
     "fumadocs-core": "16.9.2",
     "fumadocs-mdx": "15.0.9",
+    "fumadocs-typescript": "^5.2.1",
     "fumadocs-ui": "16.9.2",
-    "lucide-react": "^0.468.0",
+    "geist": "^1.7.0",
+    "lucide-react": "^1.7.0",
     "next": "16.2.6",
-    "next-themes": "^0.4.4",
+    "next-themes": "^0.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.0.1"
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^4.0.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1",
+    "tw-animate-css": "^1.3.7",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
@@ -27,6 +43,10 @@
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "postcss": "^8.5.1",
+    "remark-cli": "^12.0.1",
+    "remark-frontmatter": "^5.0.0",
+    "remark-preset-lint-consistent": "^6.0.1",
+    "remark-preset-lint-recommended": "^7.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3"
   }

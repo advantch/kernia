@@ -1,0 +1,49 @@
+---
+title: "SvelteKit"
+description: "Use SvelteKit pages with a Kernia Python backend."
+---
+
+SvelteKit can call Kernia directly from browser code or server load functions. The Python server remains the auth authority, and provider callbacks should target the Python auth mount.
+
+## Public client
+
+~~~ts title="src/lib/auth.ts"
+import { PUBLIC_AUTH_BASE_URL } from "$env/static/public";
+
+export async function authRequest(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${PUBLIC_AUTH_BASE_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+~~~
+
+## Server load with cookies
+
+~~~ts title="src/routes/dashboard/+page.server.ts"
+import { AUTH_BASE_URL } from "$env/static/private";
+
+export async function load({ request }) {
+  const response = await fetch(`${AUTH_BASE_URL}/get-session`, {
+    headers: { cookie: request.headers.get("cookie") ?? "" },
+  });
+  return { session: response.ok ? await response.json() : null };
+}
+~~~
+
+## Sign out action
+
+~~~ts title="src/routes/settings/+page.ts"
+import { authRequest } from "$lib/auth";
+
+export async function signOut() {
+  await authRequest("/sign-out", { method: "POST" });
+}
+~~~
+
+## Deployment note
+
+When SvelteKit and Kernia run on different origins, configure CORS on the Python backend and set `trusted_origins` to the SvelteKit origin. Same-origin reverse proxies must preserve `Set-Cookie` headers.

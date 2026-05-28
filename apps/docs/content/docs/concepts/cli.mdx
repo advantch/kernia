@@ -1,28 +1,83 @@
 ---
-title: CLI
-description: Scaffold, migrate, inspect, and manage Kernia apps.
-icon: Terminal
+title: "CLI"
+description: "Use the Kernia command line tool for setup, schema generation, migrations, secrets, and diagnostics."
 ---
 
-Install:
+The `kernia` CLI is the operational companion to the Python packages. It should be available in the same environment as your backend code so it can import the configured auth instance, resolve plugin schemas, and emit migrations for the exact package versions you run in production.
 
-```bash
-pip install kernia-cli
-```
+## Installation
 
-Commands:
+~~~bash
+uv add kernia-cli
+uv run kernia --help
+~~~
 
-| Command | Purpose |
-| --- | --- |
-| `kernia init` | Scaffold auth configuration. |
-| `kernia generate` | Generate an Alembic migration from resolved schema. |
-| `kernia migrate` | Apply migrations. |
-| `kernia secret` | Generate a random secret. |
-| `kernia info` | Print configuration diagnostics. |
+The CLI command is `kernia`. The old project name is not a public command.
 
-Use the CLI in CI to make schema drift explicit:
+## Project initialization
 
-```bash
-kernia info --dry-run --json
-kernia generate
-```
+~~~bash
+uv run kernia init
+~~~
+
+`init` creates the minimal local files needed to start a backend: environment placeholders, an auth module, and adapter wiring hints. Existing applications can skip generated files and copy the command output manually.
+
+## Schema generation
+
+Kernia schemas are assembled from the core tables and every enabled plugin. Run generation after adding plugins such as API keys, organizations, passkeys, SSO, SCIM, Stripe, phone numbers, or two-factor auth.
+
+~~~bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+~~~
+
+The generated migration contains SQLAlchemy/Alembic operations. Review it before applying it to production databases.
+
+## Migrations
+
+~~~bash
+uv run kernia migrate --app app.auth:auth
+~~~
+
+`migrate` is for local and simple deployments. Larger applications usually commit generated Alembic files and run them through their normal release pipeline.
+
+## Secrets
+
+~~~bash
+uv run kernia secret
+~~~
+
+Use the output as `KERNIA_SECRET`. Rotating the secret invalidates signed cookies and verification tokens unless you explicitly build a multi-secret migration path.
+
+## Environment diagnostics
+
+~~~bash
+uv run kernia info --app app.auth:auth
+~~~
+
+`info` should show the resolved base URL, base path, adapter type, active plugins, and schema contributors. Run it in CI when dependency or plugin changes are made.
+
+## Command reference
+
+<APIMethod method="CLI" path="kernia init">
+  Scaffolds local Kernia configuration files.
+</APIMethod>
+
+<APIMethod method="CLI" path="kernia generate">
+  Resolves the core and plugin schema and writes a migration file.
+</APIMethod>
+
+<APIMethod method="CLI" path="kernia migrate">
+  Applies generated migrations through the configured migration backend.
+</APIMethod>
+
+<APIMethod method="CLI" path="kernia secret">
+  Prints a strong random secret suitable for cookie signing.
+</APIMethod>
+
+<APIMethod method="CLI" path="kernia info">
+  Prints resolved app configuration for debugging and CI checks.
+</APIMethod>
+
+## Troubleshooting
+
+If the CLI cannot import your app, run it from the repository root or set `PYTHONPATH` so `app.auth:auth` imports the same code your server runs. If generated migrations do not contain plugin tables, confirm the plugin is inside `KerniaOptions.plugins` in the imported auth object.

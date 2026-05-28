@@ -1,0 +1,62 @@
+---
+title: "React Router Example"
+description: "Use React Router loaders and actions with Kernia."
+---
+
+A React Router app can keep auth flows in route actions while Kernia runs in FastAPI, Starlette, or Django.
+
+## Commands
+
+```bash
+pnpm create vite kernia-router --template react-ts
+cd kernia-router
+pnpm add react-router
+```
+
+## Environment
+
+```dotenv
+VITE_AUTH_BASE_URL=http://localhost:8000/api/auth
+```
+
+## Login action
+
+```ts title="routes/login.tsx"
+export async function loginAction({ request }: { request: Request }) {
+  const form = await request.formData();
+  const response = await fetch(`${import.meta.env.VITE_AUTH_BASE_URL}/sign-in/email`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: form.get("email"),
+      password: form.get("password"),
+      remember_me: true,
+    }),
+  });
+  if (!response.ok) return { error: await response.json() };
+  return { ok: true };
+}
+```
+
+## Dashboard loader
+
+```ts title="routes/dashboard.tsx"
+export async function dashboardLoader() {
+  const response = await fetch(`${import.meta.env.VITE_AUTH_BASE_URL}/get-session`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw redirect("/login");
+  const session = await response.json();
+  if (!session) throw redirect("/login");
+  return session;
+}
+```
+
+## OAuth
+
+Route actions can call `/sign-in/social` and redirect the browser to the returned provider URL.
+
+## Required checks
+
+Test login action errors, dashboard loader redirects, logout, OAuth redirects, API key settings pages, and backend route authorization.

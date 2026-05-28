@@ -1,0 +1,91 @@
+---
+title: "Audit Logs"
+description: "Record security and admin activity around Kernia auth events."
+---
+
+Better Auth Infrastructure includes audit-log endpoints as part of its hosted dashboard. Kernia keeps audit logs application-owned: you record events through hooks, plugin callbacks, and admin route wrappers, then expose them to your dashboard.
+
+Audit logs are different from request logs. They should answer who changed what, when it changed, which authorization context allowed it, and whether any secrets or sensitive values were redacted.
+
+## Event model
+
+| Field | Purpose |
+|---|---|
+| `id` | Stable event id. |
+| `actor_id` | User or service account that performed the action. |
+| `event` | Machine-readable event name. |
+| `subject_type` | User, session, organization, key, product, entitlement, or config. |
+| `subject_id` | Subject identifier. |
+| `request_id` | Correlates the audit event with request logs. |
+| `ip_address` | Source IP if available. |
+| `user_agent` | User agent if available. |
+| `metadata` | Redacted structured context. |
+| `created_at` | Event timestamp. |
+
+## Events to record
+
+| Area | Events |
+|---|---|
+| Users | `user.created`, `user.updated`, `user.deleted`, `user.banned`, `user.unbanned` |
+| Sessions | `session.created`, `session.revoked`, `sessions.revoked_all` |
+| Accounts | `account.linked`, `account.unlinked`, `password.changed` |
+| Admin config | `auth_method.enabled`, `auth_method.disabled`, `email_client.updated`, `provider.updated` |
+| Organizations | `organization.created`, `member.added`, `member.removed`, `role.updated` |
+| API keys | `api_key.created`, `api_key.revoked`, `api_key.rotated` |
+| Billing | `stripe.synced`, `subscription.updated`, `entitlement.granted`, `usage.tracked` |
+| Security | `captcha.failed`, `rate_limit.blocked`, `session.risk_flagged` |
+
+## Server usage
+
+```python title="audit.py"
+from datetime import datetime, timezone
+from uuid import uuid4
+
+async def audit_event(adapter, *, actor_id, event, subject_type, subject_id, metadata=None):
+    await adapter.create("audit_event", {
+        "id": str(uuid4()),
+        "actor_id": actor_id,
+        "event": event,
+        "subject_type": subject_type,
+        "subject_id": subject_id,
+        "metadata": redact(metadata or {}),
+        "created_at": datetime.now(timezone.utc),
+    })
+```
+
+Wrap admin writes instead of relying on the frontend:
+
+```python title="admin_config.py"
+@router.patch("/auth-methods/{method}")
+async def update_method(method: str, body: AuthMethodUpdate, session=Depends(require_admin)):
+    updated = await config_service.set_method_enabled(method, body.enabled)
+    await audit_event(
+        adapter,
+        actor_id=session.user_id,
+        event="auth_method.enabled" if body.enabled else "auth_method.disabled",
+        subject_type="auth_method",
+        subject_id=method,
+        metadata={"enabled": body.enabled},
+    )
+    return updated
+```
+
+## Redaction
+
+Audit metadata must never store OAuth client secrets, SMTP passwords, Stripe restricted keys, SCIM bearer tokens, API key plaintext values, password reset tokens, OTP codes, or session tokens. Store a fingerprint or last four characters when operators need to distinguish credentials.
+
+## Admin query
+
+Expose audit logs only to admins. Search by actor, subject, event type, and time range.
+
+```http
+GET /api/admin/audit-events?event=auth_method.disabled&limit=50
+```
+
+## Retention
+
+Choose retention based on compliance needs. Authentication security events are usually kept longer than request logs. If events include personal data, document deletion behavior and export requirements.
+
+## Test and demo coverage
+
+Tests should prove that config writes, billing syncs, API key changes, SSO changes, SCIM token changes, and session revocations create audit events with redacted metadata. Browser tests should show audit entries after admin actions in the SaaS demo.

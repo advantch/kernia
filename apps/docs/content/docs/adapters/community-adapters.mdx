@@ -1,0 +1,58 @@
+---
+title: "Community Adapters"
+description: "Evaluate and document third-party Kernia adapters."
+---
+
+Community adapters are welcome, but auth storage is security-critical. Treat every adapter as production infrastructure: it must implement the `CustomAdapter` protocol, preserve unique constraints, handle concurrent writes, and pass the public route test suite.
+
+## Adapter contract
+
+An adapter must implement the same logical behavior as the built-in adapters:
+
+| Operation | Requirement |
+|---|---|
+| `create` | Insert one record and fail on violated unique constraints. |
+| `find_one` | Return one matching record or `None`. |
+| `find_many` | Support filters, sorting, limit, and offset. |
+| `update` | Update one matching record and return the updated shape. |
+| `update_many` | Update all records matching a filter. |
+| `delete` | Delete one record by id or filter. |
+| `delete_many` | Delete all records matching a filter. |
+| `count` | Count records matching a filter. |
+
+Optional protocols add schema creation, transactions, joins, and atomic token consumption. If an adapter does not implement an optional protocol, its docs must say so.
+
+## Where semantics
+
+The `Where` contract is part of the adapter API, not an implementation detail. Test equality, inequality, `in`, `contains`, `starts_with`, `ends_with`, `and`, `or`, null checks, date comparisons, and pagination.
+
+OAuth callbacks, verification tokens, API keys, SSO providers, and SCIM directories rely on correct uniqueness and lookup semantics.
+
+## Documentation requirements
+
+A community adapter page should include:
+
+- Install command.
+- Import path.
+- Supported database versions.
+- Connection example.
+- Migration and index instructions.
+- Transaction support.
+- Atomic token-consumption support.
+- Known limitations.
+- Test coverage.
+
+## Test expectations
+
+Run email/password, OAuth callback, session revocation, verification token consumption, API key, organization, passkey, SSO, SCIM, and Stripe tests where those plugins are claimed as supported.
+
+Use a real backend in CI. In-memory mocks are useful for unit tests but do not prove adapter correctness under concurrency.
+
+## Production checklist
+
+- Unique indexes exist for ids, email, session tokens, provider account ids, API keys, SSO provider keys, and SCIM tokens.
+- Date values round-trip without timezone drift.
+- JSON fields preserve nested plugin data.
+- Transactions or atomic operations protect one-time token consumption.
+- Migration output is committed and reviewed.
+- Operational dashboards track query latency, error rate, and connection pool exhaustion.

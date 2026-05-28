@@ -1,69 +1,50 @@
 ---
-title: Installation
-description: Install Kernia packages and choose a database adapter.
-icon: Package
+title: "Installation"
+description: "Install Kernia and create the first Python auth server."
 ---
 
-Install the core package, one integration, and one adapter:
+## Install
 
 ```bash
-pip install kernia kernia-fastapi kernia-sqlalchemy
+uv add kernia kernia-fastapi
 ```
 
-For local development you can use the memory adapter:
+Add an adapter package for your database, for example:
 
 ```bash
-pip install kernia-memory-adapter
+uv add kernia-sqlalchemy
 ```
 
-For production, use a persistent adapter:
+## Configure
 
-```bash
-pip install kernia-sqlalchemy
-pip install kernia-mongo
+```python
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+))
 ```
 
-Optional standalone packages:
+## Mount
 
-```bash
-pip install kernia-api-key kernia-passkey kernia-sso kernia-scim kernia-stripe
-pip install kernia-oauth-provider kernia-redis-storage
+```python
+from fastapi import FastAPI
+from kernia_fastapi import mount_kernia
+
+app = FastAPI()
+mount_kernia(app, auth)
 ```
 
-## CLI
+## Generate a secret
 
-The CLI is published separately:
+<GenerateSecret />
 
-```bash
-pip install kernia-cli
-```
+## Verify
 
-It provides:
-
-```bash
-kernia init
-kernia generate
-kernia migrate
-kernia secret
-kernia info
-```
-
-## JavaScript client
-
-Kernia is server-side Python. Browser applications can use the official Better
-Auth JavaScript client when they need Better Auth-compatible flows:
-
-```bash
-pnpm add better-auth
-```
-
-```ts
-import { createAuthClient } from "better-auth/client";
-
-export const authClient = createAuthClient({
-  baseURL: "http://localhost:8000/api/auth"
-});
-```
-
-That client package name stays unchanged because it is the JavaScript client
-being tested for wire compatibility.
+Call `/api/auth/ok`, then enable a sign-in method and test through a browser with cookies enabled.

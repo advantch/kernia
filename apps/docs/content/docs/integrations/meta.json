@@ -1,4 +1,15 @@
 {
   "title": "Integrations",
-  "pages": ["fastapi", "starlette", "django"]
+  "pages": [
+    "django",
+    "fastapi",
+    "starlette",
+    "astro",
+    "electron",
+    "expo",
+    "next",
+    "nuxt",
+    "react-router",
+    "svelte-kit"
+  ]
 }
