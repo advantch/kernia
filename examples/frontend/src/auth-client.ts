@@ -12,6 +12,6 @@ import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-  baseURL: "/api/auth",
+  baseURL: `${window.location.origin}/api/auth`,
   plugins: [organizationClient()],
 });
