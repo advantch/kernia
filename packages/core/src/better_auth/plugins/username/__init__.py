@@ -15,8 +15,12 @@ from better_auth.plugins.username.routes import UsernameOptions
 from better_auth.types.adapter import FieldDef
 from better_auth.types.context import AuthContext
 from better_auth.types.endpoint import AuthEndpoint
-from better_auth.types.hooks import PluginHooks
+from better_auth.types.hooks import BeforeHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
+
+_UPDATE_USER_HOOKS = PluginHooks(
+    before=(BeforeHook(match="/update-user", handler=routes.update_user_before),)
+)
 
 USERNAME_ERROR_CODES: Mapping[str, str] = {
     "INVALID_USERNAME_OR_PASSWORD": "Invalid username or password",
@@ -46,7 +50,7 @@ class _UsernamePlugin:
     )
     endpoints: tuple[AuthEndpoint, ...] = field(default_factory=lambda: routes.ALL)
     middlewares: None = None
-    hooks: PluginHooks | None = None
+    hooks: PluginHooks | None = field(default_factory=lambda: _UPDATE_USER_HOOKS)
     on_request: None = None
     on_response: None = None
     rate_limit: tuple[RateLimitRule, ...] = (

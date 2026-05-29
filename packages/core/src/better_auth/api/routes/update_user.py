@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.crypto import hash_password, verify_password
@@ -22,8 +22,16 @@ from better_auth.types.endpoint import EndpointOptions
 
 
 class UpdateUserBody(BaseModel):
+    # ``populate_by_name`` lets the wire send ``displayUsername`` (camelCase) while
+    # the field stays snake_case internally. ``username``/``display_username`` are
+    # inert unless the username plugin's ``/update-user`` before-hook processes
+    # them (validation, normalization, duplicate rejection).
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = None
     image: str | None = None
+    username: str | None = None
+    display_username: str | None = Field(default=None, alias="displayUsername")
 
 
 class ChangeEmailBody(BaseModel):

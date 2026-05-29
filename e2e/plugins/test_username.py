@@ -389,6 +389,138 @@ async def test_custom_validator_rejects_sign_in() -> None:
     assert sign_in.json()["code"] == "INVALID_USERNAME"
 
 
+# ----- update-user flow (ported from username.test.ts, issue #8689) --------
+
+
+async def _signed_up_keep_session(
+    driver: ASGIDriver, username: str, password: str, *, email: str | None = None
+) -> None:
+    body: dict[str, Any] = {"username": username, "password": password}
+    if email is not None:
+        body["email"] = email
+    r = await driver.request("POST", "/sign-up/username", json_body=body)
+    assert r.status == 200, r.json()
+
+
+async def _session_user(driver: ASGIDriver) -> dict[str, Any]:
+    r = await driver.request("GET", "/get-session")
+    assert r.status == 200, r.json()
+    return r.json()["user"]
+
+
+async def test_update_username() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    await _signed_up_keep_session(driver, "new_username", "new-password")
+    r = await driver.request(
+        "POST", "/update-user", json_body={"username": "new_username_2.1"}
+    )
+    assert r.status == 200, r.json()
+    user = await _session_user(driver)
+    assert user["username"] == "new_username_2.1"
+
+
+async def test_update_user_duplicate_different_user_400() -> None:
+    # @see https://github.com/better-auth/better-auth/issues/8689
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    await _signed_up_keep_session(driver, "duplicate_user", "new_password1")
+    driver.cookies.clear()
+    await _signed_up_keep_session(driver, "second_user", "new_password1")
+    r = await driver.request(
+        "POST", "/update-user", json_body={"username": "duplicate_user"}
+    )
+    assert r.status == 400, r.json()
+    assert r.json()["code"] == "USERNAME_IS_ALREADY_TAKEN"
+
+
+async def test_update_user_duplicate_different_casing_400() -> None:
+    # @see https://github.com/better-auth/better-auth/issues/8689
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    await _signed_up_keep_session(driver, "casetestuser", "new_password1")
+    driver.cookies.clear()
+    await _signed_up_keep_session(driver, "another_user", "new_password1")
+    r = await driver.request(
+        "POST", "/update-user", json_body={"username": "CaseTestUser"}
+    )
+    assert r.status == 400, r.json()
+    assert r.json()["code"] == "USERNAME_IS_ALREADY_TAKEN"
+
+
+async def test_update_user_duplicate_same_user_succeeds() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    await _signed_up_keep_session(driver, "new_username_2.1", "new-password")
+    # Re-applying a differently-cased form of the SAME user's username is allowed.
+    r = await driver.request(
+        "POST", "/update-user", json_body={"username": "New_username_2.1"}
+    )
+    assert r.status == 200, r.json()
+    user = await _session_user(driver)
+    assert user["username"] == "new_username_2.1"
+
+
+async def test_update_user_preserves_both_username_and_display() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    await _signed_up_keep_session(driver, "start_user", "new-password")
+    r = await driver.request(
+        "POST",
+        "/update-user",
+        json_body={
+            "username": "priority_user",
+            "displayUsername": "Priority Display Name",
+        },
+    )
+    assert r.status == 200, r.json()
+    user = await _session_user(driver)
+    assert user["username"] == "priority_user"
+    assert user["displayUsername"] == "Priority Display Name"
+
+
+async def test_update_display_username_valid() -> None:
+    import re
+
+    from better_auth_memory_adapter import memory_adapter
+
+    plugin = username(
+        display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
+    )
+    driver = _build(memory_adapter(), plugin)
+    await _signed_up_keep_session(driver, "initial_name", "test-password")
+    r = await driver.request(
+        "POST", "/update-user", json_body={"displayUsername": "Updated_Name-123"}
+    )
+    assert r.status == 200, r.json()
+    user = await _session_user(driver)
+    assert user["displayUsername"] == "Updated_Name-123"
+    # The username itself is untouched by a display-only update.
+    assert user["username"] == "initial_name"
+
+
+async def test_update_display_username_invalid_rejected() -> None:
+    import re
+
+    from better_auth_memory_adapter import memory_adapter
+
+    plugin = username(
+        display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
+    )
+    driver = _build(memory_adapter(), plugin)
+    await _signed_up_keep_session(driver, "valid_name", "test-password")
+    r = await driver.request(
+        "POST", "/update-user", json_body={"displayUsername": "Invalid Display!"}
+    )
+    assert r.status == 400, r.json()
+    assert r.json()["code"] == "INVALID_DISPLAY_USERNAME"
+
+
 def _build_verify(adapter: Any) -> ASGIDriver:
     from better_auth.types.init_options import EmailPasswordOptions
 

@@ -248,6 +248,65 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
     }
 
 
+async def update_user_before(ctx: EndpointContext) -> None:
+    """Validate + normalize username/displayUsername on ``/update-user``.
+
+    Mirrors upstream's ``databaseHooks.user.update.before``: when an update
+    carries ``username`` and/or ``displayUsername`` it is validated, normalized,
+    and checked for collision with *other* users before being persisted. The
+    core ``/update-user`` handler then runs to apply any name/image changes.
+
+    @see https://github.com/better-auth/better-auth/issues/8689 (casing-aware
+    duplicate rejection on update).
+    """
+    import time
+
+    body = ctx.body
+    username = getattr(body, "username", None)
+    display = getattr(body, "display_username", None)
+    if username is None and display is None:
+        return
+    if ctx.session is None:
+        raise APIError(401, "UNAUTHORIZED")
+
+    opts = _opts(ctx)
+    patch: dict[str, object] = {}
+
+    if username is not None:
+        to_validate = (
+            opts.normalize(username)
+            if opts.username_validation_order == "post-normalization"
+            else username
+        )
+        _validate(opts, to_validate, status=400)
+        normalized = opts.normalize(username)
+        existing = await ctx.auth.adapter.find_one(
+            model="user",
+            where=(Where(field="username", value=normalized),),
+        )
+        if existing is not None and existing["id"] != ctx.session.user_id:
+            raise APIError(400, "USERNAME_IS_ALREADY_TAKEN")
+        patch["username"] = normalized
+        # When only the username is supplied, the display name tracks it
+        # (upstream sets displayUsername from the raw username input).
+        if display is None:
+            patch["displayUsername"] = opts.normalize_display(username)
+
+    if display is not None:
+        if opts.display_username_validator is not None and not (
+            opts.display_username_validator(display)
+        ):
+            raise APIError(400, "INVALID_DISPLAY_USERNAME")
+        patch["displayUsername"] = opts.normalize_display(display)
+
+    patch["updatedAt"] = int(time.time())
+    await ctx.auth.adapter.update(
+        model="user",
+        where=(Where(field="id", value=ctx.session.user_id),),
+        update=patch,
+    )
+
+
 async def _is_username_available(ctx: EndpointContext) -> dict[str, object]:
     body: IsUsernameAvailableBody = ctx.body
     opts = _opts(ctx)
