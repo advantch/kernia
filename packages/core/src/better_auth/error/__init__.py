@@ -62,9 +62,9 @@ class ErrorRegistry:
     codes: dict[str, str] = field(default_factory=lambda: dict(CORE_ERROR_CODES))
 
     def extend(self, codes: Mapping[str, str], *, plugin_id: str) -> None:
+        # Match upstream JS merge semantics: plugin ERROR_CODES are spread onto
+        # the shared map, so identical codes across plugins are allowed and the
+        # later contribution wins (e.g. both admin and api-key define
+        # USER_BANNED). `plugin_id` is retained for diagnostics.
         for code, msg in codes.items():
-            if code in self.codes:
-                raise ValueError(
-                    f"Plugin {plugin_id!r} tried to redefine error code {code!r}"
-                )
             self.codes[code] = msg

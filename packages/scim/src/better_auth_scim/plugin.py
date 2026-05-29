@@ -5,8 +5,8 @@ support is best-effort — when the `organization` plugin's `member` table is
 present we surface organizations as groups; otherwise the Groups routes return
 empty collections (documented).
 
-Authentication: an admin session OR an `api_key` whose stored `scope` JSON
-has `"scim": true`.
+Authentication: an admin session OR an `api_key` whose stored `permissions`
+map carries the `"scim"` resource.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema
 
 from better_auth_scim.patch import apply_patch_ops
-
 
 SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
@@ -107,26 +106,25 @@ async def _is_scim_authorized(ctx: EndpointContext, opts: SCIMOptions) -> bool:
     auth_header = ctx.request.headers.get("authorization", "")
     if auth_header.lower().startswith("apikey "):
         raw = auth_header.split(" ", 1)[1].strip()
-        from better_auth_api_key import parse_api_key
-        from better_auth.crypto import verify_password
+        from better_auth_api_key import default_key_hasher
 
-        prefix = parse_api_key(raw)
-        if prefix:
-            rows = await ctx.auth.adapter.find_many(
-                model="apiKey",
-                where=(Where(field="keyPrefix", value=prefix),),
-            )
-            for row in rows:
-                if verify_password(raw, row["keyHash"]):
-                    scope = row.get("scope")
-                    if isinstance(scope, str):
-                        try:
-                            scope = json.loads(scope)
-                        except json.JSONDecodeError:
-                            scope = None
-                    if isinstance(scope, Mapping) and scope.get("scim"):
-                        return True
-                    break
+        # The api-key package stores SHA-256(key) under the `key` column of the
+        # `apikey` table (upstream schema). SCIM scope is carried in the key's
+        # `permissions` map under the "scim" resource.
+        hashed = default_key_hasher(raw)
+        row = await ctx.auth.adapter.find_one(
+            model="apikey",
+            where=(Where(field="key", value=hashed),),
+        )
+        if row is not None and row.get("enabled", True):
+            perms = row.get("permissions")
+            if isinstance(perms, str):
+                try:
+                    perms = json.loads(perms)
+                except json.JSONDecodeError:
+                    perms = None
+            if isinstance(perms, Mapping) and perms.get("scim"):
+                return True
         return False
     # 2. Admin role on the session user
     if ctx.session is None:

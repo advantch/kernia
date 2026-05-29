@@ -10,7 +10,6 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-
 TokenGetter = Callable[
     [str, str, str | None],  # code, redirect_uri, code_verifier
     Awaitable[Mapping[str, Any]],

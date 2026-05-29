@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins.admin import admin
 from better_auth.plugins.email_password import email_and_password
@@ -13,7 +12,6 @@ from better_auth_api_key import api_key
 from better_auth_memory_adapter import memory_adapter
 from better_auth_scim import apply_patch_ops, scim
 from better_auth_test_utils import ASGIDriver
-
 
 # ----- Unit: PatchOp interpreter ------------------------------------------
 
@@ -174,15 +172,24 @@ async def test_scim_unauthorized_without_admin() -> None:
 
 
 async def test_scim_api_key_with_scim_scope() -> None:
+    import json as _json
+
     driver, _auth = await _admin_driver()
-    # Create a scim-scoped api key as admin
+    # Create an api key as admin (clients may not set server-only `permissions`).
     r = await driver.request(
         "POST",
         "/api-key/create",
-        json_body={"name": "scim-bot", "scope": {"scim": True}},
+        json_body={"name": "scim-bot"},
     )
     assert r.status == 200
-    raw = r.json()["key"]
+    body = r.json()
+    raw = body["key"]
+    # Grant the scim scope server-side (mirrors how an operator would provision it).
+    await _auth.context.adapter.update(
+        model="apikey",
+        where=(Where(field="id", value=body["id"]),),
+        update={"permissions": _json.dumps({"scim": ["read", "write"]})},
+    )
 
     # Drop session — use only the api key header
     driver.cookies.clear()
