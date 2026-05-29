@@ -30,6 +30,10 @@ ORGANIZATION_ERROR_CODES: Final[Mapping[str, str]] = {
     "ALREADY_MEMBER": "User is already a member of this organization.",
     "TEAMS_DISABLED": "Teams support is not enabled.",
     "DYNAMIC_AC_DISABLED": "Dynamic access control is not enabled.",
+    "NO_ACTIVE_ORGANIZATION": "No active organization is set on the session.",
+    "NO_ACTIVE_TEAM": "No active team is set on the session.",
+    "NOT_TEAM_MEMBER": "You are not a member of this team.",
+    "NOT_INVITATION_RECIPIENT": "You are not the recipient of this invitation.",
 }
 
 

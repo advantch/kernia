@@ -790,7 +790,7 @@ async def test_teams_create_add_remove_delete(
     # Create team.
     r = await driver_owner.request(
         "POST",
-        "/organization/teams/create",
+        "/organization/create-team",
         json_body={"organizationId": org["id"], "name": "Eng"},
     )
     assert r.status == 200
@@ -802,7 +802,7 @@ async def test_teams_create_add_remove_delete(
     )
     r = await driver_owner.request(
         "POST",
-        "/organization/teams/add-member",
+        "/organization/add-team-member",
         json_body={
             "organizationId": org["id"],
             "teamId": team["id"],
@@ -813,7 +813,7 @@ async def test_teams_create_add_remove_delete(
 
     # List teams.
     r = await driver_owner.request(
-        "GET", "/organization/teams/list", query=f"organizationId={org['id']}"
+        "GET", "/organization/list-teams", query=f"organizationId={org['id']}"
     )
     assert r.status == 200
     assert len(r.json()) == 1
@@ -821,7 +821,7 @@ async def test_teams_create_add_remove_delete(
     # Remove member from team.
     r = await driver_owner.request(
         "POST",
-        "/organization/teams/remove-member",
+        "/organization/remove-team-member",
         json_body={
             "organizationId": org["id"],
             "teamId": team["id"],
@@ -833,7 +833,7 @@ async def test_teams_create_add_remove_delete(
     # Delete team.
     r = await driver_owner.request(
         "POST",
-        "/organization/teams/delete",
+        "/organization/remove-team",
         json_body={"organizationId": org["id"], "teamId": team["id"]},
     )
     assert r.status == 200
@@ -851,7 +851,7 @@ async def test_team_create_requires_org_member(
     org = await _create_org(driver_owner, name="Co")
     r = await driver_stranger.request(
         "POST",
-        "/organization/teams/create",
+        "/organization/create-team",
         json_body={"organizationId": org["id"], "name": "Eng"},
     )
     assert r.status == 403
@@ -879,7 +879,7 @@ async def test_member_cannot_create_team(
     )
     r = await driver_member.request(
         "POST",
-        "/organization/teams/create",
+        "/organization/create-team",
         json_body={"organizationId": org["id"], "name": "Eng"},
     )
     assert r.status == 403
@@ -1003,3 +1003,174 @@ async def test_unauthenticated_create_rejected(
         "POST", "/organization/create", json_body={"name": "X"}
     )
     assert r.status == 401
+
+
+# ---------------------------------------------------------------------------
+# Parity: additional read / lookup endpoints (flat upstream paths)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_check_slug(org_adapter_factory: Callable[[], Awaitable[Any]]) -> None:
+    adapter = await org_adapter_factory()
+    driver = await _make_driver(adapter)
+    await _sign_up(driver, email="slug@example.com")
+    org = await _create_org(driver, name="Slug Co", slug="slug-co")
+    # Free slug → status True
+    r = await driver.request(
+        "POST", "/organization/check-slug", json_body={"slug": "totally-free"}
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["status"] is True
+    # Taken slug → 400 SLUG_TAKEN
+    r = await driver.request(
+        "POST", "/organization/check-slug", json_body={"slug": "slug-co"}
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "SLUG_TAKEN"
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_get_full_organization(
+    org_adapter_factory: Callable[[], Awaitable[Any]],
+) -> None:
+    adapter = await org_adapter_factory()
+    driver = await _make_driver(adapter)
+    await _sign_up(driver, email="full@example.com")
+    org = await _create_org(driver, name="Full Co")
+    # No query → resolves via active org set on create.
+    r = await driver.request("GET", "/organization/get-full-organization")
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body["id"] == org["id"]
+    assert isinstance(body["members"], list) and len(body["members"]) == 1
+    assert isinstance(body["invitations"], list)
+    assert "teams" in body  # teams enabled in the test driver
+    # Explicit slug lookup also works.
+    r = await driver.request(
+        "GET", "/organization/get-full-organization", query=f"organizationId={org['id']}"
+    )
+    assert r.status == 200
+    assert r.json()["id"] == org["id"]
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_get_active_member_and_role(
+    org_adapter_factory: Callable[[], Awaitable[Any]],
+) -> None:
+    adapter = await org_adapter_factory()
+    driver = await _make_driver(adapter)
+    await _sign_up(driver, email="active@example.com")
+    org = await _create_org(driver, name="Active Co")
+    r = await driver.request("GET", "/organization/get-active-member")
+    assert r.status == 200, r.json()
+    assert r.json()["role"] == "owner"
+    assert r.json()["organizationId"] == org["id"]
+    r = await driver.request("GET", "/organization/get-active-member-role")
+    assert r.status == 200
+    assert r.json()["role"] == "owner"
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_get_invitation(org_adapter_factory: Callable[[], Awaitable[Any]]) -> None:
+    adapter = await org_adapter_factory()
+    driver_a = await _make_driver(adapter)
+    await _sign_up(driver_a, email="inv-owner@example.com")
+    org = await _create_org(driver_a, name="Invite Co")
+    r = await driver_a.request(
+        "POST",
+        "/organization/invite-member",
+        json_body={"organizationId": org["id"], "email": "guest@example.com"},
+    )
+    invite = r.json()["invitation"]
+    # The invited user signs up and reads the invitation.
+    driver_b = await _make_driver(adapter)
+    await _sign_up(driver_b, email="guest@example.com")
+    r = await driver_b.request(
+        "GET", "/organization/get-invitation", query=f"id={invite['id']}"
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body["id"] == invite["id"]
+    assert body["organizationName"] == "Invite Co"
+    assert body["organizationSlug"] == org["slug"]
+    assert body["inviterEmail"] == "inv-owner@example.com"
+    # A non-recipient is forbidden.
+    r = await driver_a.request(
+        "GET", "/organization/get-invitation", query=f"id={invite['id']}"
+    )
+    assert r.status == 403
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_set_active_team_and_listings(
+    org_adapter_factory: Callable[[], Awaitable[Any]],
+) -> None:
+    adapter = await org_adapter_factory()
+    driver = await _make_driver(adapter)
+    user = await _sign_up(driver, email="team-active@example.com")
+    org = await _create_org(driver, name="TeamCo")
+    r = await driver.request(
+        "POST",
+        "/organization/create-team",
+        json_body={"organizationId": org["id"], "name": "Engineering"},
+    )
+    assert r.status == 200, r.json()
+    team = r.json()["team"]
+    # Add the owner to the team so they can set it active.
+    r = await driver.request(
+        "POST",
+        "/organization/add-team-member",
+        json_body={
+            "organizationId": org["id"],
+            "teamId": team["id"],
+            "userId": user["id"],
+        },
+    )
+    assert r.status == 200, r.json()
+    # Set active team.
+    r = await driver.request(
+        "POST", "/organization/set-active-team", json_body={"teamId": team["id"]}
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["id"] == team["id"]
+    # list-user-teams shows the team.
+    r = await driver.request("GET", "/organization/list-user-teams")
+    assert r.status == 200
+    assert any(t["id"] == team["id"] for t in r.json())
+    # list-team-members (defaults to active team) shows the owner.
+    r = await driver.request("GET", "/organization/list-team-members")
+    assert r.status == 200, r.json()
+    assert any(m["userId"] == user["id"] for m in r.json())
+    # Unset active team.
+    r = await driver.request(
+        "POST", "/organization/set-active-team", json_body={"teamId": None}
+    )
+    assert r.status == 200
+
+
+@pytest.mark.parametrize(*org_adapters_param())
+async def test_get_role_dynamic_ac(
+    org_adapter_factory: Callable[[], Awaitable[Any]],
+) -> None:
+    adapter = await org_adapter_factory()
+    driver = await _make_driver(adapter)
+    await _sign_up(driver, email="role@example.com")
+    org = await _create_org(driver, name="RoleCo")
+    r = await driver.request(
+        "POST",
+        "/organization/create-role",
+        json_body={
+            "organizationId": org["id"],
+            "role": "auditor",
+            "permissions": {"member": ["read"]},
+        },
+    )
+    assert r.status == 200, r.json()
+    r = await driver.request(
+        "GET",
+        "/organization/get-role",
+        query=f"organizationId={org['id']}&roleName=auditor",
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["role"]["role"] == "auditor"

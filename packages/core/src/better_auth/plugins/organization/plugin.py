@@ -79,9 +79,15 @@ def organization(
 
     The plugin registers:
 
-      * 16 base endpoints (org CRUD, members, invitations, has-permission)
-      * 6 team endpoints if ``teams`` is True
-      * 4 dynamic-AC role endpoints if ``dynamic_access_control`` is True
+      * 21 base endpoints (org CRUD, members, invitations, has-permission,
+        check-slug, get-full-organization, get-active-member[-role],
+        get-invitation, list-user-invitations)
+      * 9 team endpoints if ``teams`` is True (flat upstream paths:
+        create-team / update-team / remove-team / add-team-member /
+        remove-team-member / list-teams / set-active-team / list-user-teams /
+        list-team-members)
+      * 5 dynamic-AC role endpoints if ``dynamic_access_control`` is True
+        (create/update/delete/list/get-role)
 
     Side effects on init:
 
