@@ -20,6 +20,7 @@ from typing import Any
 from better_auth.auth import init
 from better_auth.plugins.email_password import email_and_password
 from better_auth.plugins.organization import organization
+from better_auth.types.adapter import Where
 from better_auth.types.init_options import (
     BetterAuthOptions,
     EmailPasswordOptions,
@@ -216,3 +217,126 @@ async def test_seat_only_plan_does_not_duplicate_base_price() -> None:
     assert items[0]["price"] == "price_same"
     assert items[0]["quantity"] is not None
     assert items[1] == {"price": "price_meter_api"}
+
+
+# ---------------------------------------------------------------------------
+# webhook seat handling
+# ---------------------------------------------------------------------------
+
+
+def _sign(body: bytes) -> dict[str, str]:
+    import hashlib
+    import hmac
+    import time
+
+    ts = int(time.time())
+    sig = hmac.new(
+        WEBHOOK_SECRET.encode("utf-8"),
+        f"{ts}.".encode("ascii") + body,
+        hashlib.sha256,
+    ).hexdigest()
+    return {
+        "stripe-signature": f"t={ts},v1={sig}",
+        "content-type": "application/json",
+    }
+
+
+def _seat_items_event(event_type: str, *, sub_id: str, customer: str, seat_qty: int,
+                      metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "id": "evt_seat",
+        "type": event_type,
+        "data": {
+            "object": {
+                "id": sub_id,
+                "customer": customer,
+                "status": "active",
+                "cancel_at_period_end": False,
+                "items": {
+                    "data": [
+                        {
+                            "price": {"id": "price_team_base"},
+                            "quantity": 1,
+                            "current_period_start": 1700000000,
+                            "current_period_end": 1700000000 + 30 * 86400,
+                        },
+                        {
+                            "price": {"id": "price_team_seat"},
+                            "quantity": seat_qty,
+                            "current_period_start": 1700000000,
+                            "current_period_end": 1700000000 + 30 * 86400,
+                        },
+                    ]
+                },
+                "metadata": metadata or {},
+            }
+        },
+    }
+
+
+async def _post_webhook(driver: ASGIDriver, event: dict[str, Any]) -> Any:
+    import json as _json
+
+    body_bytes = _json.dumps(event).encode("utf-8")
+    return await driver.request(
+        "POST", "/stripe/webhook", json_body=event, headers=_sign(body_bytes)
+    )
+
+
+async def test_webhook_persists_seat_count_on_creation() -> None:
+    driver, _mock, auth = _build(_seat_plan())
+    await _signup(driver, "webhook-seat@test.com")
+    org_id = await _create_org(driver, name="Webhook Seat Org", slug="webhook-seat-org")
+    await auth.context.adapter.update(  # type: ignore[attr-defined]
+        model="organization",
+        where=(Where(field="id", value=org_id),),
+        update={"stripeCustomerId": "cus_webhook_seat"},
+    )
+
+    event = _seat_items_event(
+        "customer.subscription.created",
+        sub_id="sub_webhook_seat",
+        customer="cus_webhook_seat",
+        seat_qty=5,
+    )
+    r = await _post_webhook(driver, event)
+    assert r.status == 200, r.json()
+
+    sub = await auth.context.adapter.find_one(  # type: ignore[attr-defined]
+        model="subscription",
+        where=(Where(field="stripeSubscriptionId", value="sub_webhook_seat"),),
+    )
+    assert sub is not None
+    assert sub["plan"] == "team"
+    assert sub["seats"] == 5
+
+
+async def test_webhook_updates_seat_count_on_update() -> None:
+    driver, _mock, auth = _build(_seat_plan())
+    sub = await auth.context.adapter.create(  # type: ignore[attr-defined]
+        model="subscription",
+        data={
+            "referenceId": "org_123",
+            "stripeCustomerId": "cus_seat_update",
+            "stripeSubscriptionId": "sub_seat_update",
+            "status": "active",
+            "plan": "team",
+            "seats": 3,
+        },
+    )
+
+    event = _seat_items_event(
+        "customer.subscription.updated",
+        sub_id="sub_seat_update",
+        customer="cus_seat_update",
+        seat_qty=8,
+        metadata={"subscriptionId": sub["id"]},
+    )
+    r = await _post_webhook(driver, event)
+    assert r.status == 200, r.json()
+
+    updated = await auth.context.adapter.find_one(  # type: ignore[attr-defined]
+        model="subscription",
+        where=(Where(field="id", value=sub["id"]),),
+    )
+    assert updated["seats"] == 8
