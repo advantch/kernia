@@ -37,6 +37,12 @@ dev-dependencies = [
     "pyotp>=2.9",
     "eth-account>=0.11",
     "webauthn>=2.7",
+    "aiosqlite>=0.20",
+    "greenlet>=3.0",
+    "openapi-spec-validator>=0.7",
+    "argon2-cffi>=23.1",
+    "alembic>=1.13",
+    "click>=8.1",
 ]
 
 [tool.uv.workspace]

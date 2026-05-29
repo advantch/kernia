@@ -3,7 +3,7 @@ name = "better-auth"
 version = "0.0.0"
 description = "Python port of better-auth — framework-agnostic core"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["argon2-cffi>=23.1"]
 
 [project.optional-dependencies]
 jwt = ["authlib>=1.3"]

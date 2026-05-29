@@ -3,7 +3,7 @@ name = "better-auth-cli"
 version = "0.0.0"
 description = "CLI for better-auth (codegen, migrations)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["click>=8.1", "alembic>=1.13", "sqlalchemy>=2.0"]
 
 [build-system]
 requires = ["hatchling"]

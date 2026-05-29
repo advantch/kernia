@@ -3,7 +3,7 @@
 The MCP plugin exposes:
   * POST /mcp/authorize {clientId, scope, resource} →
         {access_token, token_type, expires_in, resource}
-  * GET /.well-known/oauth-authorization-server → MCP discovery doc
+  * GET /.well-known/oauth-protected-resource → RFC 9728 resource metadata
 
 It re-uses the OIDC provider plugin's `oauthClient` registry for client lookup
 and the JWT plugin's active key for signing the access token. Tokens include
@@ -98,21 +98,29 @@ async def _authorize(ctx: EndpointContext) -> dict[str, object]:
 
 
 async def _well_known(ctx: EndpointContext) -> dict[str, object]:
+    """RFC 9728 OAuth 2.0 protected-resource metadata for the MCP server.
+
+    The MCP plugin is a *resource server*: it publishes ``oauth-protected-resource``
+    pointing clients at the authorization server (the issuer — served by the
+    ``oauth_provider`` plugin's RFC 8414 ``oauth-authorization-server`` document).
+    This keeps the AS and RS metadata on their canonical, non-colliding paths so
+    the two plugins compose. The legacy AS-style hints (``authorization_endpoint``,
+    ``resource_indicators_supported``) are retained for MCP clients that expect the
+    plugin's built-in ``/mcp/authorize`` grant.
+    """
     opts = _options(ctx.auth)
     base = opts.issuer.rstrip("/")
     return {
+        "resource": opts.issuer,
+        "authorization_servers": [opts.issuer],
+        "jwks_uri": f"{base}/jwks",
+        "scopes_supported": list(opts.supported_scopes),
+        "bearer_methods_supported": ["header"],
+        # MCP-specific grant hints (the plugin issues tokens at /mcp/authorize).
         "issuer": opts.issuer,
         "authorization_endpoint": f"{base}/mcp/authorize",
         "token_endpoint": f"{base}/mcp/authorize",
-        "jwks_uri": f"{base}/jwks",
-        "scopes_supported": list(opts.supported_scopes),
-        "response_types_supported": ["token"],
-        "grant_types_supported": ["urn:ietf:params:oauth:grant-type:mcp"],
-        "token_endpoint_auth_methods_supported": ["none"],
-        "code_challenge_methods_supported": [],
-        "id_token_signing_alg_values_supported": ["ES256", "RS256", "EdDSA"],
         "resource_indicators_supported": True,
-        "subject_types_supported": ["public"],
     }
 
 
@@ -156,7 +164,7 @@ AUTHORIZE = create_auth_endpoint(
     _authorize,
 )
 WELL_KNOWN = create_auth_endpoint(
-    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
     EndpointOptions(method="GET"),
     _well_known,
 )

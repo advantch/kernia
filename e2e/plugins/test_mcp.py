@@ -103,10 +103,13 @@ async def test_mcp_introspect_rejects_wrong_resource(setup) -> None:
 
 async def test_mcp_well_known(setup) -> None:
     _, driver, _, _ = setup
-    r = await driver.request("GET", "/.well-known/oauth-authorization-server")
+    # RFC 9728 protected-resource metadata (the MCP server is a resource server;
+    # the AS metadata lives on oauth_provider's oauth-authorization-server doc).
+    r = await driver.request("GET", "/.well-known/oauth-protected-resource")
     assert r.status == 200
     j = r.json()
-    assert j["issuer"] == "https://issuer.test"
+    assert j["resource"] == "https://issuer.test"
+    assert j["authorization_servers"] == ["https://issuer.test"]
     assert j["authorization_endpoint"].endswith("/mcp/authorize")
     assert j["resource_indicators_supported"] is True
 
