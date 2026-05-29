@@ -170,8 +170,17 @@ class MockStripe:
                 "name": body.get("name"),
                 "metadata": self._collect_metadata(body),
             }
+            # Reflect any additional flat customer params (e.g. description,
+            # phone) supplied via getCustomerCreateParams so callers can assert
+            # on them. Skip the bracketed metadata keys handled above.
+            for key, value in body.items():
+                if key in ("email", "name") or key.startswith("metadata["):
+                    continue
+                obj.setdefault(key, value)
             self.customers[obj["id"]] = obj
-            self.capture_events.append({"type": "customer.create", "object": obj})
+            self.capture_events.append(
+                {"type": "customer.create", "object": obj, "params": dict(body)}
+            )
             return httpx.Response(200, json=obj)
         if path == "/v1/customers" and method == "GET":
             email = request.url.params.get("email")

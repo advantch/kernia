@@ -383,6 +383,115 @@ async def _call_customer_create(
     )
 
 
+async def _find_org_customer(
+    opts: StripeOptions, org_id: str
+) -> dict[str, Any] | None:
+    """Search → list fallback for an existing organization Stripe customer."""
+    client = opts.stripe_client
+    try:
+        result = await client.search_customers(
+            query=(
+                f'metadata["organizationId"]:"{escape_stripe_search_value(org_id)}"'
+                f' AND metadata["customerType"]:"organization"'
+            ),
+            limit=1,
+        )
+        data = (result or {}).get("data") or []
+        if data:
+            return data[0]
+        return None
+    except Exception:
+        _log.warning("customers.search failed, falling back to customers.list")
+        listed = await client.list_customers(limit=100)
+        for customer in (listed or {}).get("data") or []:
+            meta = customer.get("metadata") or {}
+            if (
+                meta.get("organizationId") == org_id
+                and meta.get("customerType") == "organization"
+            ):
+                return customer
+    return None
+
+
+async def _ensure_org_customer(
+    ctx: EndpointContext,
+    opts: StripeOptions,
+    *,
+    reference_id: str,
+    metadata: dict[str, Any] | None,
+) -> str:
+    """Get-or-create the Stripe customer id for an organization reference.
+
+    Mirrors upstream's organization branch: look the org up (raising
+    ``ORGANIZATION_NOT_FOUND`` when absent), reuse its ``stripeCustomerId`` if
+    set, otherwise reconcile against any existing org-typed Stripe customer
+    (search→list) before creating a fresh one named after the org. The plan's
+    ``getCustomerCreateParams`` is merged with library-owned ``name``/``metadata``
+    winning (defu semantics), and ``onCustomerCreate`` fires only for newly
+    created customers. Any failure surfaces as ``UNABLE_TO_CREATE_CUSTOMER``.
+    """
+    org = await ctx.auth.adapter.find_one(
+        model="organization", where=(Where(field="id", value=reference_id),)
+    )
+    if not org:
+        raise _err("ORGANIZATION_NOT_FOUND")
+    customer_id = org.get("stripeCustomerId")
+    if customer_id:
+        return customer_id
+    try:
+        stripe_customer = await _find_org_customer(opts, org["id"])
+        if not stripe_customer:
+            extra: dict[str, Any] = {}
+            if opts.organization and opts.organization.get_customer_create_params:
+                extra = (
+                    await _maybe_await(
+                        opts.organization.get_customer_create_params(org, ctx)
+                    )
+                    or {}
+                )
+            extra = dict(extra)
+            # Library-owned fields take priority (defu: base wins).
+            extra.pop("name", None)
+            extra.pop("metadata", None)
+            email = extra.pop("email", None)
+            stripe_customer = await opts.stripe_client.create_customer(
+                email=email,
+                name=org.get("name"),
+                metadata=customer_metadata.set(
+                    {
+                        "organizationId": org["id"],
+                        "customerType": "organization",
+                    },
+                    metadata,
+                ),
+                **extra,
+            )
+            if opts.organization and opts.organization.on_customer_create:
+                await _maybe_await(
+                    opts.organization.on_customer_create(
+                        {
+                            "stripeCustomer": stripe_customer,
+                            "organization": {
+                                **org,
+                                "stripeCustomerId": stripe_customer["id"],
+                            },
+                        },
+                        ctx,
+                    )
+                )
+        await ctx.auth.adapter.update(
+            model="organization",
+            where=(Where(field="id", value=org["id"]),),
+            update={"stripeCustomerId": stripe_customer["id"]},
+        )
+        return stripe_customer["id"]
+    except APIError:
+        raise
+    except Exception as e:
+        _log.error("Organization customer creation failed: %s", e)
+        raise _err("UNABLE_TO_CREATE_CUSTOMER") from e
+
+
 # ----- checkout -------------------------------------------------------------
 
 
@@ -736,10 +845,16 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         # to the user customer (creating one) when the org has none yet.
         customer_id: str | None = None
         if customer_type == "organization":
-            customer_id = await _customer_for_reference(
+            customer_id = (
+                sub_to_update.get("stripeCustomerId") if sub_to_update else None
+            ) or await _customer_for_reference(
                 ctx, opts, customer_type, reference_id
             )
-        if not customer_id:
+            if not customer_id:
+                customer_id = await _ensure_org_customer(
+                    ctx, opts, reference_id=reference_id, metadata=body.metadata
+                )
+        else:
             customer_id = await _ensure_user_customer(
                 ctx, opts, metadata=body.metadata
             )
