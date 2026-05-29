@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from better_auth.types.adapter import FieldDef, ModelDef
 
-
 SSO_PROVIDER_MODEL = ModelDef(
     name="ssoProvider",
     fields=(

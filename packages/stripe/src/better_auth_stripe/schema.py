@@ -1,7 +1,7 @@
 """Stripe plugin schema + options.
 
 Mirrors `reference/packages/stripe/src/schema.ts` (subscription model + user
-extension) and `types.ts` (plan definition, plugin options).
+extension) and `types.ts` (plan definition, plugin options, lifecycle hooks).
 """
 
 from __future__ import annotations
@@ -13,8 +13,23 @@ from typing import Any, Literal
 from better_auth.types.adapter import FieldDef, ModelDef
 from better_auth.types.plugin import PluginSchema
 
-
 SubscriptionFor = Literal["user", "organization"]
+
+
+@dataclass(frozen=True, slots=True)
+class FreeTrial:
+    """Free-trial config for a plan. Mirrors `StripePlan.freeTrial`.
+
+    The callbacks receive the persisted local subscription row (a dict). They are
+    optional and may be sync or async.
+    """
+
+    days: int
+    on_trial_start: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
+    on_trial_end: Callable[[dict[str, Any], Any], Awaitable[None] | None] | None = None
+    on_trial_expired: (
+        Callable[[dict[str, Any], Any], Awaitable[None] | None] | None
+    ) = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,14 +51,16 @@ class StripePlan:
     / ``none``). ``line_items`` are extra checkout line items (add-ons, metered
     usage prices) appended to the base price. ``group`` lets a reference id hold
     multiple concurrent subscriptions (one per group). ``limits`` is opaque
-    plan metadata surfaced to the app.
+    plan metadata surfaced to the app. ``free_trial`` configures a per-plan trial
+    with optional lifecycle callbacks.
     """
 
     name: str
-    price_id: str
+    price_id: str | None = None
     seats: bool = False
     seat_price_id: str | None = None
     free_trial_days: int | None = None
+    free_trial: FreeTrial | None = None
     annual_price_id: str | None = None
     annual_discount_price_id: str | None = None
     lookup_key: str | None = None
@@ -56,7 +73,18 @@ class StripePlan:
 
 
 SubscriptionRow = dict[str, Any]
-CustomerHook = Callable[[Mapping[str, Any]], Awaitable[None]]
+# Generic async-or-sync callback type used by lifecycle hooks. The first arg is
+# a data dict; an optional second arg is the endpoint context.
+Hook = Callable[..., Awaitable[None] | None]
+
+
+@dataclass
+class OrganizationStripeOptions:
+    """Mirrors `StripeOptions.organization`."""
+
+    enabled: bool = True
+    get_customer_create_params: Callable[..., Any] | None = None
+    on_customer_create: Hook | None = None
 
 
 @dataclass
@@ -65,9 +93,10 @@ class StripeOptions:
 
     `stripe_client` is duck-typed; we only call the methods needed (`customers`,
     `checkout.sessions`, `subscriptions`, `billingPortal.sessions`, `webhooks`).
-    Tests can inject `MockStripe` configured with an httpx mock transport, plus
-    a stubbed `webhooks` namespace whose `construct_event` short-circuits to
-    `MockStripe.emit_webhook`'s verifier.
+    Tests can inject a `StripeClient` wired to `MockStripe.mock_transport()`.
+
+    Lifecycle hooks mirror upstream's `SubscriptionOptions` and top-level
+    `StripeOptions` callbacks. All hooks may be sync or async.
     """
 
     stripe_client: Any
@@ -75,7 +104,24 @@ class StripeOptions:
     plans: Mapping[str, StripePlan] = field(default_factory=dict)
     subscription_for: SubscriptionFor = "user"
     create_customer_on_sign_up: bool = True
-    on_event: CustomerHook | None = None
+    require_email_verification: bool = False
+
+    # top-level callbacks
+    on_event: Hook | None = None
+    on_customer_create: Hook | None = None
+    get_customer_create_params: Callable[..., Any] | None = None
+
+    # subscription lifecycle callbacks
+    on_subscription_complete: Hook | None = None
+    on_subscription_created: Hook | None = None
+    on_subscription_update: Hook | None = None
+    on_subscription_cancel: Hook | None = None
+    on_subscription_deleted: Hook | None = None
+    authorize_reference: Callable[..., Any] | None = None
+    get_checkout_session_params: Callable[..., Any] | None = None
+
+    # organization integration
+    organization: OrganizationStripeOptions | None = None
 
 
 # ----- schema contribution --------------------------------------------------
@@ -93,6 +139,9 @@ SUBSCRIPTION_MODEL = ModelDef(
         FieldDef(name="periodStart", type="number", required=False),
         FieldDef(name="periodEnd", type="number", required=False),
         FieldDef(name="cancelAtPeriodEnd", type="boolean", required=False),
+        FieldDef(name="cancelAt", type="number", required=False),
+        FieldDef(name="canceledAt", type="number", required=False),
+        FieldDef(name="endedAt", type="number", required=False),
         FieldDef(name="seats", type="number", required=False),
         FieldDef(name="trialStart", type="number", required=False),
         FieldDef(name="trialEnd", type="number", required=False),
@@ -107,19 +156,37 @@ SUBSCRIPTION_MODEL = ModelDef(
 )
 
 
+_USER_EXTENSION = (FieldDef(name="stripeCustomerId", type="string", required=False),)
+_ORGANIZATION_EXTENSION = (
+    FieldDef(name="stripeCustomerId", type="string", required=False),
+)
+
+# Static view of every column the plugin may contribute, used by tests/introspection.
 USER_EXTENSIONS: Mapping[str, tuple[FieldDef, ...]] = {
-    "user": (FieldDef(name="stripeCustomerId", type="string", required=False),),
+    "user": _USER_EXTENSION,
+    "organization": _ORGANIZATION_EXTENSION,
 }
 
 
-def get_schema() -> PluginSchema:
-    """Return the `PluginSchema` contributed by the stripe plugin."""
-    return PluginSchema(tables=(SUBSCRIPTION_MODEL,), extend=USER_EXTENSIONS)
+def get_schema(options: StripeOptions | None = None) -> PluginSchema:
+    """Return the `PluginSchema` contributed by the stripe plugin.
+
+    Mirrors `getSchema` in schema.ts: the `user` table always gains
+    `stripeCustomerId`, but the `organization` table is only extended when
+    organization billing is enabled (otherwise the column would target a model
+    that may not exist).
+    """
+    extend: dict[str, tuple[FieldDef, ...]] = {"user": _USER_EXTENSION}
+    if options is not None and options.organization and options.organization.enabled:
+        extend["organization"] = _ORGANIZATION_EXTENSION
+    return PluginSchema(tables=(SUBSCRIPTION_MODEL,), extend=extend)
 
 
 __all__ = [
     "SUBSCRIPTION_MODEL",
     "USER_EXTENSIONS",
+    "FreeTrial",
+    "OrganizationStripeOptions",
     "StripeOptions",
     "StripePlan",
     "SubscriptionFor",

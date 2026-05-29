@@ -47,6 +47,7 @@ OAUTH_CLIENT_MODEL = ModelDef(
         FieldDef("allowedScopes", "text"),
         FieldDef("requirePKCE", "boolean", default=False),
         FieldDef("tokenEndpointAuthMethod", "string", default="client_secret_basic"),
+        FieldDef("subjectType", "string", required=False),
         FieldDef("createdAt", "date"),
         FieldDef("updatedAt", "date"),
     ),
@@ -115,6 +116,42 @@ class OAuthProviderOptions:
     # How refresh tokens are kept at rest. "hashed" (default, mirrors upstream
     # `storeTokens: "hashed"`) means the raw token never lands in the DB.
     store_tokens: str = "hashed"
+    # Secret used to compute pairwise subject identifiers (HMAC-SHA256).
+    # When set (min 32 chars), clients with `subject_type: "pairwise"` receive
+    # unique, unlinkable `sub` values per sector identifier.
+    # @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+    pairwise_secret: str | None = None
+    # Overwrite advertised `scopes_supported` / `claims_supported` in metadata.
+    advertised_scopes_supported: tuple[str, ...] | None = None
+    advertised_claims_supported: tuple[str, ...] | None = None
+    # Grant types supported by the token endpoint.
+    grant_types: tuple[str, ...] = (
+        "authorization_code",
+        "client_credentials",
+        "refresh_token",
+    )
+
+    def __post_init__(self) -> None:
+        # Mirror upstream `BetterAuthError("pairwiseSecret must be at least 32
+        # characters long for adequate HMAC-SHA256 security")`.
+        if self.pairwise_secret is not None and len(self.pairwise_secret) < 32:
+            raise ValueError(
+                "pairwiseSecret must be at least 32 characters long for "
+                "adequate HMAC-SHA256 security"
+            )
+
+
+def _oauth_error(
+    status: int, error: str, description: str | None = None
+) -> APIError:
+    """Build an APIError carrying the OAuth `{error, error_description}` envelope
+    in its `data` payload, mirroring upstream's `new APIError(status, {error, ...})`.
+    """
+    data: dict[str, object] = {"error": error}
+    if description is not None:
+        data["error_description"] = description
+    code = "UNAUTHORIZED" if status == 401 else "INVALID_REQUEST"
+    return APIError(status, code, message=description or error, data=data)
 
 
 def _sha256_b64url(value: str) -> str:
@@ -136,6 +173,38 @@ def _verify_secret(method: str, presented: str, stored: str) -> bool:
     return hmac.compare_digest(candidate, stored)
 
 
+def _hmac_sha256_b64url(value: str, secret: str) -> str:
+    """HMAC-SHA256 → unpadded base64url. Mirrors `@better-auth/crypto` `makeSignature`."""
+    mac = hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256)
+    return base64.urlsafe_b64encode(mac.digest()).rstrip(b"=").decode("ascii")
+
+
+def _sector_identifier(client: OAuthClient) -> str:
+    """Extract the sector identifier (host) from a client's first redirect URI.
+
+    @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+    """
+    if not client.redirect_uris or not client.redirect_uris[0]:
+        raise ValueError("Client has no redirect URIs for sector identifier")
+    from urllib.parse import urlsplit
+
+    return urlsplit(client.redirect_uris[0]).netloc
+
+
+def _resolve_sub(
+    user_id: str, client: OAuthClient, opts: OAuthProviderOptions
+) -> str:
+    """Return the subject identifier for a user+client pair.
+
+    Uses a pairwise (sector-scoped HMAC) identifier when the client opts in and
+    a `pairwise_secret` is configured; otherwise returns the raw user id.
+    """
+    if client.subject_type == "pairwise" and opts.pairwise_secret:
+        sector = _sector_identifier(client)
+        return _hmac_sha256_b64url(f"{sector}.{user_id}", opts.pairwise_secret)
+    return user_id
+
+
 @dataclass(frozen=True, slots=True)
 class OAuthClient:
     """Plain-data representation of a registered client."""
@@ -147,6 +216,7 @@ class OAuthClient:
     allowed_scopes: tuple[str, ...]
     require_pkce: bool
     token_endpoint_auth_method: str
+    subject_type: str | None = None
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> OAuthClient:
@@ -159,6 +229,7 @@ class OAuthClient:
             require_pkce=bool(row.get("requirePKCE")),
             token_endpoint_auth_method=row.get("tokenEndpointAuthMethod")
             or "client_secret_basic",
+            subject_type=row.get("subjectType") or None,
         )
 
 
@@ -171,6 +242,7 @@ class RegisterBody(BaseModel):
     allowed_scopes: list[str] = ["openid", "profile", "email"]
     require_pkce: bool = False
     token_endpoint_auth_method: str = "client_secret_basic"
+    subject_type: str | None = None
 
 
 class TokenBody(BaseModel):
@@ -391,7 +463,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         return await _issue_tokens(
             ctx,
             opts,
-            client_id=client_id,
+            client=client,
             user_id=user_id,
             scope=scope,
             nonce=record.get("nonce"),
@@ -428,17 +500,35 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         return await _issue_tokens(
             ctx,
             opts,
-            client_id=client_id,
+            client=client,
             user_id=row["userId"],
             scope=row.get("scope") or "",
         )
 
     if grant == "client_credentials":
+        # Machine-to-machine: a confidential client authenticating as itself.
+        # Upstream rejects public clients and OIDC/identity scopes here, since
+        # there is no end user to represent.
+        if is_public or not client_secret:
+            raise _oauth_error(
+                401,
+                "invalid_client",
+                "client_credentials requires client authentication",
+            )
+        requested = {s for s in (body.scope or "").split() if s}
+        oidc_scopes = {"openid", "profile", "email", "offline_access"}
+        forbidden = requested & oidc_scopes
+        if forbidden:
+            raise _oauth_error(
+                400,
+                "invalid_scope",
+                f"scope not allowed for client_credentials: {sorted(forbidden)}",
+            )
         # Issue an access token bound to the client itself (no user).
         return await _issue_tokens(
             ctx,
             opts,
-            client_id=client_id,
+            client=client,
             user_id=f"client:{client_id}",
             scope=body.scope or "",
             include_id_token=False,
@@ -464,17 +554,28 @@ async def _issue_tokens(
     ctx: EndpointContext,
     opts: OAuthProviderOptions,
     *,
-    client_id: str,
+    client: OAuthClient,
     user_id: str,
     scope: str,
     nonce: str | None = None,
     include_id_token: bool = True,
 ) -> dict[str, object]:
     now = int(time.time())
+    client_id = client.client_id
+    # The JWT access token's `sub` stays the *real* user id so that /userinfo and
+    # /introspect can look the account up. The pairwise (sector-scoped) subject
+    # is applied only to the id_token and at the introspection presentation
+    # layer. Client-credential tokens carry their synthetic `client:` id.
+    # Mirrors upstream `resolveSubjectIdentifier` placement (utils + introspect).
+    pairwise_sub = (
+        user_id if user_id.startswith("client:") else _resolve_sub(user_id, client, opts)
+    )
+    # `azp` records the client so introspection can recompute the pairwise sub.
     access_token, _kid = await issue_jwt(
         ctx.auth,
         payload={
             "sub": user_id,
+            "azp": client_id,
             "aud": client_id,
             "iss": opts.issuer,
             "scope": scope,
@@ -508,7 +609,7 @@ async def _issue_tokens(
             model="user", where=(Where(field="id", value=user_id),)
         )
         payload: dict[str, Any] = {
-            "sub": user_id,
+            "sub": pairwise_sub,
             "aud": client_id,
             "iss": opts.issuer,
         }
@@ -540,12 +641,20 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(401, "UNAUTHORIZED")
     if sub.startswith("client:"):
         return {"sub": sub}
+    # The access token `sub` is the real user id (for lookup). The response
+    # `sub` is the pairwise identifier resolved from the issuing client (`azp`),
+    # so /userinfo agrees with the id_token for pairwise clients.
     user = await ctx.auth.adapter.find_one(
         model="user", where=(Where(field="id", value=sub),)
     )
     if user is None:
         raise APIError(404, "USER_NOT_FOUND")
-    out: dict[str, object] = {"sub": sub}
+    response_sub = sub
+    azp = claims.get("azp")
+    if isinstance(azp, str) and azp:
+        client = await _load_client(ctx.auth, azp)
+        response_sub = _resolve_sub(sub, client, opts)
+    out: dict[str, object] = {"sub": response_sub}
     scopes = set(str(claims.get("scope", "")).split())
     if "email" in scopes:
         out["email"] = user.get("email")
@@ -561,26 +670,60 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
 async def _revoke(ctx: EndpointContext) -> dict[str, object]:
     opts = _options(ctx.auth)
     body: RevokeBody = ctx.body
-    # Try refresh-token store (tokens stored hashed → hash the presented value).
+    # RFC 7009 §2.1: the revocation endpoint MUST authenticate the caller.
+    client_id, client_secret = _client_auth(ctx)
+    if not client_id:
+        raise _oauth_error(401, "invalid_client", "missing required credentials")
+    client = await _load_client(ctx.auth, client_id)
+    is_public = client.token_endpoint_auth_method == "none"
+    if not is_public:
+        if (
+            not client_secret
+            or not client.client_secret
+            or not _verify_secret(
+                opts.store_client_secret, client_secret, client.client_secret
+            )
+        ):
+            raise _oauth_error(401, "invalid_client", "invalid client credentials")
+    # Only revoke tokens that belong to the authenticated client (RFC 7009 §2.1).
     await ctx.auth.adapter.delete_many(
         model="oauthRefreshToken",
         where=(
             Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
+            Where(field="clientId", value=client_id),
         ),
     )
-    # RFC 7009: respond 200 regardless
+    # RFC 7009: respond 200 regardless of whether the token existed.
     return {}
 
 
 async def _introspect(ctx: EndpointContext) -> dict[str, object]:
     opts = _options(ctx.auth)
     body: IntrospectBody = ctx.body
+    # RFC 7662 §2.1: the introspection endpoint MUST authenticate the caller.
+    client_id, client_secret = _client_auth(ctx)
+    if not client_id or not client_secret:
+        raise _oauth_error(401, "invalid_client", "missing required credentials")
+    client = await _load_client(ctx.auth, client_id)
+    if (
+        not client.client_secret
+        or not _verify_secret(
+            opts.store_client_secret, client_secret, client.client_secret
+        )
+    ):
+        raise _oauth_error(401, "invalid_client", "invalid client credentials")
     # Try as JWT access token
     try:
         claims = await verify_local_jwt(ctx.auth, body.token, issuer=opts.issuer)
+        token_sub = claims.get("sub")
+        # Resolve the pairwise sub at the presentation layer (mirrors upstream
+        # `resolveIntrospectionSub`): the token carries the real user id, but
+        # the response presents the sector-scoped identifier for the client.
+        if isinstance(token_sub, str) and not token_sub.startswith("client:"):
+            token_sub = _resolve_sub(token_sub, client, opts)
         return {
             "active": True,
-            "sub": claims.get("sub"),
+            "sub": token_sub,
             "aud": claims.get("aud"),
             "iss": claims.get("iss"),
             "exp": claims.get("exp"),
@@ -609,43 +752,87 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
     return {"active": False}
 
 
+_BASE_CLAIMS = (
+    "sub",
+    "iss",
+    "aud",
+    "exp",
+    "iat",
+    "sid",
+    "scope",
+    "azp",
+    "email",
+    "email_verified",
+    "name",
+    "picture",
+    "family_name",
+    "given_name",
+)
+
+
 def _metadata(opts: OAuthProviderOptions, *, openid: bool) -> dict[str, object]:
+    """Build the authorization-server (RFC 8414) or OIDC discovery document.
+
+    Mirrors upstream `authServerMetadata` / `oidcServerMetadata` field-for-field.
+    """
     base = opts.issuer.rstrip("/")
+    grant_types = list(opts.grant_types)
+    response_types = ["code"] if "authorization_code" in grant_types else []
+    # Public clients are advertised only when dynamic registration of secretless
+    # clients is permitted; mirror upstream by prepending "none".
+    auth_methods: list[str] = ["client_secret_basic", "client_secret_post"]
     doc: dict[str, object] = {
         "issuer": opts.issuer,
         "authorization_endpoint": f"{base}/oauth2/authorize",
         "token_endpoint": f"{base}/oauth2/token",
         "jwks_uri": f"{base}/jwks",
-        "revocation_endpoint": f"{base}/oauth2/revoke",
+        "registration_endpoint": f"{base}/oauth2/register",
         "introspection_endpoint": f"{base}/oauth2/introspect",
-        "registration_endpoint": f"{base}/oauth2/register"
-        if opts.enable_dynamic_registration
-        else None,
-        "scopes_supported": list(opts.supported_scopes),
-        "response_types_supported": ["code"],
-        "grant_types_supported": [
-            "authorization_code",
-            "refresh_token",
-            "client_credentials",
-        ],
-        "code_challenge_methods_supported": ["S256", "plain"],
-        "token_endpoint_auth_methods_supported": [
-            "client_secret_basic",
-            "client_secret_post",
-            "none",
-        ],
+        "revocation_endpoint": f"{base}/oauth2/revoke",
+        "scopes_supported": list(
+            opts.advertised_scopes_supported or opts.supported_scopes
+        ),
+        "response_types_supported": response_types,
+        "response_modes_supported": ["query"],
+        "grant_types_supported": grant_types,
+        "token_endpoint_auth_methods_supported": auth_methods,
+        "introspection_endpoint_auth_methods_supported": list(auth_methods),
+        "revocation_endpoint_auth_methods_supported": list(auth_methods),
+        "code_challenge_methods_supported": ["S256"],
+        "authorization_response_iss_parameter_supported": True,
     }
     if openid:
-        # OIDC discovery (RFC OpenID-Connect-Discovery) adds the identity layer.
+        # OIDC discovery (OpenID-Connect-Discovery) adds the identity layer.
+        doc["claims_supported"] = list(
+            opts.advertised_claims_supported or _BASE_CLAIMS
+        )
         doc["userinfo_endpoint"] = f"{base}/oauth2/userinfo"
-        doc["id_token_signing_alg_values_supported"] = ["ES256", "RS256", "EdDSA"]
-        doc["subject_types_supported"] = ["public"]
+        doc["subject_types_supported"] = (
+            ["public", "pairwise"] if opts.pairwise_secret else ["public"]
+        )
+        doc["id_token_signing_alg_values_supported"] = ["EdDSA"]
+        doc["end_session_endpoint"] = f"{base}/oauth2/end-session"
+        doc["acr_values_supported"] = ["urn:mace:incommon:iap:bronze"]
+        doc["prompt_values_supported"] = [
+            "login",
+            "consent",
+            "create",
+            "select_account",
+            "none",
+        ]
     return doc
 
 
 async def _discovery(ctx: EndpointContext) -> dict[str, object]:
-    """OpenID Connect discovery — `/.well-known/openid-configuration`."""
-    return _metadata(_options(ctx.auth), openid=True)
+    """OpenID Connect discovery — `/.well-known/openid-configuration`.
+
+    Upstream `getOpenIdConfig` 404s when the issuer does not advertise the
+    `openid` scope (i.e. it is operating as a pure OAuth 2.0 server).
+    """
+    opts = _options(ctx.auth)
+    if "openid" not in opts.supported_scopes:
+        raise APIError(404, "NOT_FOUND")
+    return _metadata(opts, openid=True)
 
 
 async def _as_metadata(ctx: EndpointContext) -> dict[str, object]:
@@ -658,6 +845,7 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
     if not opts.enable_dynamic_registration:
         raise APIError(404, "NOT_FOUND")
     body: RegisterBody = ctx.body
+    _validate_subject_type(body.subject_type, body.redirect_uris, opts)
     client_id = secrets.token_urlsafe(16)
     client_secret = (
         "" if body.token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
@@ -675,11 +863,12 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
             "allowedScopes": ",".join(body.allowed_scopes),
             "requirePKCE": body.require_pkce,
             "tokenEndpointAuthMethod": body.token_endpoint_auth_method,
+            "subjectType": body.subject_type,
             "createdAt": now,
             "updatedAt": now,
         },
     )
-    return {
+    out: dict[str, object] = {
         "client_id": client_id,
         "client_secret": client_secret,
         "redirect_uris": body.redirect_uris,
@@ -687,6 +876,9 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
         "token_endpoint_auth_method": body.token_endpoint_auth_method,
         "client_name": body.name,
     }
+    if body.subject_type:
+        out["subject_type"] = body.subject_type
+    return out
 
 
 # ----- endpoints -----
@@ -781,6 +973,34 @@ def oauth_provider(options: OAuthProviderOptions) -> BetterAuthPlugin:
     return _OAuthProviderPlugin(opts=options)  # type: ignore[return-value]
 
 
+def _validate_subject_type(
+    subject_type: str | None, redirect_uris: Sequence[str], opts: OAuthProviderOptions
+) -> None:
+    """Reject pairwise client registration that cannot produce stable subs.
+
+    Mirrors upstream: pairwise requires a configured `pairwiseSecret`, and every
+    redirect URI must share the same host (sector) so the computed `sub` is
+    deterministic.
+    """
+    if subject_type != "pairwise":
+        return
+    if not opts.pairwise_secret:
+        raise _oauth_error(
+            400,
+            "invalid_client_metadata",
+            "pairwise subject_type requires a configured pairwiseSecret",
+        )
+    from urllib.parse import urlsplit
+
+    hosts = {urlsplit(u).netloc for u in redirect_uris if u}
+    if len(hosts) > 1:
+        raise _oauth_error(
+            400,
+            "invalid_redirect_uri",
+            "pairwise subject_type requires all redirect URIs to share one host",
+        )
+
+
 async def create_client(
     auth: AuthContext,
     *,
@@ -789,9 +1009,11 @@ async def create_client(
     allowed_scopes: Sequence[str] = ("openid", "profile", "email"),
     require_pkce: bool = False,
     token_endpoint_auth_method: str = "client_secret_basic",
+    subject_type: str | None = None,
 ) -> OAuthClient:
     """Helper: register a client programmatically (no /register endpoint required)."""
     opts = _options(auth)
+    _validate_subject_type(subject_type, redirect_uris, opts)
     client_id = secrets.token_urlsafe(16)
     client_secret = "" if token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
     now = int(time.time())
@@ -807,6 +1029,7 @@ async def create_client(
             "allowedScopes": ",".join(allowed_scopes),
             "requirePKCE": require_pkce,
             "tokenEndpointAuthMethod": token_endpoint_auth_method,
+            "subjectType": subject_type,
             "createdAt": now,
             "updatedAt": now,
         },
@@ -819,6 +1042,7 @@ async def create_client(
         allowed_scopes=tuple(allowed_scopes),
         require_pkce=require_pkce,
         token_endpoint_auth_method=token_endpoint_auth_method,
+        subject_type=subject_type,
     )
 
 

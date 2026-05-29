@@ -34,11 +34,15 @@ class MockStripe:
     customers: dict[str, dict[str, Any]] = field(default_factory=dict)
     subscriptions: dict[str, dict[str, Any]] = field(default_factory=dict)
     sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    schedules: dict[str, dict[str, Any]] = field(default_factory=dict)
     capture_events: list[dict[str, Any]] = field(default_factory=list)
     # Pre-seeded price objects keyed by price id and/or lookup key. Lets tests
     # declare a metered price (``recurring.usage_type == "metered"``) so the
     # plugin's usage-based code paths can be exercised end-to-end.
     prices: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # When True, GET /v1/customers/search returns 400 to emulate regions where
+    # the Stripe Search API is unavailable (exercises the list fallback path).
+    search_unavailable: bool = False
 
     def add_price(
         self,
@@ -77,6 +81,21 @@ class MockStripe:
         path = request.url.path
         body = self._parse_form(request.content)
 
+        # /v1/customers/search — must be checked before the create/list routes.
+        if path == "/v1/customers/search" and method == "GET":
+            if self.search_unavailable:
+                return self._err(400, "search is not available in this region")
+            query = request.url.params.get("query", "")
+            data = self._search_customers(query)
+            try:
+                limit = int(request.url.params.get("limit", "1"))
+            except ValueError:
+                limit = 1
+            return httpx.Response(
+                200,
+                json={"object": "search_result", "data": data[:limit], "has_more": False},
+            )
+
         # /v1/customers
         if path == "/v1/customers" and method == "POST":
             obj = {
@@ -89,11 +108,40 @@ class MockStripe:
             self.customers[obj["id"]] = obj
             self.capture_events.append({"type": "customer.create", "object": obj})
             return httpx.Response(200, json=obj)
+        if path == "/v1/customers" and method == "GET":
+            email = request.url.params.get("email")
+            data = [
+                c
+                for c in self.customers.values()
+                if email is None or c.get("email") == email
+            ]
+            try:
+                limit = int(request.url.params.get("limit", "100"))
+            except ValueError:
+                limit = 100
+            return httpx.Response(
+                200,
+                json={"object": "list", "data": data[:limit], "has_more": False},
+            )
         if path.startswith("/v1/customers/") and method == "GET":
             cid = path.rsplit("/", 1)[-1]
             obj = self.customers.get(cid)
             if obj is None:
                 return self._err(404, f"No such customer: {cid}")
+            return httpx.Response(200, json=obj)
+        if path.startswith("/v1/customers/") and method == "POST":
+            cid = path.rsplit("/", 1)[-1]
+            obj = self.customers.get(cid)
+            if obj is None:
+                return self._err(404, f"No such customer: {cid}")
+            if "email" in body:
+                obj["email"] = body["email"]
+            if "name" in body:
+                obj["name"] = body["name"]
+            meta = self._collect_metadata(body)
+            if meta:
+                obj["metadata"] = {**(obj.get("metadata") or {}), **meta}
+            self.capture_events.append({"type": "customer.update", "object": obj})
             return httpx.Response(200, json=obj)
 
         # /v1/checkout/sessions
@@ -113,6 +161,27 @@ class MockStripe:
             self.sessions[obj["id"]] = obj
             self.capture_events.append({"type": "checkout.session.create", "object": obj})
             return httpx.Response(200, json=obj)
+        if path.startswith("/v1/checkout/sessions/") and method == "GET":
+            sid = path.rsplit("/", 1)[-1]
+            obj = self.sessions.get(sid)
+            if obj is None:
+                return self._err(404, f"No such checkout session: {sid}")
+            return httpx.Response(200, json=obj)
+
+        # /v1/subscriptions — list (by customer) must precede the get-by-id route.
+        if path == "/v1/subscriptions" and method == "GET":
+            customer = request.url.params.get("customer")
+            status = request.url.params.get("status")
+            data = [
+                s
+                for s in self.subscriptions.values()
+                if (customer is None or s.get("customer") == customer)
+                and (status in (None, "all") or s.get("status") == status)
+            ]
+            return httpx.Response(
+                200,
+                json={"object": "list", "data": data, "has_more": False},
+            )
 
         # /v1/subscriptions
         if path == "/v1/subscriptions" and method == "POST":
@@ -175,6 +244,62 @@ class MockStripe:
             self.capture_events.append({"type": "subscription.delete", "object": obj})
             return httpx.Response(200, json=obj)
 
+        # /v1/subscription_schedules
+        if path == "/v1/subscription_schedules" and method == "GET":
+            customer = request.url.params.get("customer")
+            data = [
+                s
+                for s in self.schedules.values()
+                if customer is None or s.get("customer") == customer
+            ]
+            return httpx.Response(
+                200, json={"object": "list", "data": data, "has_more": False}
+            )
+        if path == "/v1/subscription_schedules" and method == "POST":
+            obj = {
+                "id": _new_id("sub_sched"),
+                "object": "subscription_schedule",
+                "status": "active",
+                "customer": body.get("customer"),
+                "subscription": body.get("from_subscription"),
+                "phases": [],
+                "metadata": self._collect_metadata(body),
+            }
+            self.schedules[obj["id"]] = obj
+            self.capture_events.append(
+                {"type": "subscription_schedule.create", "object": obj}
+            )
+            return httpx.Response(200, json=obj)
+        if path.startswith("/v1/subscription_schedules/") and method == "POST":
+            tail = path[len("/v1/subscription_schedules/") :]
+            sched_id, _, action = tail.partition("/")
+            obj = self.schedules.get(sched_id)
+            if obj is None:
+                return self._err(404, f"No such schedule: {sched_id}")
+            if action == "release":
+                obj["status"] = "released"
+                self.capture_events.append(
+                    {"type": "subscription_schedule.release", "object": obj}
+                )
+                return httpx.Response(200, json=obj)
+            meta = self._collect_metadata(body)
+            if meta:
+                obj["metadata"] = {**(obj.get("metadata") or {}), **meta}
+            for k, v in body.items():
+                if k.startswith(("metadata[", "phases[")):
+                    continue
+                obj[k] = v
+            self.capture_events.append(
+                {"type": "subscription_schedule.update", "object": obj}
+            )
+            return httpx.Response(200, json=obj)
+        if path.startswith("/v1/subscription_schedules/") and method == "GET":
+            sched_id = path.rsplit("/", 1)[-1]
+            obj = self.schedules.get(sched_id)
+            if obj is None:
+                return self._err(404, f"No such schedule: {sched_id}")
+            return httpx.Response(200, json=obj)
+
         # /v1/billing_portal/sessions
         if path == "/v1/billing_portal/sessions" and method == "POST":
             obj = {
@@ -183,8 +308,11 @@ class MockStripe:
                 "customer": body.get("customer"),
                 "return_url": body.get("return_url"),
                 "url": f"https://billing.stripe.test/p/{_new_id('sess')}",
+                "flow_data": self._collect_flow_data(body),
             }
-            self.capture_events.append({"type": "billing_portal.create", "object": obj})
+            self.capture_events.append(
+                {"type": "billing_portal.session.create", "object": obj}
+            )
             return httpx.Response(200, json=obj)
 
         # /v1/prices — list (supports lookup_keys[] filtering) and retrieve.
@@ -270,12 +398,69 @@ class MockStripe:
 
         return dict(parse_qsl(content.decode("utf-8"), keep_blank_values=True))
 
+    def _search_customers(self, query: str) -> list[dict[str, Any]]:
+        """Apply a (small) subset of Stripe's search query language.
+
+        Supports clauses joined by ``AND``:
+          - ``email:"x"``
+          - ``metadata["k"]:"v"``
+          - ``-metadata["k"]:"v"`` (negated)
+        """
+        import re
+
+        clauses = [c.strip() for c in re.split(r"\bAND\b", query) if c.strip()]
+        results: list[dict[str, Any]] = []
+        for cust in self.customers.values():
+            meta = cust.get("metadata") or {}
+            ok = True
+            for clause in clauses:
+                negate = clause.startswith("-")
+                body = clause[1:] if negate else clause
+                m = re.match(r'metadata\["([^"]+)"\]:"([^"]*)"', body)
+                if m:
+                    key, val = m.group(1), m.group(2)
+                    matched = meta.get(key) == val
+                elif body.startswith('email:"'):
+                    val = body[len('email:"') : -1]
+                    matched = cust.get("email") == val
+                else:
+                    matched = False
+                if negate:
+                    matched = not matched
+                if not matched:
+                    ok = False
+                    break
+            if ok:
+                results.append(cust)
+        return results
+
     @staticmethod
     def _collect_metadata(body: dict[str, str]) -> dict[str, str]:
         out: dict[str, str] = {}
         for k, v in body.items():
             if k.startswith("metadata[") and k.endswith("]"):
                 out[k[len("metadata[") : -1]] = v
+        return out
+
+    @staticmethod
+    def _collect_flow_data(body: dict[str, str]) -> dict[str, Any]:
+        """Reconstruct the nested `flow_data[...]` bracket form into a dict.
+
+        e.g. ``flow_data[type]=subscription_cancel`` and
+        ``flow_data[subscription_cancel][subscription]=sub_x`` become
+        ``{"type": "subscription_cancel", "subscription_cancel": {"subscription": "sub_x"}}``.
+        """
+        out: dict[str, Any] = {}
+        for k, v in body.items():
+            if not k.startswith("flow_data["):
+                continue
+            # Strip the leading "flow_data" and split the remaining brackets.
+            inner = k[len("flow_data") :]
+            keys = [seg.rstrip("]") for seg in inner.split("[") if seg]
+            cursor = out
+            for seg in keys[:-1]:
+                cursor = cursor.setdefault(seg, {})
+            cursor[keys[-1]] = v
         return out
 
     @staticmethod

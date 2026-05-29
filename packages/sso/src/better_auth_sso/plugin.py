@@ -34,7 +34,6 @@ from better_auth_sso.domain import provider_for_email
 from better_auth_sso.errors import SSO_ERROR_CODES
 from better_auth_sso.schema import SSO_MODELS
 
-
 _OPTS_KEY = "sso"
 
 

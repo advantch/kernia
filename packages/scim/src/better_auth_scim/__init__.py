@@ -1,11 +1,25 @@
 """better-auth SCIM 2.0 plugin.
 
-Mirrors `reference/packages/scim/`. Exposes the standard SCIM 2.0 surface under
-`/scim/v2/`. Authentication can be either an admin session (resolved via the
-`admin` plugin's role gate) OR an api_key carrying `scope.scim == True`.
+Mirrors ``reference/packages/scim/``. Exposes the standard SCIM 2.0 surface under
+``/scim/v2/`` authenticated by a per-provider Bearer ``scimToken``, plus
+org-scoped provider/token management endpoints (``/scim/generate-token`` etc.)
+authenticated by a logged-in session.
 """
 
-from better_auth_scim.patch import apply_patch_ops
-from better_auth_scim.plugin import SCIMOptions, scim
+from better_auth_scim.patch_operations import build_user_patch
+from better_auth_scim.plugin import scim
+from better_auth_scim.types import (
+    ProviderOwnership,
+    SCIMOptions,
+    SCIMProvider,
+    StoreSCIMToken,
+)
 
-__all__ = ["SCIMOptions", "apply_patch_ops", "scim"]
+__all__ = [
+    "ProviderOwnership",
+    "SCIMOptions",
+    "SCIMProvider",
+    "StoreSCIMToken",
+    "build_user_patch",
+    "scim",
+]

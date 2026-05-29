@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import time
 
 import pytest
-
 from better_auth.error import APIError
 from better_auth_stripe import StripeClient, verify_signature
 from better_auth_test_utils import MockStripe

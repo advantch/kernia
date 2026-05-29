@@ -33,13 +33,12 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from xml.etree import ElementTree as ET
 
 import anyio
-
 
 SAML_NS = {
     "samlp": "urn:oasis:names:tc:SAML:2.0:protocol",
@@ -352,7 +351,7 @@ def validate_permissive(
     raw = base64.b64decode(saml_response_b64).decode("utf-8")
     try:
         root = ET.fromstring(raw)
-    except ET.ParseError as e:  # noqa: BLE001
+    except ET.ParseError as e:
         raise SAMLValidationError(f"malformed SAML response: {e}") from None
 
     # Status
@@ -403,7 +402,7 @@ def validate_permissive(
         raise SAMLValidationError("audience does not match SP entityId")
 
     # Timestamps
-    now = now or datetime.now(tz=timezone.utc)
+    now = now or datetime.now(tz=UTC)
     skew = 5 * 60
     if not_before:
         nb = _parse_iso8601(not_before)

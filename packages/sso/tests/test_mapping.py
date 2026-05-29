@@ -7,7 +7,8 @@ Covers both `oidc.apply_mapping` (claim dict → user fields) and
 from __future__ import annotations
 
 from better_auth_sso.oidc import apply_mapping as apply_oidc_mapping
-from better_auth_sso.saml import SAMLAssertion, apply_mapping as apply_saml_mapping
+from better_auth_sso.saml import SAMLAssertion
+from better_auth_sso.saml import apply_mapping as apply_saml_mapping
 
 
 def test_oidc_mapping_pulls_named_claims() -> None:

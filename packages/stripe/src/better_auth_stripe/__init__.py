@@ -14,6 +14,8 @@ from better_auth_stripe.plugin import STRIPE_ERROR_CODES, stripe
 from better_auth_stripe.schema import (
     SUBSCRIPTION_MODEL,
     USER_EXTENSIONS,
+    FreeTrial,
+    OrganizationStripeOptions,
     StripeOptions,
     StripePlan,
 )
@@ -23,6 +25,8 @@ __all__ = [
     "STRIPE_ERROR_CODES",
     "SUBSCRIPTION_MODEL",
     "USER_EXTENSIONS",
+    "FreeTrial",
+    "OrganizationStripeOptions",
     "StripeAPIError",
     "StripeClient",
     "StripeOptions",

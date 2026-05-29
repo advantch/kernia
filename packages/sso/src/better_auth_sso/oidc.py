@@ -17,7 +17,6 @@ from collections.abc import Mapping
 from typing import Any
 
 import httpx
-
 from better_auth.oauth2 import exchange_code, fetch_userinfo, verify_id_token
 
 

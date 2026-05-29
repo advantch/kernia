@@ -18,6 +18,7 @@ import logging
 from better_auth.events import MemberEvent, get_bus
 from better_auth.types.adapter import Where
 from better_auth.types.context import AuthContext
+
 from better_auth_stripe.schema import StripeOptions
 
 _log = logging.getLogger("better_auth.stripe.seat_sync")

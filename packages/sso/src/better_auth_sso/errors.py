@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
 SSO_ERROR_CODES: Mapping[str, str] = {
     "SSO_PROVIDER_NOT_FOUND": "SSO provider not found.",
     "SSO_PROVIDER_EXISTS": "An SSO provider with that issuer already exists.",

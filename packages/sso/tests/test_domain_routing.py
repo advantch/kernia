@@ -8,7 +8,6 @@ that uses this function is covered by the e2e suite.
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_memory_adapter import memory_adapter

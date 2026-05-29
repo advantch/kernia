@@ -29,8 +29,6 @@ import time
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
-
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.api.request import RedirectResponse
 from better_auth.context import create_session
@@ -38,14 +36,13 @@ from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
+from pydantic import BaseModel, Field
 
 from better_auth_sso import oidc as oidc_helpers
 from better_auth_sso import saml as saml_helpers
 from better_auth_sso.domain import (
-    email_domain,
     make_verification_token,
 )
-
 
 _OPTS_KEY = "sso"
 
@@ -433,7 +430,7 @@ async def _oidc_callback(ctx: EndpointContext) -> dict[str, Any]:
                 redirect_uri=redirect_uri,
                 http_client=client,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise APIError(
                 400, "SSO_OIDC_EXCHANGE_FAILED", message=str(e)
             ) from None
@@ -498,7 +495,7 @@ async def _saml_sign_in(ctx: EndpointContext) -> RedirectResponse:
 
     try:
         url, request_id = await saml_helpers.build_authn_request(plan)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise APIError(500, "SSO_SAML_AUTHN_FAILED", message=str(e)) from None
 
     await ctx.auth.adapter.create(
@@ -559,7 +556,7 @@ async def _saml_acs(ctx: EndpointContext) -> dict[str, Any]:
         if idx != -1:
             end = decoded.find('"', idx + len('InResponseTo="'))
             in_response_to = decoded[idx + len('InResponseTo="') : end]
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     if in_response_to:
         identifier = f"sso:saml-request:{in_response_to}"
@@ -570,7 +567,7 @@ async def _saml_acs(ctx: EndpointContext) -> dict[str, Any]:
             try:
                 stored = json.loads(rec["value"])
                 callback = stored.get("callback") or callback
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     mode = _opts(ctx).get("saml_validation", "strict")

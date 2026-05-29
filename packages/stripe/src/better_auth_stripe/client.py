@@ -13,7 +13,6 @@ from typing import Any
 
 import httpx
 
-
 _STRIPE_API_BASE = "https://api.stripe.com"
 
 
@@ -73,10 +72,31 @@ class StripeClient:
     async def get_customer(self, customer_id: str) -> dict[str, Any]:
         return await self._get(f"/v1/customers/{customer_id}")
 
+    async def update_customer(self, customer_id: str, **params: Any) -> dict[str, Any]:
+        return await self._post(f"/v1/customers/{customer_id}", params)
+
+    async def search_customers(
+        self, *, query: str, limit: int = 1
+    ) -> dict[str, Any]:
+        return await self._get(
+            "/v1/customers/search", {"query": query, "limit": limit}
+        )
+
+    async def list_customers(
+        self, *, email: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if email:
+            params["email"] = email
+        return await self._get("/v1/customers", params)
+
     # ----- checkout sessions ------------------------------------------------
 
     async def create_checkout_session(self, **params: Any) -> dict[str, Any]:
         return await self._post("/v1/checkout/sessions", params)
+
+    async def retrieve_checkout_session(self, session_id: str) -> dict[str, Any]:
+        return await self._get(f"/v1/checkout/sessions/{session_id}")
 
     # ----- billing portal ---------------------------------------------------
 
@@ -102,6 +122,14 @@ class StripeClient:
     async def get_subscription(self, subscription_id: str) -> dict[str, Any]:
         return await self._get(f"/v1/subscriptions/{subscription_id}")
 
+    async def list_subscriptions(
+        self, *, customer: str, status: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"customer": customer, "limit": limit}
+        if status:
+            params["status"] = status
+        return await self._get("/v1/subscriptions", params)
+
     async def update_subscription(
         self, subscription_id: str, **params: Any
     ) -> dict[str, Any]:
@@ -120,6 +148,36 @@ class StripeClient:
         if r.status_code >= 400:
             raise StripeAPIError(r.status_code, r.text)
         return r.json()
+
+    # ----- subscription schedules -------------------------------------------
+
+    async def create_subscription_schedule(self, **params: Any) -> dict[str, Any]:
+        return await self._post("/v1/subscription_schedules", params)
+
+    async def get_subscription_schedule(self, schedule_id: str) -> dict[str, Any]:
+        return await self._get(f"/v1/subscription_schedules/{schedule_id}")
+
+    async def update_subscription_schedule(
+        self, schedule_id: str, **params: Any
+    ) -> dict[str, Any]:
+        return await self._post(
+            f"/v1/subscription_schedules/{schedule_id}", params
+        )
+
+    async def list_subscription_schedules(
+        self, *, customer: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if customer:
+            params["customer"] = customer
+        return await self._get("/v1/subscription_schedules", params)
+
+    async def release_subscription_schedule(
+        self, schedule_id: str
+    ) -> dict[str, Any]:
+        return await self._post(
+            f"/v1/subscription_schedules/{schedule_id}/release", {}
+        )
 
 
 class StripeAPIError(Exception):
