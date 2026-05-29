@@ -6,13 +6,16 @@ into endpoint handlers via `createAuthEndpoint`.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from better_auth.api.router import Router
-    from better_auth.types.adapter import CustomAdapter
+    from better_auth.db.with_hooks import WithHooks
+    from better_auth.types.adapter import CustomAdapter, ModelDef
+    from better_auth.types.db_hooks import DatabaseHooksEntry
     from better_auth.types.init_options import BetterAuthOptions
 
 
@@ -40,6 +43,72 @@ class AuthContext:
     # Optional rate-limit store; `init()` synthesizes an in-memory store when
     # rate-limit is enabled and no explicit store is supplied.
     rate_limit_store: Any | None = None
+    # Resolved table set (core + plugin tables/extends + user additionalFields),
+    # keyed by logical model name. Populated by `init()` via `resolve_tables`.
+    tables: dict[str, ModelDef] = field(default_factory=dict)
+    # Database lifecycle hooks contributed by options + plugins, in registration
+    # order. Consumed by the `with_hooks` runtime.
+    database_hooks: list[DatabaseHooksEntry] = field(default_factory=list)
+    # Hook-wrapped adapter operations (create/update/delete/consume with the
+    # `database_hooks` lifecycle applied). Assigned by `init()`.
+    with_hooks: WithHooks | None = None
+    # Lazy plugin-init bookkeeping. `init()` runs plugin `init` callbacks eagerly
+    # when no event loop is running; when one is (e.g. an async framework's
+    # startup), the work is deferred and the router awaits `ensure_initialized()`
+    # before the first dispatch. See `ensure_initialized`.
+    _init_done: bool = field(default=False, repr=False, compare=False)
+    _init_lock: Any = field(default=None, repr=False, compare=False)
+
+    def transaction(self) -> Any:
+        """Atomic write boundary: ``async with ctx.transaction(): ...``.
+
+        Runs the block under the adapter's transaction and drains database
+        ``after`` hooks only after a clean commit (discarding them on rollback).
+        See :func:`better_auth.db.transaction.transaction`.
+        """
+        from better_auth.db.transaction import transaction
+
+        return transaction(self.adapter)
+
+    async def ensure_initialized(self) -> None:
+        """Run every plugin's `init` callback exactly once, applying its result.
+
+        Mirrors better-auth's lazily-resolved `$context`: a plugin's `init` may
+        mutate this context directly and/or return an
+        :class:`~better_auth.types.plugin.InitResult` whose ``options_patch`` /
+        ``context_patch`` are merged here. Idempotent and concurrency-safe — the
+        first caller runs the inits; racers await the same completion.
+        """
+        if self._init_done:
+            return
+        if self._init_lock is None:
+            self._init_lock = asyncio.Lock()
+        async with self._init_lock:
+            if self._init_done:
+                return
+            for plugin in self.plugins:
+                plugin_init = getattr(plugin, "init", None)
+                if plugin_init is None:
+                    continue
+                result = await plugin_init(self)
+                if result is not None:
+                    self._apply_init_result(result)
+            self._init_done = True
+
+    def _apply_init_result(self, result: Any) -> None:
+        """Merge an `InitResult`'s option/context patches onto this context."""
+        options_patch = getattr(result, "options_patch", None) or {}
+        for key, value in options_patch.items():
+            if hasattr(self.options, key):
+                setattr(self.options, key, value)
+            else:
+                self.options.advanced[key] = value
+        context_patch = getattr(result, "context_patch", None) or {}
+        for key, value in context_patch.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                self.plugin_state[key] = value
 
 
 @dataclass

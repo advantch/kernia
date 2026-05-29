@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from better_auth.social_providers._base import OAuthProvider
-    from better_auth.types.adapter import CustomAdapter
+    from better_auth.types.adapter import CustomAdapter, FieldDef
+    from better_auth.types.db_hooks import DatabaseHooks
     from better_auth.types.plugin import BetterAuthPlugin
 
 
@@ -27,6 +28,23 @@ class EmailPasswordOptions:
 
 
 @dataclass
+class ModelConfig:
+    """Per-model schema overrides. Mirrors `options.<model>` in `getAuthTables`.
+
+    - ``model_name``: physical table name when it differs from the logical model
+      name (``options.user.modelName`` etc.).
+    - ``fields``: logical-field -> physical-column renames
+      (``options.user.fields.email = "email_address"``).
+    - ``additional_fields``: extra fields grafted onto the model
+      (``options.user.additionalFields``).
+    """
+
+    model_name: str | None = None
+    fields: Mapping[str, str] = field(default_factory=dict)
+    additional_fields: Sequence[FieldDef] = field(default_factory=tuple)
+
+
+@dataclass
 class SessionOptions:
     """Session lifetime + cookie tuning. Mirrors `session` in better-auth."""
 
@@ -34,6 +52,12 @@ class SessionOptions:
     update_age: int = 60 * 60 * 24  # 1 day — refresh cookie if older than this
     cookie_cache_enabled: bool = True
     cookie_cache_max_age: int = 60 * 5  # 5 min — short-lived `session_data` cookie
+    # Schema overrides (see ModelConfig). `store_session_in_database` keeps the
+    # session table even when a secondary storage is configured.
+    model_name: str | None = None
+    fields: Mapping[str, str] = field(default_factory=dict)
+    additional_fields: Sequence[FieldDef] = field(default_factory=tuple)
+    store_session_in_database: bool = False
 
 
 @dataclass
@@ -71,6 +95,24 @@ class AccountOptions:
 
     account_linking: AccountLinkingOptions = field(default_factory=AccountLinkingOptions)
     encrypt_oauth_tokens: bool = False
+    # Schema overrides (see ModelConfig).
+    model_name: str | None = None
+    fields: Mapping[str, str] = field(default_factory=dict)
+    additional_fields: Sequence[FieldDef] = field(default_factory=tuple)
+
+
+@dataclass
+class VerificationOptions:
+    """`verification` config block. Mirrors `verification` in better-auth.
+
+    ``store_in_database`` keeps the verification table even when a secondary
+    storage is configured.
+    """
+
+    model_name: str | None = None
+    fields: Mapping[str, str] = field(default_factory=dict)
+    additional_fields: Sequence[FieldDef] = field(default_factory=tuple)
+    store_in_database: bool = False
 
 
 @dataclass
@@ -102,6 +144,18 @@ class BetterAuthOptions:
     social_providers: Mapping[str, OAuthProvider] = field(default_factory=dict)
     # Account-linking + token-encryption config. Mirrors `account` in better-auth.
     account: AccountOptions = field(default_factory=AccountOptions)
+    # Per-model schema overrides (modelName / field renames / additionalFields)
+    # for the user and verification tables. Mirrors `user` / `verification` in
+    # better-auth's `getAuthTables`.
+    user: ModelConfig = field(default_factory=ModelConfig)
+    verification: VerificationOptions = field(default_factory=VerificationOptions)
+    # User-supplied database lifecycle hooks (model -> create/update/delete ->
+    # before/after). Mirrors `databaseHooks` in better-auth; merged with plugin
+    # hooks by `init()` and run via the `with_hooks` runtime.
+    database_hooks: DatabaseHooks | None = None
+    # Extra fields to graft onto resolved tables, keyed by model name. Mirrors
+    # `user.additionalFields` / `session.additionalFields` in better-auth.
+    additional_fields: Mapping[str, Sequence[FieldDef]] = field(default_factory=dict)
     # Adapter-specific or plugin-specific extras live here, keyed by plugin id.
     advanced: dict[str, Any] = field(default_factory=dict)
 

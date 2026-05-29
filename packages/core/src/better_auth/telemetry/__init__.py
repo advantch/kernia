@@ -55,7 +55,10 @@ class _TelemetryPlugin:
         from better_auth import __version__
 
         plugin_ids = [p.id for p in ctx.plugins if p.id != "telemetry"]
-        adapter_kind = type(ctx.adapter).__name__
+        # `ctx.adapter` is the schema-driven transform wrapper; report the
+        # underlying adapter's kind, not the wrapper's.
+        underlying = getattr(ctx.adapter, "_raw", ctx.adapter)
+        adapter_kind = type(underlying).__name__
         await self.sink({
             "kind": "startup",
             "version": __version__,

@@ -154,6 +154,12 @@ async def _handle_http(
         _body_bytes=body_bytes,
     )
 
+    # Ensure plugin `init` callbacks have run. Idempotent: a no-op when `init()`
+    # already initialized eagerly (no running loop at construction); the real
+    # work happens here on the first request when the handle was built inside an
+    # async framework's startup.
+    await router.auth.ensure_initialized()
+
     matched = router.match(method, path)
     if matched is None:
         await _send_json(send, JSONResponse({"code": "NOT_FOUND"}, status=404))

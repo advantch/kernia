@@ -6,10 +6,10 @@ Every database adapter (memory, SQLAlchemy, Drizzle-equivalent, etc.) implements
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, Union, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Where clause — mirrors `CleanedWhere` in adapter.ts
@@ -87,24 +87,81 @@ FieldType = Literal[
 ]
 
 
+OnDeleteAction = Literal[
+    "no action",
+    "restrict",
+    "cascade",
+    "set null",
+    "set default",
+]
+
+# A default may be a static primitive or a zero-arg factory (called at create time).
+DefaultValue = Union[Any, Callable[[], Any]]
+
+
+@dataclass(frozen=True, slots=True)
+class FieldTransform:
+    """Value transforms applied at the persistence boundary.
+
+    Mirrors JS `transform: { input?, output? }`. `input` runs before a value is
+    written to the adapter; `output` runs after a value is read back. Either may be
+    sync or async.
+    """
+
+    input: Callable[[Any], Awaitable[Any] | Any] | None = None
+    output: Callable[[Any], Awaitable[Any] | Any] | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class FieldDef:
-    """Single column on a model. Mirrors better-auth's field metadata."""
+    """Single column on a model. Mirrors better-auth's `DBFieldAttribute`.
+
+    The first six attributes are the original Python surface (kept positionally
+    stable so existing call sites do not break). The remainder mirror the rest of
+    JS `DBFieldAttributeConfig` and are load-bearing for `additionalFields`
+    semantics and the internal-adapter's input/output field filtering:
+
+    - ``returned``: include this field in response bodies (``False`` hides secrets
+      such as hashed columns).
+    - ``input``: accept a client-supplied value when creating (``False`` blocks it).
+    - ``transform``: input/output value transforms at the persistence boundary.
+    - ``on_update``: factory invoked to refresh the value on every update
+      (e.g. ``updatedAt``).
+    - ``field_name``: physical column name when it differs from the logical name.
+    - ``bigint`` / ``sortable`` / ``index`` / ``on_delete``: adapter/DDL hints.
+    """
 
     name: str
     type: FieldType
     required: bool = True
     unique: bool = False
     references: tuple[str, str] | None = None  # (model, field)
-    default: Any = None
+    default: DefaultValue = None
+    # --- extended attributes (mirror JS DBFieldAttributeConfig) ---
+    returned: bool = True
+    input: bool = True
+    transform: FieldTransform | None = None
+    on_update: Callable[[], Any] | None = None
+    field_name: str | None = None
+    bigint: bool = False
+    sortable: bool = False
+    index: bool = False
+    on_delete: OnDeleteAction = "cascade"
 
 
 @dataclass(frozen=True, slots=True)
 class ModelDef:
-    """A logical table definition that an adapter materializes."""
+    """A logical table definition that an adapter materializes.
+
+    ``name`` is the *logical* model name (the key the core, plugins, and the API
+    address the model by). ``table_name`` is the *physical* name the adapter
+    persists under; when ``None`` it equals ``name``. Mirrors better-auth's
+    ``modelName`` override (``options.user.modelName`` etc.).
+    """
 
     name: str
     fields: tuple[FieldDef, ...]
+    table_name: str | None = None
 
 
 # ---------------------------------------------------------------------------

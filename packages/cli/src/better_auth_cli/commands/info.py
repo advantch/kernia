@@ -34,7 +34,9 @@ def _redact(url: str) -> str:
 
 def _collect(auth_handle) -> dict:
     ctx = auth_handle.context
-    adapter = ctx.adapter
+    # `ctx.adapter` is the schema-driven transform wrapper; unwrap to the real
+    # adapter so `info` reports e.g. "MemoryAdapter", not "TransformAdapter".
+    adapter = getattr(ctx.adapter, "_raw", ctx.adapter)
     adapter_name = type(adapter).__name__
     target = ""
     engine = getattr(adapter, "engine", None)

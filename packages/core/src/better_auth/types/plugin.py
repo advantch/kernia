@@ -14,6 +14,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from better_auth.types.adapter import FieldDef, ModelDef
 from better_auth.types.context import AuthContext
+from better_auth.types.db_hooks import DatabaseHooks
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import (
     Middleware,
@@ -70,7 +71,8 @@ class BetterAuthPlugin(Protocol):
       * `schema`        — DB additions the plugin needs
       * `endpoints`     — routes contributed by this plugin
       * `middlewares`   — global middlewares (per-endpoint use `EndpointOptions.use`)
-      * `hooks`         — before/after lifecycle hooks
+      * `hooks`         — before/after endpoint lifecycle hooks
+      * `database_hooks`— before/after DB-write hooks (model -> create/update/delete)
       * `on_request`    — runs globally for every request
       * `on_response`   — runs globally for every response
       * `rate_limit`    — per-path rate-limit rules
@@ -86,6 +88,7 @@ class BetterAuthPlugin(Protocol):
     endpoints: Sequence[AuthEndpoint] | None
     middlewares: Sequence[Middleware] | None
     hooks: PluginHooks | None
+    database_hooks: DatabaseHooks | None
     on_request: RequestHook | None
     on_response: ResponseHook | None
     rate_limit: Sequence[RateLimitRule] | None

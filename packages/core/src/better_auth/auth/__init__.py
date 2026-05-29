@@ -11,9 +11,12 @@ import asyncio
 from dataclasses import dataclass
 
 from better_auth.api.router import Router
-from better_auth.db.schema import CORE_MODELS
+from better_auth.db.adapter.transform_adapter import TransformAdapter
+from better_auth.db.schema.resolve import resolve_tables
+from better_auth.db.with_hooks import get_with_hooks
 from better_auth.error import ErrorRegistry
 from better_auth.types.context import AuthContext
+from better_auth.types.db_hooks import DatabaseHooksEntry
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.init_options import BetterAuthOptions
 
@@ -55,15 +58,56 @@ def init(options: BetterAuthOptions) -> BetterAuth:
 
         rate_limit_store = InMemoryRateLimitStore()
 
+    # Resolve the full table set (core + plugin tables/extends + user
+    # additionalFields), then wrap the raw adapter so every read/write flows
+    # through the schema-driven transform layer (defaults, on_update,
+    # transform.input/output, field-name mapping).
+    # Per-model overrides (modelName / field renames / additionalFields) for the
+    # core tables, mirroring better-auth's `getAuthTables` reading
+    # `options.{user,session,account,verification}`.
+    model_overrides = {
+        "user": options.user,
+        "session": options.session,
+        "account": options.account,
+        "verification": options.verification,
+    }
+    tables = resolve_tables(
+        options.plugins,
+        additional_fields=options.additional_fields,
+        model_overrides=model_overrides,
+        secondary_storage=options.secondary_storage is not None,
+        store_session_in_database=options.session.store_session_in_database,
+        store_verification_in_database=options.verification.store_in_database,
+        rate_limit_database=options.rate_limit.storage == "database",
+    )
+    adapter = TransformAdapter(options.database, tables)
+
+    # Collect database lifecycle hooks: user options first, then each plugin in
+    # registration order. Mirrors how better-auth assembles `databaseHooks`.
+    database_hooks: list[DatabaseHooksEntry] = []
+    if options.database_hooks:
+        database_hooks.append(
+            DatabaseHooksEntry(source="options", hooks=options.database_hooks)
+        )
+    for plugin in options.plugins:
+        plugin_hooks = getattr(plugin, "database_hooks", None)
+        if plugin_hooks:
+            database_hooks.append(
+                DatabaseHooksEntry(source=plugin.id, hooks=plugin_hooks)
+            )
+
     ctx = AuthContext(
         options=options,
-        adapter=options.database,
+        adapter=adapter,
         base_url=options.base_url,
         secret=options.secret,
         plugins=list(options.plugins),
         secondary_storage=options.secondary_storage,
         rate_limit_store=rate_limit_store,
+        tables=tables,
+        database_hooks=database_hooks,
     )
+    ctx.with_hooks = get_with_hooks(adapter, ctx, database_hooks)
     router = Router(auth=ctx)
     # Expose the router on the context so plugins (e.g. open-api) can introspect
     # the full set of registered endpoints during their own `init` hook.
@@ -83,23 +127,21 @@ def init(options: BetterAuthOptions) -> BetterAuth:
         if plugin.error_codes:
             errors.extend(plugin.error_codes, plugin_id=plugin.id)
 
-    # 3. Plugin init hooks (synchronous via event loop — kept simple; plugins that
-    # need a running loop already are handled by the first ASGI request).
-    for plugin in options.plugins:
-        plugin_init = getattr(plugin, "init", None)
-        if plugin_init is None:
-            continue
-        try:
-            asyncio.get_running_loop()
-            # We're already inside a loop — schedule and fire-and-forget.
-            asyncio.create_task(plugin_init(ctx))
-        except RuntimeError:
-            asyncio.run(plugin_init(ctx))
+    # 3. Plugin init callbacks. When no event loop is running we run them eagerly
+    # so a fully-initialized handle is returned (preserving synchronous call
+    # sites). When called inside a running loop we cannot block, so the work is
+    # deferred: `Router._handle_http` awaits `ctx.ensure_initialized()` before the
+    # first dispatch. `ensure_initialized` is idempotent, so the eager call here
+    # makes the router's await a no-op. This replaces the previous
+    # fire-and-forget `create_task`, which dropped `InitResult` patches and raced
+    # the first request.
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(ctx.ensure_initialized())
 
-    # Core schema is always present (CORE_MODELS).  Plugin schema is collected via
-    # `db.migrations.resolve_full_schema` when generating migrations.
-    _ = CORE_MODELS
-
+    # The resolved table set lives on `ctx.tables`; migration codegen reuses the
+    # same merge via `db.schema.resolve.resolve_tables`.
     return BetterAuth(context=ctx, router=router, errors=errors)
 
 
