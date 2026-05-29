@@ -19,6 +19,7 @@ import base64
 import hashlib
 import hmac
 import inspect
+import re
 import secrets
 import time
 from typing import Any
@@ -63,6 +64,38 @@ def default_key_hasher(otp: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _is_valid_email(email: str) -> bool:
+    """Mirror `z.email()` validation used by upstream send/verify endpoints."""
+    return bool(_EMAIL_RE.match(email))
+
+
+def _symmetric_encrypt(secret: str, data: str) -> str:
+    """Reversible at-rest transform for `store_otp="encrypted"`.
+
+    Scoped to the plugin (core exposes no symmetric primitive). XOR-keystream
+    derived from the configured secret, base64url-encoded. Sufficient for the
+    plugin contract: the stored value is unreadable without the secret and is
+    recoverable for `getVerificationOTP`. Not the JS AES-GCM scheme, but the
+    parity contract is "recoverable + not plaintext".
+    """
+    key = hashlib.sha256(secret.encode("utf-8")).digest()
+    raw = data.encode("utf-8")
+    keystream = (key * (len(raw) // len(key) + 1))[: len(raw)]
+    xored = bytes(b ^ k for b, k in zip(raw, keystream, strict=False))
+    return base64.urlsafe_b64encode(xored).decode("ascii")
+
+
+def _symmetric_decrypt(secret: str, data: str) -> str:
+    key = hashlib.sha256(secret.encode("utf-8")).digest()
+    raw = base64.urlsafe_b64decode(data.encode("ascii"))
+    keystream = (key * (len(raw) // len(key) + 1))[: len(raw)]
+    xored = bytes(b ^ k for b, k in zip(raw, keystream, strict=False))
+    return xored.decode("utf-8")
+
+
 async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
@@ -92,6 +125,8 @@ async def _generate_otp(
 async def _store_otp(ctx: EndpointContext, otp: str) -> str:
     """Transform an OTP for at-rest storage. Mirrors `storeOTP`."""
     mode = _opts(ctx).get("store_otp")
+    if mode == "encrypted":
+        return _symmetric_encrypt(ctx.auth.secret, otp)
     if mode == "hashed":
         return default_key_hasher(otp)
     if isinstance(mode, dict) and "hash" in mode:
@@ -104,6 +139,9 @@ async def _store_otp(ctx: EndpointContext, otp: str) -> str:
 async def _verify_stored_otp(ctx: EndpointContext, stored: str, otp: str) -> bool:
     """Constant-time compare against a stored OTP. Mirrors `verifyStoredOTP`."""
     mode = _opts(ctx).get("store_otp")
+    if mode == "encrypted":
+        decrypted = _symmetric_decrypt(ctx.auth.secret, stored)
+        return hmac.compare_digest(decrypted, otp)
     if mode == "hashed":
         return hmac.compare_digest(default_key_hasher(otp), stored)
     if isinstance(mode, dict) and "hash" in mode:
@@ -120,6 +158,8 @@ async def _retrieve_otp(ctx: EndpointContext, stored: str) -> str | None:
     mode = _opts(ctx).get("store_otp")
     if mode in (None, "plain"):
         return stored
+    if mode == "encrypted":
+        return _symmetric_decrypt(ctx.auth.secret, stored)
     if isinstance(mode, dict) and "decrypt" in mode:
         return str(await _maybe_await(mode["decrypt"](stored)))
     # hashed or custom hash -> cannot recover
@@ -214,13 +254,13 @@ async def _consume_otp(
         where=(Where(field="identifier", value=identifier),),
     )
     if not record:
-        raise APIError(400, "INVALID_OTP", message="OTP is invalid")
+        raise APIError(400, "INVALID_OTP", message="Invalid OTP")
     if int(record.get("expiresAt", 0)) < _now():
         await ctx.auth.adapter.delete_many(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
         )
-        raise APIError(400, "OTP_EXPIRED", message="OTP has expired")
+        raise APIError(400, "OTP_EXPIRED", message="OTP expired")
     stored, _, attempts_str = str(record["value"]).rpartition(":")
     attempts = int(attempts_str or "0")
     if attempts >= _allowed_attempts(ctx):
@@ -228,14 +268,14 @@ async def _consume_otp(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
         )
-        raise APIError(403, "TOO_MANY_ATTEMPTS", message="Too many invalid attempts")
+        raise APIError(403, "TOO_MANY_ATTEMPTS", message="Too many attempts")
     if not await _verify_stored_otp(ctx, stored, otp):
         await ctx.auth.adapter.update(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
             update={"value": f"{stored}:{attempts + 1}", "updatedAt": _now()},
         )
-        raise APIError(400, "INVALID_OTP", message="OTP is invalid")
+        raise APIError(400, "INVALID_OTP", message="Invalid OTP")
     # Success — consume.
     await ctx.auth.adapter.delete_many(
         model="verification",
@@ -263,6 +303,7 @@ class ResetPasswordBody(BaseModel):
 
 class RequestEmailChangeBody(BaseModel):
     new_email: str
+    otp: str | None = None
 
 
 class ChangeEmailBody(BaseModel):
@@ -329,29 +370,52 @@ async def _sign_in_verify(ctx: EndpointContext) -> dict[str, object]:
 
 async def _send_verification_otp(ctx: EndpointContext) -> dict[str, object]:
     body: SendVerificationOTPBody = ctx.body
-    otp = await _create_otp(ctx, email=body.email, purpose="email-verification")
-    await _send_otp(ctx, body.email, otp, "email-verification")
+    email = body.email.lower()
+    if not _is_valid_email(email):
+        raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
+    purpose = body.type or "email-verification"
+    # Change-email OTPs must be requested via the dedicated endpoint.
+    if purpose == "change-email":
+        raise APIError(400, "INVALID_OTP_TYPE", message="Invalid OTP type")
+    opts = _opts(ctx)
+    disable_sign_up = bool(opts.get("disable_sign_up", False))
+    otp = await _create_otp(ctx, email=email, purpose=purpose)
+    # For sign-in with sign-up allowed we always send (the user may not exist
+    # yet). Otherwise we only send when the user exists, but still return success
+    # to avoid user-enumeration. Mirrors upstream `shouldSendOTP`.
+    should_send = purpose == "sign-in" and not disable_sign_up
+    user = await ctx.auth.adapter.find_one(
+        model="user", where=(Where(field="email", value=email),)
+    )
+    if user is None and not should_send:
+        identifier = _identifier(purpose, email)
+        await ctx.auth.adapter.delete_many(
+            model="verification",
+            where=(Where(field="identifier", value=identifier),),
+        )
+        return {"success": True}
+    await _send_otp(ctx, email, otp, purpose)
     return {"success": True}
 
 
 async def _verify_email(ctx: EndpointContext) -> dict[str, object]:
-    if ctx.session is None:
-        raise APIError(401, "UNAUTHORIZED")
     body: VerifyOTPBody = ctx.body
+    email = body.email.lower()
+    if not _is_valid_email(email):
+        raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
+    # Atomic-style consume (delete first, re-create on miss) for race safety.
+    await _consume_otp(ctx, email=email, purpose="email-verification", otp=body.otp)
     user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=ctx.session.user_id),)
+        model="user", where=(Where(field="email", value=email),)
     )
-    if user is None or user.get("email", "").lower() != body.email.lower():
-        raise APIError(400, "INVALID_OTP", message="OTP does not match this user")
-    await _consume_otp(
-        ctx, email=body.email, purpose="email-verification", otp=body.otp
-    )
-    await ctx.auth.adapter.update(
+    if user is None:
+        raise APIError(400, "USER_NOT_FOUND", message="User not found")
+    updated = await ctx.auth.adapter.update(
         model="user",
         where=(Where(field="id", value=user["id"]),),
         update={"emailVerified": True, "updatedAt": _now()},
     )
-    return {"success": True}
+    return {"success": True, "status": True, "user": updated or user}
 
 
 async def _forget_password_send(ctx: EndpointContext) -> dict[str, object]:
@@ -403,34 +467,213 @@ async def _reset_password(ctx: EndpointContext) -> dict[str, object]:
                 "updatedAt": now,
             },
         )
+    if not user.get("emailVerified"):
+        await ctx.auth.adapter.update(
+            model="user",
+            where=(Where(field="id", value=user["id"]),),
+            update={"emailVerified": True, "updatedAt": _now()},
+        )
+    callback = _opts(ctx).get("on_password_reset")
+    if callback is not None:
+        await _maybe_await(callback({"user": user}, ctx))
     return {"success": True}
+
+
+async def _session_user_email(ctx: EndpointContext) -> str | None:
+    if ctx.session is None:
+        return None
+    user = await ctx.auth.adapter.find_one(
+        model="user", where=(Where(field="id", value=ctx.session.user_id),)
+    )
+    if user is None:
+        return None
+    return str(user.get("email", "")).lower()
+
+
+def _change_email_enabled(ctx: EndpointContext) -> bool:
+    cfg = _opts(ctx).get("change_email")
+    return bool(isinstance(cfg, dict) and cfg.get("enabled"))
+
+
+def _verify_current_email(ctx: EndpointContext) -> bool:
+    cfg = _opts(ctx).get("change_email")
+    return bool(isinstance(cfg, dict) and cfg.get("verify_current_email"))
 
 
 async def _request_email_change(ctx: EndpointContext) -> dict[str, object]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
+    if not _change_email_enabled(ctx):
+        raise APIError(
+            400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled"
+        )
     body: RequestEmailChangeBody = ctx.body
-    otp = await _create_otp(ctx, email=body.new_email, purpose="change-email")
-    await _send_otp(ctx, body.new_email, otp, "change-email")
+    email = await _session_user_email(ctx)
+    if email is None:
+        raise APIError(401, "UNAUTHORIZED")
+    new_email = body.new_email.lower()
+    if not _is_valid_email(new_email):
+        raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
+    if new_email == email:
+        raise APIError(400, "EMAIL_IS_THE_SAME", message="Email is the same")
+
+    # Optionally verify the user owns the current email before issuing the
+    # change-email OTP to the new address.
+    if _verify_current_email(ctx):
+        if not body.otp:
+            raise APIError(
+                400,
+                "OTP_REQUIRED",
+                message="OTP is required to verify current email",
+            )
+        await _consume_otp(
+            ctx, email=email, purpose="email-verification", otp=body.otp
+        )
+
+    # Issue the change-email OTP keyed by (currentEmail-newEmail).
+    composite = f"{email}-{new_email}"
+    otp = await _create_otp(ctx, email=composite, purpose="change-email")
+
+    # If the new email is already used by another account, silently succeed
+    # without sending (avoid disclosing membership).
+    existing = await ctx.auth.adapter.find_one(
+        model="user", where=(Where(field="email", value=new_email),)
+    )
+    if existing is not None:
+        await ctx.auth.adapter.delete_many(
+            model="verification",
+            where=(Where(field="identifier", value=_identifier("change-email", composite)),),
+        )
+        return {"success": True}
+
+    await _send_otp(ctx, new_email, otp, "change-email")
     return {"success": True}
 
 
 async def _change_email(ctx: EndpointContext) -> dict[str, object]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
+    if not _change_email_enabled(ctx):
+        raise APIError(
+            400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled"
+        )
     body: ChangeEmailBody = ctx.body
-    await _consume_otp(
-        ctx, email=body.new_email, purpose="change-email", otp=body.otp
+    email = await _session_user_email(ctx)
+    if email is None:
+        raise APIError(401, "UNAUTHORIZED")
+    new_email = body.new_email.lower()
+    if not _is_valid_email(new_email):
+        raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
+    if new_email == email:
+        raise APIError(400, "EMAIL_IS_THE_SAME", message="Email is the same")
+
+    composite = f"{email}-{new_email}"
+    await _consume_otp(ctx, email=composite, purpose="change-email", otp=body.otp)
+
+    existing = await ctx.auth.adapter.find_one(
+        model="user", where=(Where(field="email", value=new_email),)
     )
+    if existing is not None:
+        raise APIError(400, "EMAIL_ALREADY_IN_USE", message="Email already in use")
+
     await ctx.auth.adapter.update(
         model="user",
         where=(Where(field="id", value=ctx.session.user_id),),
         update={
-            "email": body.new_email.lower(),
+            "email": new_email,
             "emailVerified": True,
             "updatedAt": _now(),
         },
     )
+    return {"success": True}
+
+
+class CreateVerificationOTPBody(BaseModel):
+    email: str
+    type: str = "email-verification"
+
+
+class GetVerificationOTPQuery(BaseModel):
+    email: str
+    type: str = "email-verification"
+
+
+class CheckVerificationOTPBody(BaseModel):
+    email: str
+    otp: str
+    type: str = "email-verification"
+
+
+async def _create_verification_otp(ctx: EndpointContext) -> str:
+    """Server-only: create + store an OTP and return the plain text. Mirrors
+    `auth.api.createVerificationOTP`."""
+    body: CreateVerificationOTPBody = ctx.body
+    email = body.email.lower()
+    purpose = body.type or "email-verification"
+    return await _create_otp(ctx, email=email, purpose=purpose)
+
+
+async def _get_verification_otp(ctx: EndpointContext) -> dict[str, object]:
+    """Server-only: recover a stored plain OTP. Throws if hashed. Mirrors
+    `auth.api.getVerificationOTP`."""
+    query: GetVerificationOTPQuery = ctx.body
+    email = query.email.lower()
+    purpose = query.type or "email-verification"
+    identifier = _identifier(purpose, email)
+    record = await ctx.auth.adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value=identifier),),
+    )
+    if not record or int(record.get("expiresAt", 0)) < _now():
+        return {"otp": None}
+    mode = _opts(ctx).get("store_otp")
+    if mode == "hashed" or (isinstance(mode, dict) and "hash" in mode):
+        raise APIError(
+            400,
+            "OTP_HASHED",
+            message="OTP is hashed, cannot return the plain text OTP",
+        )
+    stored = str(record["value"]).rpartition(":")[0]
+    plain = await _retrieve_otp(ctx, stored)
+    return {"otp": plain}
+
+
+async def _check_verification_otp(ctx: EndpointContext) -> dict[str, object]:
+    """Verify an OTP without consuming user state. Mirrors
+    `auth.api.checkVerificationOTP`."""
+    body: CheckVerificationOTPBody = ctx.body
+    email = body.email.lower()
+    if not _is_valid_email(email):
+        raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
+    purpose = body.type or "email-verification"
+    identifier = _identifier(purpose, email)
+    record = await ctx.auth.adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value=identifier),),
+    )
+    if not record:
+        raise APIError(400, "INVALID_OTP", message="Invalid OTP")
+    if int(record.get("expiresAt", 0)) < _now():
+        await ctx.auth.adapter.delete_many(
+            model="verification",
+            where=(Where(field="identifier", value=identifier),),
+        )
+        raise APIError(400, "OTP_EXPIRED", message="OTP expired")
+    stored, _, attempts_str = str(record["value"]).rpartition(":")
+    attempts = int(attempts_str or "0")
+    if attempts >= _allowed_attempts(ctx):
+        await ctx.auth.adapter.delete_many(
+            model="verification",
+            where=(Where(field="identifier", value=identifier),),
+        )
+        raise APIError(403, "TOO_MANY_ATTEMPTS", message="Too many attempts")
+    if not await _verify_stored_otp(ctx, stored, body.otp):
+        await ctx.auth.adapter.update(
+            model="verification",
+            where=(Where(field="identifier", value=identifier),),
+            update={"value": f"{stored}:{attempts + 1}", "updatedAt": _now()},
+        )
+        raise APIError(400, "INVALID_OTP", message="Invalid OTP")
     return {"success": True}
 
 
@@ -457,7 +700,7 @@ SEND_VERIFICATION_OTP = create_auth_endpoint(
 
 VERIFY_EMAIL = create_auth_endpoint(
     "/email-otp/verify-email",
-    EndpointOptions(method="POST", body=VerifyOTPBody, requires_session=True),
+    EndpointOptions(method="POST", body=VerifyOTPBody),
     _verify_email,
 )
 
@@ -467,10 +710,34 @@ FORGET_PASSWORD_OTP = create_auth_endpoint(
     _forget_password_send,
 )
 
+REQUEST_PASSWORD_RESET_OTP = create_auth_endpoint(
+    "/email-otp/request-password-reset",
+    EndpointOptions(method="POST", body=EmailBody),
+    _forget_password_send,
+)
+
 RESET_PASSWORD_OTP = create_auth_endpoint(
     "/email-otp/reset-password",
     EndpointOptions(method="POST", body=ResetPasswordBody),
     _reset_password,
+)
+
+CREATE_VERIFICATION_OTP = create_auth_endpoint(
+    "/email-otp/create-verification-otp",
+    EndpointOptions(method="POST", body=CreateVerificationOTPBody),
+    _create_verification_otp,
+)
+
+GET_VERIFICATION_OTP = create_auth_endpoint(
+    "/email-otp/get-verification-otp",
+    EndpointOptions(method="POST", body=GetVerificationOTPQuery),
+    _get_verification_otp,
+)
+
+CHECK_VERIFICATION_OTP = create_auth_endpoint(
+    "/email-otp/check-verification-otp",
+    EndpointOptions(method="POST", body=CheckVerificationOTPBody),
+    _check_verification_otp,
 )
 
 REQUEST_EMAIL_CHANGE = create_auth_endpoint(
@@ -492,7 +759,11 @@ ALL: tuple[AuthEndpoint, ...] = (
     SEND_VERIFICATION_OTP,
     VERIFY_EMAIL,
     FORGET_PASSWORD_OTP,
+    REQUEST_PASSWORD_RESET_OTP,
     RESET_PASSWORD_OTP,
+    CREATE_VERIFICATION_OTP,
+    GET_VERIFICATION_OTP,
+    CHECK_VERIFICATION_OTP,
     REQUEST_EMAIL_CHANGE,
     CHANGE_EMAIL,
 )

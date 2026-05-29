@@ -39,7 +39,11 @@ def test_plugin_id_and_paths() -> None:
         "/email-otp/send-verification-otp",
         "/email-otp/verify-email",
         "/forget-password/email-otp",
+        "/email-otp/request-password-reset",
         "/email-otp/reset-password",
+        "/email-otp/create-verification-otp",
+        "/email-otp/get-verification-otp",
+        "/email-otp/check-verification-otp",
         "/email-otp/request-email-change",
         "/email-otp/change-email",
     }

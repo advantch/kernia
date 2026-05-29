@@ -7,11 +7,14 @@ to support rotation while keeping old tokens verifiable.
 
 from __future__ import annotations
 
+import inspect
 import json
+import re
 import secrets
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from authlib.jose import JsonWebKey
@@ -48,15 +51,127 @@ JWK_MODEL = ModelDef(
 class JwtOptions:
     """Configuration for the JWT plugin.
 
-    `algorithm` is one of `"ES256"` (default), `"RS256"`, `"EdDSA"`.
+    Mirrors `reference/.../jwt/types.ts`. `algorithm` is the JWK key-pair
+    algorithm and is one of `"EdDSA"` (default), `"ES256"`, `"ES384"`,
+    `"ES512"`, `"RS256"`, `"PS256"`.
+
+    Parity-relevant options:
+      * ``expiration_time`` — default token lifetime (seconds int or a time
+        string like ``"15m"``/``"1h"``/``"7d"``). Mirrors ``jwt.expirationTime``.
+      * ``define_payload`` — ``(session) -> payload`` hook for ``/token``.
+      * ``get_subject`` — ``(session) -> str`` override for the ``sub`` claim.
+      * ``jwks_path`` — path the JWKS is served from (default ``/jwks``).
+      * ``remote_url`` — when set, ``/jwks`` is disabled (the issuer publishes
+        keys remotely). Requires ``algorithm`` to be specified.
+      * ``sign`` — custom signing function ``(payload) -> token``. Requires
+        ``remote_url`` to be set.
+      * ``rotation_interval`` / ``grace_period`` — seconds. Keys older than
+        ``rotation_interval`` trigger a fresh key; keys past
+        ``rotation_interval + grace_period`` drop out of the JWKS.
     """
 
-    algorithm: str = "ES256"
-    access_token_ttl: int = 900  # 15 minutes
+    algorithm: str = "EdDSA"
+    access_token_ttl: int = 900  # 15 minutes (legacy alias for expiration_time)
+    expiration_time: int | str | None = None
     issuer: str | None = None
     audience: str | None = None
+    define_payload: Callable[..., Any] | None = None
+    get_subject: Callable[..., Any] | None = None
+    jwks_path: str = "/jwks"
+    remote_url: str | None = None
+    sign: Callable[..., Any] | None = None
+    rotation_interval: int | None = None
+    grace_period: int | None = None
+    disable_private_key_encryption: bool = True
     rotate_admin_token: str | None = None  # if set, /jwks/rotate requires this bearer
     rotate_allowed_roles: tuple[str, ...] = ("admin",)
+
+    def __post_init__(self) -> None:
+        # Upstream: options.jwks.remoteUrl must be set when using options.jwt.sign
+        if self.sign is not None and not self.remote_url:
+            raise ValueError(
+                "options.jwks.remoteUrl must be set when using options.jwt.sign"
+            )
+        # Upstream: alg must be specified when using remoteUrl.
+        if self.remote_url and not self.algorithm:
+            raise ValueError(
+                "options.jwks.keyPairConfig.alg must be specified when using "
+                "the oidc plugin with options.jwks.remoteUrl"
+            )
+
+
+# ----- time-string parsing (mirrors `toExpJWT` + `sec()` upstream) -----
+
+
+_TIME_UNITS: Mapping[str, int] = {
+    "s": 1,
+    "sec": 1,
+    "secs": 1,
+    "second": 1,
+    "seconds": 1,
+    "m": 60,
+    "min": 60,
+    "mins": 60,
+    "minute": 60,
+    "minutes": 60,
+    "h": 3600,
+    "hr": 3600,
+    "hrs": 3600,
+    "hour": 3600,
+    "hours": 3600,
+    "d": 86400,
+    "day": 86400,
+    "days": 86400,
+    "w": 604800,
+    "week": 604800,
+    "weeks": 604800,
+    "y": 31557600,
+    "yr": 31557600,
+    "yrs": 31557600,
+    "year": 31557600,
+    "years": 31557600,
+}
+
+_TIME_RE = re.compile(
+    r"^\s*(-?\d+(?:\.\d+)?)\s*"
+    r"(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|"
+    r"d|day|days|w|week|weeks|y|yr|yrs|year|years)?\s*(ago)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _sec(value: str) -> int:
+    """Parse a time string into seconds. Mirrors the `ms`/`sec` helpers."""
+    match = _TIME_RE.match(value)
+    if not match or match.group(1) is None:
+        raise TypeError(f"invalid time string: {value!r}")
+    amount = float(match.group(1))
+    unit = (match.group(2) or "s").lower()
+    factor = _TIME_UNITS.get(unit)
+    if factor is None:
+        raise TypeError(f"invalid time unit in {value!r}")
+    seconds = amount * factor
+    if match.group(3):  # "...ago"
+        seconds = -seconds
+    return int(seconds)
+
+
+def to_exp_jwt(expiration_time: int | float | datetime | str, iat: int) -> int:
+    """Mirror `toExpJWT(expirationTime, iat)` from `jwt/utils.ts`.
+
+    - number -> returned as-is
+    - datetime -> floor(timestamp seconds)
+    - time string -> iat + sec(string)
+    """
+    if isinstance(expiration_time, bool):  # guard: bool is an int subclass
+        raise TypeError("expiration time must not be a bool")
+    if isinstance(expiration_time, int | float):
+        return int(expiration_time)
+    if isinstance(expiration_time, datetime):
+        return int(expiration_time.timestamp())
+    if isinstance(expiration_time, str):
+        return iat + _sec(expiration_time)
+    raise TypeError(f"unsupported expiration time: {expiration_time!r}")
 
 
 # ----- request bodies -----
@@ -75,6 +190,7 @@ _DEFAULT_CURVES: Mapping[str, Mapping[str, Any]] = {
     "ES384": {"kty": "EC", "crv": "P-384"},
     "ES512": {"kty": "EC", "crv": "P-521"},
     "RS256": {"kty": "RSA", "size": 2048},
+    "PS256": {"kty": "RSA", "size": 2048},
     "EdDSA": {"kty": "OKP", "crv": "Ed25519"},
 }
 
@@ -99,16 +215,24 @@ def _gen_keypair(alg: str) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 async def _get_active_key(auth: AuthContext) -> dict[str, Any]:
+    opts = _jwt_options(auth)
     rows = await auth.adapter.find_many(
         model="jwk",
         where=(Where(field="isActive", value=True),),
     )
     if rows:
-        # newest active key
         rows.sort(key=lambda r: int(r.get("createdAt") or 0), reverse=True)
-        return rows[0]
+        latest = rows[0]
+        # Rotation: if the newest key is older than rotationInterval, mint a
+        # fresh one (the old key stays in the JWKS until grace period elapses).
+        interval = opts.rotation_interval
+        if interval is not None:
+            age = int(time.time()) - int(latest.get("createdAt") or 0)
+            if age >= interval:
+                return await _create_key(auth, alg=opts.algorithm)
+        return latest
     # bootstrap: no key yet → create one
-    return await _create_key(auth, alg=_jwt_options(auth).algorithm)
+    return await _create_key(auth, alg=opts.algorithm)
 
 
 async def _create_key(auth: AuthContext, *, alg: str) -> dict[str, Any]:
@@ -145,41 +269,68 @@ def _jwt_options(auth: AuthContext) -> JwtOptions:
     return JwtOptions()
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 # ----- handlers -----
+
+
+async def _resolve_session_user(ctx: EndpointContext) -> dict[str, Any]:
+    user = await ctx.auth.adapter.find_one(
+        model="user", where=(Where(field="id", value=ctx.session.user_id),)
+    )
+    return dict(user) if user else {"id": ctx.session.user_id}
 
 
 async def _get_token(ctx: EndpointContext) -> dict[str, object]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
     opts = _jwt_options(ctx.auth)
-    key_row = await _get_active_key(ctx.auth)
-    private_jwk = json.loads(key_row["privateKey"])
-    alg = key_row["algorithm"]
+    user = await _resolve_session_user(ctx)
+    session_obj = {"user": user, "session": ctx.session}
     now = int(time.time())
-    payload: dict[str, Any] = {
-        "sub": ctx.session.user_id,
-        "iat": now,
-        "exp": now + opts.access_token_ttl,
-        "jti": secrets.token_urlsafe(16),
-    }
-    if opts.issuer:
-        payload["iss"] = opts.issuer
-    if opts.audience:
-        payload["aud"] = opts.audience
-    header = {"alg": alg, "typ": "JWT", "kid": key_row["keyId"]}
-    token_bytes = jose_jwt.encode(header, payload, private_jwk)
-    token = token_bytes.decode("ascii") if isinstance(token_bytes, bytes) else str(token_bytes)
-    return {"token": token, "kid": key_row["keyId"], "expires_in": opts.access_token_ttl}
+
+    # definePayload hook controls the body; default is the user record.
+    if opts.define_payload is not None:
+        payload = dict(await _maybe_await(opts.define_payload(session_obj)))
+    else:
+        payload = dict(user)
+    payload.setdefault("iat", now)
+
+    # getSubject overrides `sub`; default is the user id.
+    if opts.get_subject is not None:
+        payload["sub"] = str(await _maybe_await(opts.get_subject(session_obj)))
+    else:
+        payload.setdefault("sub", user.get("id", ctx.session.user_id))
+
+    token = await sign_jwt(ctx.auth, payload=payload)
+    key_row = await _get_active_key(ctx.auth)
+    return {"token": token, "kid": key_row["keyId"]}
+
+
+def _key_is_within_grace(row: Mapping[str, Any], opts: JwtOptions, now: int) -> bool:
+    """A key stays in the JWKS until rotationInterval + gracePeriod elapses."""
+    if opts.rotation_interval is None or opts.grace_period is None:
+        return True
+    age = now - int(row.get("createdAt") or 0)
+    return age <= (opts.rotation_interval + opts.grace_period)
 
 
 async def _get_jwks(ctx: EndpointContext) -> dict[str, object]:
+    opts = _jwt_options(ctx.auth)
     rows = await ctx.auth.adapter.find_many(model="jwk")
     # bootstrap if empty
     if not rows:
         await _get_active_key(ctx.auth)
         rows = await ctx.auth.adapter.find_many(model="jwk")
+    now = int(time.time())
     keys: list[dict[str, Any]] = []
     for row in rows:
+        if not _key_is_within_grace(row, opts, now):
+            continue
         pub = json.loads(row["publicKey"])
         pub["kid"] = row["keyId"]
         pub["alg"] = row["algorithm"]
@@ -253,6 +404,60 @@ async def issue_jwt(
     return token, key_row["keyId"]
 
 
+async def sign_jwt(
+    auth: AuthContext,
+    *,
+    payload: Mapping[str, Any],
+    options: JwtOptions | None = None,
+) -> str:
+    """Sign an arbitrary payload into a JWT. Mirrors `signJWT` in `jwt/sign.ts`.
+
+    Applies iat/exp/iss/aud defaults, honours an explicit `exp` in the payload,
+    and delegates to a custom `options.sign` function when configured (remote
+    signing). Returns the compact JWT string.
+    """
+    opts = options or _jwt_options(auth)
+    body: dict[str, Any] = dict(payload)
+    now = int(time.time())
+    iat = int(body.get("iat", now))
+    body["iat"] = iat
+
+    # Exp: explicit payload exp wins, else expiration_time (default "15m").
+    if "exp" not in body:
+        exp_setting: int | str = (
+            opts.expiration_time
+            if opts.expiration_time is not None
+            else opts.access_token_ttl
+        )
+        body["exp"] = to_exp_jwt(exp_setting, iat)
+
+    base_url = ""
+    raw_base = getattr(auth.options, "base_url", None)
+    if isinstance(raw_base, str):
+        base_url = raw_base
+    default_iss = opts.issuer or base_url
+    default_aud = opts.audience or base_url
+    if "iss" not in body and default_iss:
+        body["iss"] = default_iss
+    if "aud" not in body and default_aud:
+        body["aud"] = default_aud
+
+    # Custom/remote signing function takes the fully-formed payload.
+    if opts.sign is not None:
+        return str(await _maybe_await(opts.sign(body)))
+
+    key_row = await _get_active_key(auth)
+    private_jwk = json.loads(key_row["privateKey"])
+    alg = key_row["algorithm"]
+    header = {"alg": alg, "typ": "JWT", "kid": key_row["keyId"]}
+    token_bytes = jose_jwt.encode(header, body, private_jwk)
+    return (
+        token_bytes.decode("ascii")
+        if isinstance(token_bytes, bytes)
+        else str(token_bytes)
+    )
+
+
 async def verify_local_jwt(
     auth: AuthContext,
     token: str,
@@ -304,12 +509,6 @@ GET_TOKEN = create_auth_endpoint(
     _get_token,
 )
 
-GET_JWKS = create_auth_endpoint(
-    "/jwks",
-    EndpointOptions(method="GET"),
-    _get_jwks,
-)
-
 ROTATE_JWKS = create_auth_endpoint(
     "/jwks/rotate",
     EndpointOptions(method="POST"),
@@ -317,7 +516,23 @@ ROTATE_JWKS = create_auth_endpoint(
 )
 
 
-_ENDPOINTS: tuple[AuthEndpoint, ...] = (GET_TOKEN, GET_JWKS, ROTATE_JWKS)
+def _build_endpoints(opts: JwtOptions) -> tuple[AuthEndpoint, ...]:
+    """Endpoint set depends on options (mirrors upstream conditional routes).
+
+    - ``/jwks`` is served at ``opts.jwks_path`` (default ``/jwks``).
+    - When ``remote_url`` is configured the issuer publishes keys remotely, so
+      the local ``/jwks`` route is omitted (client gets a 404).
+    """
+    endpoints: list[AuthEndpoint] = [GET_TOKEN, ROTATE_JWKS]
+    if not opts.remote_url:
+        endpoints.append(
+            create_auth_endpoint(
+                opts.jwks_path or "/jwks",
+                EndpointOptions(method="GET"),
+                _get_jwks,
+            )
+        )
+    return tuple(endpoints)
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,7 +543,7 @@ class _JwtPlugin:
     schema: PluginSchema | None = field(
         default_factory=lambda: PluginSchema(tables=(JWK_MODEL,))
     )
-    endpoints: tuple[AuthEndpoint, ...] = field(default_factory=lambda: _ENDPOINTS)
+    endpoints: tuple[AuthEndpoint, ...] = ()
     middlewares: None = None
     hooks: None = None
     on_request: None = None
@@ -348,11 +563,18 @@ class _JwtPlugin:
 def jwt(options: JwtOptions | None = None) -> BetterAuthPlugin:
     """Construct the JWT plugin.
 
-    Pass a `JwtOptions` to override the algorithm, TTL, issuer, or audience. The
-    options are also stashed under `auth.options.advanced["jwt"]` so other plugins
-    (notably `oidc_provider`) can read them at request time.
+    Pass a `JwtOptions` to override the algorithm, TTL, issuer, audience, JWKS
+    path, rotation policy, or remote-signing config. The options are also stashed
+    under `auth.options.advanced["jwt"]` so other plugins (notably
+    `oidc_provider`) can read them at request time.
+
+    To sign an arbitrary payload server-side (the equivalent of upstream
+    `auth.api.signJWT`), call :func:`sign_jwt`. There is intentionally no HTTP
+    route for signing — clients receive 404, matching upstream's SERVER_ONLY
+    `/sign-jwt`.
     """
-    return _JwtPlugin(opts=options or JwtOptions())  # type: ignore[return-value]
+    opts = options or JwtOptions()
+    return _JwtPlugin(opts=opts, endpoints=_build_endpoints(opts))  # type: ignore[return-value]
 
 
 __all__ = [
@@ -360,5 +582,7 @@ __all__ = [
     "JWK_MODEL",
     "jwt",
     "issue_jwt",
+    "sign_jwt",
+    "to_exp_jwt",
     "verify_local_jwt",
 ]
