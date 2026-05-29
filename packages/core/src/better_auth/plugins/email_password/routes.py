@@ -69,27 +69,37 @@ async def _sign_up_email(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(409, "EMAIL_ALREADY_IN_USE")
 
     now = int(time.time())
-    user = await ctx.auth.adapter.create(
-        model="user",
-        data={
-            "email": body.email,
-            "name": body.name,
-            "emailVerified": False,
-            "createdAt": now,
-            "updatedAt": now,
-        },
-    )
-    await ctx.auth.adapter.create(
-        model="account",
-        data={
-            "userId": user["id"],
-            "accountId": user["id"],
-            "providerId": "credential",
-            "password": hash_password(body.password),
-            "createdAt": now,
-            "updatedAt": now,
-        },
-    )
+    # Route writes through with_hooks so plugin database_hooks (e.g. Stripe's
+    # createCustomerOnSignUp) fire before/after user creation, matching
+    # upstream's createWithHooks path. Falls back to the raw adapter only if the
+    # hook runtime was not wired (it always is via init()).
+    wh = ctx.auth.with_hooks
+    user_data = {
+        "email": body.email,
+        "name": body.name,
+        "emailVerified": False,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    if wh is not None:
+        user = await wh.create("user", user_data)
+    else:
+        user = await ctx.auth.adapter.create(model="user", data=user_data)
+    if user is None:
+        # A before-hook aborted the write (returned False).
+        raise APIError(400, "FAILED_TO_CREATE_USER")
+    account_data = {
+        "userId": user["id"],
+        "accountId": user["id"],
+        "providerId": "credential",
+        "password": hash_password(body.password),
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    if wh is not None:
+        await wh.create("account", account_data)
+    else:
+        await ctx.auth.adapter.create(model="account", data=account_data)
 
     if ctx.auth.options.email_and_password.auto_sign_in:
         session, cookies = await create_session(

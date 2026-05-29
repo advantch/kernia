@@ -43,13 +43,16 @@ def _sign_bytes(body: bytes, secret: str = WEBHOOK_SECRET) -> tuple[bytes, dict[
     }
 
 
-def _make_driver() -> tuple[ASGIDriver, MockStripe, object]:
+def _make_driver(
+    *, create_customer_on_sign_up: bool = True
+) -> tuple[ASGIDriver, MockStripe, object]:
     mock = MockStripe()
     client = StripeClient(api_key="sk_test_x", transport=mock.mock_transport())
     plugin = stripe(
         StripeOptions(
             stripe_client=client,
             webhook_secret=WEBHOOK_SECRET,
+            create_customer_on_sign_up=create_customer_on_sign_up,
             plans={
                 "pro": StripePlan(name="pro", price_id="price_pro"),
                 "team": StripePlan(name="team", price_id="price_team", seats=True),
@@ -913,7 +916,9 @@ async def test_resume_clears_cancel_flag_immediately() -> None:
 async def test_checkout_reuses_existing_customer_via_search() -> None:
     """When a Stripe customer already exists for the email, checkout reuses it
     (customers.search) instead of creating a new one."""
-    driver, mock, auth = _make_driver()
+    # Disable createCustomerOnSignUp so the user has no stripeCustomerId yet —
+    # checkout must then resolve the existing customer via customers.search.
+    driver, mock, auth = _make_driver(create_customer_on_sign_up=False)
     await _sign_up(driver, email="reuse@example.com")
 
     # Pre-seed an existing Stripe customer for the same email.
@@ -945,7 +950,7 @@ async def test_checkout_reuses_existing_customer_via_search() -> None:
 
 async def test_checkout_falls_back_to_list_when_search_unavailable() -> None:
     """If customers.search is unavailable, checkout falls back to customers.list."""
-    driver, mock, auth = _make_driver()
+    driver, mock, auth = _make_driver(create_customer_on_sign_up=False)
     mock.search_unavailable = True
     await _sign_up(driver, email="fallback@example.com")
 

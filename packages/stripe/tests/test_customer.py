@@ -2,26 +2,23 @@
 
 Upstream drives customer creation via the `createCustomerOnSignUp` database
 hook (`databaseHooks.user.create.after`). The Python plugin registers the same
-hook (`build_customer_database_hooks`), but in this port the email/password
-sign-up route writes the user row through the *raw* adapter
-(`ctx.auth.adapter.create`) rather than through `with_hooks`, so the user-create
-database hook does not fire on sign-up. That is a core-lifecycle gap, out of
-scope for this package.
+hook (`build_customer_database_hooks`), and core now routes the email/password
+sign-up route through `with_hooks`, so the user-create database hook fires on
+sign-up exactly as upstream.
 
-Accordingly the cases are split:
+The cases are split:
   * The hook *behavior* (search → list fallback, getCustomerCreateParams merge,
     onCustomerCreate, metadata stamping, email sync, duplicate prevention) is
-    ported and exercised by invoking the registered hook directly with a fake
-    context — kept ~1:1 with the upstream assertions.
-  * The end-to-end "create a customer on sign up" path is ported as xfail with
-    the precise reason (sign-up bypasses with_hooks in core).
+    exercised by invoking the registered hook directly with a fake context —
+    kept ~1:1 with the upstream assertions.
+  * The end-to-end "create a customer on sign up" path drives the live
+    /sign-up/email route and asserts the customer was provisioned.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import pytest
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
 from better_auth.types.adapter import Where
@@ -297,18 +294,11 @@ async def test_updates_stripe_customer_email_on_user_email_change() -> None:
     assert update_event["object"]["email"] == "newemail@example.com"
 
 
-# ----- end-to-end signup path (xfail: core lifecycle gap) ------------------
+# ----- end-to-end signup path -----------------------------------------------
+# Core now routes /sign-up/email through with_hooks, so the plugin's user.create
+# database hook fires and createCustomerOnSignUp provisions a Stripe customer.
 
 
-@pytest.mark.xfail(
-    reason=(
-        "sign-up/email writes the user row via raw ctx.auth.adapter.create, "
-        "which bypasses with_hooks, so the plugin's user.create database hook "
-        "never fires. Fixing requires core to route signup through "
-        "create_with_hooks (out of scope for packages/stripe)."
-    ),
-    strict=True,
-)
 async def test_create_customer_on_sign_up_end_to_end() -> None:
     mock = MockStripe()
     options = _make_options(mock)

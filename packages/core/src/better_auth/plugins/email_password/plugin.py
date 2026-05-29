@@ -20,6 +20,7 @@ EMAIL_PASSWORD_ERROR_CODES: Mapping[str, str] = {
     "PASSWORD_TOO_SHORT": "Password does not meet the minimum length policy.",
     "PASSWORD_TOO_LONG": "Password exceeds the maximum length policy.",
     "EMAIL_NOT_VERIFIED": "Email address has not been verified.",
+    "FAILED_TO_CREATE_USER": "Failed to create user",
 }
 
 
