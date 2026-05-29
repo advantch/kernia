@@ -44,6 +44,7 @@ from better_auth_sso.domain import (
     make_verification_token,
 )
 from better_auth_sso.linking import assign_organization_from_provider
+from better_auth_sso.utils import mask_client_id, parse_certificate
 
 _OPTS_KEY = "sso"
 
@@ -133,6 +134,7 @@ class RegisterProviderBody(BaseModel):
 
 class UpdateProviderBody(BaseModel):
     id: str
+    issuer: str | None = None
     name: str | None = None
     domains: list[str] | None = None
     oidc_config: dict[str, Any] | None = Field(default=None, alias="oidcConfig")
@@ -189,6 +191,7 @@ async def _register_provider(ctx: EndpointContext) -> dict[str, Any]:
             "samlConfig": json.dumps(body.saml_config) if body.saml_config else None,
             "userInfoMapping": json.dumps(body.mapping or {}),
             "organizationId": body.organization_id,
+            "userId": ctx.session.user_id if ctx.session is not None else None,
             "createdAt": now,
             "updatedAt": now,
         },
@@ -199,15 +202,64 @@ async def _register_provider(ctx: EndpointContext) -> dict[str, Any]:
 async def _update_provider(ctx: EndpointContext) -> dict[str, Any]:
     await _require_admin(ctx)
     body: UpdateProviderBody = ctx.body
+
+    # Reject a no-op update: at least one mutable field must be supplied. Mirrors
+    # upstream's "No fields provided for update" 400.
+    if (
+        body.issuer is None
+        and body.name is None
+        and body.domains is None
+        and body.oidc_config is None
+        and body.saml_config is None
+        and body.mapping is None
+        and body.organization_id is None
+    ):
+        raise APIError(400, "SSO_NO_UPDATE_FIELDS", message="No fields provided for update")
+
+    if body.issuer is not None and not _is_valid_url(body.issuer):
+        raise APIError(400, "SSO_INVALID_ISSUER", message="issuer must be a valid URL")
+
+    existing = await ctx.auth.adapter.find_one(
+        model="ssoProvider",
+        where=(Where(field="id", value=body.id),),
+    )
+    if existing is None:
+        raise APIError(404, "SSO_PROVIDER_NOT_FOUND", message="Provider not found")
+
+    # A config update must target the provider's actual kind. You cannot patch a
+    # SAML config onto an OIDC provider (or vice versa) — mirrors upstream's
+    # "Cannot update {SAML,OIDC} config for a provider that doesn't have it".
+    if body.saml_config is not None and not existing.get("samlConfig"):
+        raise APIError(
+            400,
+            "SSO_CONFIG_KIND_MISMATCH",
+            message="Cannot update SAML config for a provider that doesn't have SAML configured",
+        )
+    if body.oidc_config is not None and not existing.get("oidcConfig"):
+        raise APIError(
+            400,
+            "SSO_CONFIG_KIND_MISMATCH",
+            message="Cannot update OIDC config for a provider that doesn't have OIDC configured",
+        )
+
     update: dict[str, Any] = {"updatedAt": _now()}
+    if body.issuer is not None:
+        update["issuer"] = body.issuer
     if body.name is not None:
         update["name"] = body.name
     if body.domains is not None:
         update["domains"] = json.dumps(body.domains)
     if body.oidc_config is not None:
-        update["oidcConfig"] = json.dumps(body.oidc_config)
+        # Merge partial OIDC config onto the existing config.
+        current = json.loads(existing["oidcConfig"]) if existing.get("oidcConfig") else {}
+        merged = {**current, **body.oidc_config}
+        if body.issuer is not None:
+            merged["issuer"] = body.issuer
+        update["oidcConfig"] = json.dumps(merged)
     if body.saml_config is not None:
-        update["samlConfig"] = json.dumps(body.saml_config)
+        current = json.loads(existing["samlConfig"]) if existing.get("samlConfig") else {}
+        merged = {**current, **body.saml_config}
+        update["samlConfig"] = json.dumps(merged)
     if body.mapping is not None:
         update["userInfoMapping"] = json.dumps(body.mapping)
     if body.organization_id is not None:
@@ -218,13 +270,29 @@ async def _update_provider(ctx: EndpointContext) -> dict[str, Any]:
         update=update,
     )
     if row is None:
-        raise APIError(404, "SSO_PROVIDER_NOT_FOUND")
+        raise APIError(404, "SSO_PROVIDER_NOT_FOUND", message="Provider not found")
     return {"provider": _serialize_provider(row)}
+
+
+def _is_valid_url(value: str) -> bool:
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(value)
+    except (ValueError, TypeError):
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
 async def _delete_provider(ctx: EndpointContext) -> dict[str, Any]:
     await _require_admin(ctx)
     body: DeleteProviderBody = ctx.body
+    existing = await ctx.auth.adapter.find_one(
+        model="ssoProvider",
+        where=(Where(field="id", value=body.id),),
+    )
+    if existing is None:
+        raise APIError(404, "SSO_PROVIDER_NOT_FOUND", message="Provider not found")
     await ctx.auth.adapter.delete_many(
         model="ssoDomain",
         where=(Where(field="ssoProviderId", value=body.id),),
@@ -242,6 +310,54 @@ async def _list_providers(ctx: EndpointContext) -> dict[str, Any]:
     return {"providers": [_serialize_provider(r) for r in rows]}
 
 
+class GetProviderQuery(BaseModel):
+    provider_id: str = Field(alias="providerId")
+
+    model_config = {"populate_by_name": True}
+
+
+async def _get_provider(ctx: EndpointContext) -> dict[str, Any]:
+    """Return sanitized details for one provider, gated by ownership/org-admin."""
+    provider_id = ctx.request.query.get("providerId") or ctx.request.query.get(
+        "provider_id"
+    )
+    if isinstance(provider_id, list):
+        provider_id = provider_id[0]
+    if not provider_id:
+        raise APIError(400, "INVALID_REQUEST", message="providerId is required")
+    provider = await _check_provider_access(ctx, str(provider_id))
+    return sanitize_provider(provider, ctx.auth.base_url)
+
+
+async def _accessible_providers(ctx: EndpointContext) -> dict[str, Any]:
+    """List sanitized providers the current session has access to (issue parity).
+
+    User-owned providers (no org link) are always included; org-linked providers
+    are included when the organization plugin is installed and the user is an
+    admin/owner of that org, or — when the plugin is absent — when the user owns
+    the row. Requires a session.
+    """
+    if ctx.session is None:
+        raise APIError(401, "UNAUTHORIZED")
+    user_id = ctx.session.user_id
+    rows = await ctx.auth.adapter.find_many(model="ssoProvider")
+
+    org_present = _org_plugin_present(ctx)
+    accessible: list[dict[str, Any]] = []
+    for row in rows:
+        org_id = row.get("organizationId")
+        if not org_id:
+            if row.get("userId") == user_id:
+                accessible.append(row)
+        elif org_present:
+            if await _is_org_admin(ctx, user_id, str(org_id)):
+                accessible.append(row)
+        elif row.get("userId") == user_id:
+            accessible.append(row)
+
+    return {"providers": [sanitize_provider(r, ctx.auth.base_url) for r in accessible]}
+
+
 def _serialize_provider(row: dict[str, Any]) -> dict[str, Any]:
     """Project the storage row onto the wire shape (decode JSON columns)."""
     return {
@@ -257,6 +373,136 @@ def _serialize_provider(row: dict[str, Any]) -> dict[str, Any]:
         "createdAt": row.get("createdAt"),
         "updatedAt": row.get("updatedAt"),
     }
+
+
+def sanitize_provider(row: dict[str, Any], base_url: str) -> dict[str, Any]:
+    """Project a provider row onto a *safe* wire shape for read endpoints.
+
+    Port of ``sanitizeProvider`` in ``reference/packages/sso/src/routes/
+    providers.ts``, adapted to the Python config shapes. Secrets are never
+    surfaced: the OIDC ``clientSecret`` is dropped entirely and the ``clientId``
+    is masked to its last four characters; the SAML IdP/SP private keys are
+    dropped and the certificate is reduced to parsed, non-sensitive metadata
+    (fingerprint, validity window, key algorithm) — never the raw PEM.
+    """
+    try:
+        oidc_config = json.loads(row["oidcConfig"]) if row.get("oidcConfig") else None
+    except (ValueError, TypeError):
+        oidc_config = None
+    try:
+        saml_config = json.loads(row["samlConfig"]) if row.get("samlConfig") else None
+    except (ValueError, TypeError):
+        saml_config = None
+
+    kind = row.get("kind") or ("saml" if saml_config else "oidc")
+
+    sanitized: dict[str, Any] = {
+        "id": row["id"],
+        "type": kind,
+        "issuer": row["issuer"],
+        "domains": json.loads(row.get("domains") or "[]"),
+        "organizationId": row.get("organizationId") or None,
+        "spMetadataUrl": f"{base_url}/sso/saml/metadata/{row['id']}",
+    }
+
+    if kind == "oidc" and oidc_config:
+        sanitized["oidcConfig"] = {
+            "issuer": oidc_config.get("issuer"),
+            "clientIdLastFour": mask_client_id(str(oidc_config.get("clientId") or "")),
+            "pkce": oidc_config.get("pkce"),
+            "authorizationEndpoint": oidc_config.get("authorizationEndpoint"),
+            "tokenEndpoint": oidc_config.get("tokenEndpoint"),
+            "userInfoEndpoint": oidc_config.get("userInfoEndpoint"),
+            "jwksEndpoint": oidc_config.get("jwksEndpoint"),
+            "scopes": oidc_config.get("scopes"),
+        }
+    if kind == "saml" and saml_config:
+        idp = saml_config.get("idp") or {}
+        cert = idp.get("cert")
+        certificate: Any
+        if cert:
+            try:
+                certificate = parse_certificate(str(cert))
+            except Exception:
+                certificate = {"error": "Failed to parse certificate"}
+        else:
+            certificate = None
+        sanitized["samlConfig"] = {
+            "entryPoint": idp.get("ssoUrl"),
+            "idpEntityId": idp.get("entityId"),
+            "audience": (saml_config.get("sp") or {}).get("audience"),
+            "wantAssertionsSigned": saml_config.get("wantAssertionsSigned"),
+            "signatureAlgorithm": saml_config.get("signatureAlgorithm"),
+            "digestAlgorithm": saml_config.get("digestAlgorithm"),
+            "certificate": certificate,
+        }
+    return sanitized
+
+
+def _org_plugin_present(ctx: EndpointContext) -> bool:
+    return any(
+        getattr(p, "id", None) == "organization"
+        for p in getattr(ctx.auth, "plugins", []) or []
+    )
+
+
+_ADMIN_ROLES = ("owner", "admin")
+
+
+def _has_org_admin_role(member: dict[str, Any]) -> bool:
+    role = str(member.get("role") or "")
+    return any(r.strip() in _ADMIN_ROLES for r in role.split(","))
+
+
+async def _is_org_admin(
+    ctx: EndpointContext, user_id: str, organization_id: str
+) -> bool:
+    member = await ctx.auth.adapter.find_one(
+        model="member",
+        where=(
+            Where(field="userId", value=user_id),
+            Where(field="organizationId", value=organization_id),
+        ),
+    )
+    return _has_org_admin_role(member) if member else False
+
+
+async def _check_provider_access(
+    ctx: EndpointContext, provider_id: str
+) -> dict[str, Any]:
+    """Load a provider, enforcing ownership / org-admin access (mirrors upstream).
+
+    A provider with no ``organizationId`` is owned by the user who registered it
+    (``userId``). A provider linked to an organization is accessible to org
+    admins/owners when the organization plugin is installed, otherwise it falls
+    back to the registering user. Raises 401/404/403 as appropriate.
+    """
+    if ctx.session is None:
+        raise APIError(401, "UNAUTHORIZED")
+    provider = await ctx.auth.adapter.find_one(
+        model="ssoProvider",
+        where=(Where(field="id", value=provider_id),),
+    )
+    if provider is None:
+        raise APIError(404, "SSO_PROVIDER_NOT_FOUND", message="Provider not found")
+
+    user_id = ctx.session.user_id
+    organization_id = provider.get("organizationId")
+    if organization_id:
+        if _org_plugin_present(ctx):
+            has_access = await _is_org_admin(ctx, user_id, str(organization_id))
+        else:
+            has_access = provider.get("userId") == user_id
+    else:
+        has_access = provider.get("userId") == user_id
+
+    if not has_access:
+        raise APIError(
+            403,
+            "SSO_PROVIDER_ACCESS_DENIED",
+            message="You don't have access to this provider",
+        )
+    return provider
 
 
 # ---------------------------------------------------------------------------
@@ -717,6 +963,16 @@ LIST_PROVIDERS = create_auth_endpoint(
     EndpointOptions(method="GET"),
     _list_providers,
 )
+GET_PROVIDER = create_auth_endpoint(
+    "/sso/get-provider",
+    EndpointOptions(method="GET"),
+    _get_provider,
+)
+PROVIDERS = create_auth_endpoint(
+    "/sso/providers",
+    EndpointOptions(method="GET"),
+    _accessible_providers,
+)
 REGISTER_DOMAIN = create_auth_endpoint(
     "/sso/register-domain",
     EndpointOptions(method="POST", body=RegisterDomainBody),
@@ -766,6 +1022,8 @@ ALL: tuple[AuthEndpoint, ...] = (
     UPDATE_PROVIDER,
     DELETE_PROVIDER,
     LIST_PROVIDERS,
+    GET_PROVIDER,
+    PROVIDERS,
     REGISTER_DOMAIN,
     VERIFY_DOMAIN,
     OIDC_SIGN_IN,
@@ -780,7 +1038,9 @@ ALL: tuple[AuthEndpoint, ...] = (
 __all__ = [
     "ALL",
     "DELETE_PROVIDER",
+    "GET_PROVIDER",
     "LIST_PROVIDERS",
+    "PROVIDERS",
     "OIDC_CALLBACK",
     "OIDC_SIGN_IN",
     "REGISTER_DOMAIN",

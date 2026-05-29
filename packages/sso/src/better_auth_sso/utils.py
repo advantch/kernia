@@ -76,10 +76,53 @@ def mask_client_id(client_id: str) -> str:
     return f"****{client_id[-4:]}"
 
 
+def parse_certificate(cert_pem: str) -> dict[str, Any]:
+    """Parse an X.509 certificate (PEM or bare base64) into safe metadata.
+
+    Port of ``reference/packages/sso/src/utils.ts``'s ``parseCertificate``. SAML
+    metadata ``X509Certificate`` elements carry raw base64 without PEM armor, but
+    callers may also pass a full PEM document — normalise to PEM either way, then
+    surface only non-sensitive fields (never the public/private key material).
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+
+    normalized = (
+        cert_pem
+        if "-----BEGIN" in cert_pem
+        else f"-----BEGIN CERTIFICATE-----\n{cert_pem}\n-----END CERTIFICATE-----"
+    )
+    cert = x509.load_pem_x509_certificate(normalized.encode("utf-8"))
+
+    fingerprint = cert.fingerprint(hashes.SHA256())
+    fingerprint_sha256 = ":".join(f"{b:02X}" for b in fingerprint)
+
+    key = cert.public_key()
+    if isinstance(key, rsa.RSAPublicKey):
+        algo = "RSA"
+    elif isinstance(key, ec.EllipticCurvePublicKey):
+        algo = "EC"
+    elif isinstance(key, dsa.DSAPublicKey):
+        algo = "DSA"
+    elif isinstance(key, ed25519.Ed25519PublicKey | ed448.Ed448PublicKey):
+        algo = type(key).__name__.replace("PublicKey", "").upper()
+    else:
+        algo = "UNKNOWN"
+
+    return {
+        "fingerprintSha256": fingerprint_sha256,
+        "notBefore": cert.not_valid_before_utc.isoformat(),
+        "notAfter": cert.not_valid_after_utc.isoformat(),
+        "publicKeyAlgorithm": algo,
+    }
+
+
 __all__ = [
     "domain_matches",
     "get_hostname_from_domain",
     "mask_client_id",
+    "parse_certificate",
     "safe_json_parse",
     "validate_email_domain",
 ]

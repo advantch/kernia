@@ -32,6 +32,12 @@ SSO_PROVIDER_MODEL = ModelDef(
         # plugin is installed) SSO sign-ins through this provider auto-provision
         # the user as a member. Mirrors upstream `ssoProvider.organizationId`.
         FieldDef("organizationId", "string", required=False),
+        # The user who registered this provider. Mirrors upstream
+        # ``ssoProvider.userId`` and underpins ownership-based access control on
+        # the read/update/delete endpoints (the registering user owns the
+        # provider unless it is linked to an organization, in which case org
+        # admins/owners gain access).
+        FieldDef("userId", "string", required=False),
         FieldDef("createdAt", "date"),
         FieldDef("updatedAt", "date"),
     ),
