@@ -19,11 +19,20 @@ dev-dependencies = [
     "pydantic>=2.10",
     "better-auth",
     "better-auth-memory-adapter",
+    "better-auth-sqlalchemy",
+    "better-auth-mongo",
+    "better-auth-redis-storage",
+    "better-auth-api-key",
+    "better-auth-sso",
+    "better-auth-scim",
+    "better-auth-stripe",
+    "better-auth-cli",
     "better-auth-fastapi",
     "better-auth-starlette",
     "better-auth-django",
     "better-auth-test-utils",
     "better-auth-oauth-provider",
+    "better-auth-mcp",
     "better-auth-passkey",
     "pyotp>=2.9",
     "eth-account>=0.11",
@@ -41,6 +50,7 @@ members = [
     "packages/passkey",
     "packages/sso",
     "packages/oauth_provider",
+    "packages/mcp",
     "packages/scim",
     "packages/stripe",
     "packages/fastapi_integration",
@@ -61,6 +71,7 @@ better-auth-api-key = { workspace = true }
 better-auth-passkey = { workspace = true }
 better-auth-sso = { workspace = true }
 better-auth-oauth-provider = { workspace = true }
+better-auth-mcp = { workspace = true }
 better-auth-scim = { workspace = true }
 better-auth-stripe = { workspace = true }
 better-auth-fastapi = { workspace = true }
