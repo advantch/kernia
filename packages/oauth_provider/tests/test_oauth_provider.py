@@ -12,14 +12,13 @@ Drives the plugin through its ASGI surface using `ASGIDriver`. Covers:
 from __future__ import annotations
 
 import base64
-from urllib.parse import parse_qs, urlparse
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.oauth2 import pkce_challenge, pkce_verifier
 from better_auth.plugins.email_password import email_and_password
 from better_auth.plugins.jwt import jwt
+from better_auth.types.adapter import Where
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_memory_adapter import memory_adapter
 from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
@@ -28,7 +27,7 @@ from better_auth_test_utils import ASGIDriver
 
 
 def _basic(client_id: str, client_secret: str) -> str:
-    token = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+    token = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
     return f"Basic {token}"
 
 
@@ -273,6 +272,98 @@ async def test_dynamic_registration_disabled() -> None:
         json_body={"name": "x", "redirect_uris": ["https://x/cb"]},
     )
     assert r.status == 404
+
+
+async def test_oauth_authorization_server_metadata(setup) -> None:
+    # RFC 8414: the OAuth 2.0 authorization-server metadata document.
+    _, driver, _ = setup
+    r = await driver.request("GET", "/.well-known/oauth-authorization-server")
+    assert r.status == 200, r.json()
+    j = r.json()
+    assert j["issuer"] == "https://issuer.test"
+    assert j["token_endpoint"].endswith("/oauth2/token")
+    assert j["authorization_endpoint"].endswith("/oauth2/authorize")
+    # RFC 8414 doc is the OAuth (non-OIDC) profile: no userinfo/id_token claims.
+    assert "userinfo_endpoint" not in j
+
+
+async def test_client_secret_stored_hashed(setup) -> None:
+    # A DB leak must never expose a usable client secret: the stored value is a
+    # SHA-256 digest, not the plaintext returned to the caller.
+    auth, _, client = setup
+    row = await auth.context.adapter.find_one(
+        model="oauthClient",
+        where=[Where(field="clientId", value=client.client_id)],
+    )
+    assert row is not None
+    assert row["clientSecret"] != client.client_secret
+    assert client.client_secret  # the caller still gets the usable plaintext
+
+
+async def test_refresh_token_reuse_invalidates_family(setup) -> None:
+    # RFC 9700 §4.14: replaying a rotated refresh token tears down the whole
+    # family, so the *new* refresh token issued by the legitimate rotation is
+    # also revoked.
+    _, driver, client = setup
+    await _signup_signin(driver)
+    query = (
+        f"response_type=code&client_id={client.client_id}"
+        f"&redirect_uri=https://client.test/cb&scope=openid%20offline_access"
+    )
+    r = await driver.request("GET", "/oauth2/authorize", query=query)
+    code = r.json()["code"]
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://client.test/cb",
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    original_refresh = r.json()["refresh_token"]
+
+    # Legitimate rotation
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": original_refresh,
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    assert r.status == 200
+    rotated_refresh = r.json()["refresh_token"]
+
+    # Replay the consumed (original) token → detected reuse, family torn down
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": original_refresh,
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    assert r.status == 400
+
+    # The legitimately-rotated token is now also dead (family invalidation)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": rotated_refresh,
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    assert r.status == 400
 
 
 async def test_client_credentials_grant(setup) -> None:

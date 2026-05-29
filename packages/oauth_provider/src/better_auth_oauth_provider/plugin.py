@@ -14,15 +14,15 @@ Tokens are signed with the active JWK from the `jwt` plugin (shared key material
 
 from __future__ import annotations
 
-import json
+import base64
+import hashlib
+import hmac
 import secrets
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlencode
-
-from pydantic import BaseModel
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.error import APIError
@@ -32,7 +32,7 @@ from better_auth.types.adapter import FieldDef, ModelDef, Where
 from better_auth.types.context import AuthContext, EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
-
+from pydantic import BaseModel
 
 # ----- schema -----
 
@@ -79,6 +79,10 @@ OAUTH_REFRESH_TOKEN_MODEL = ModelDef(
         FieldDef("userId", "string"),
         FieldDef("scope", "string"),
         FieldDef("expiresAt", "date"),
+        # RFC 9700 §4.14 reuse detection: rotated tokens are marked revoked
+        # (not deleted) so a later replay of a consumed token is detectable and
+        # tears down the whole family. `None` means live.
+        FieldDef("revoked", "date", required=False),
     ),
 )
 
@@ -104,6 +108,32 @@ class OAuthProviderOptions:
     supported_scopes: tuple[str, ...] = ("openid", "profile", "email", "offline_access")
     enable_dynamic_registration: bool = False
     require_pkce_for_public: bool = True
+    # How client secrets are kept at rest. "hashed" (default, mirrors upstream
+    # `storeClientSecret: "hashed"`) stores only a SHA-256 digest so a DB leak
+    # never exposes usable secrets. "plain" keeps the legacy behaviour.
+    store_client_secret: str = "hashed"
+    # How refresh tokens are kept at rest. "hashed" (default, mirrors upstream
+    # `storeTokens: "hashed"`) means the raw token never lands in the DB.
+    store_tokens: str = "hashed"
+
+
+def _sha256_b64url(value: str) -> str:
+    """SHA-256 → unpadded base64url. Matches `@better-auth/utils` `createHash`."""
+    digest = hashlib.sha256(value.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def _store_secret(method: str, secret: str) -> str:
+    """Transform a freshly-minted secret/token into its at-rest representation."""
+    if method == "hashed":
+        return _sha256_b64url(secret)
+    return secret
+
+
+def _verify_secret(method: str, presented: str, stored: str) -> bool:
+    """Constant-time check of a presented secret against its stored form."""
+    candidate = _sha256_b64url(presented) if method == "hashed" else presented
+    return hmac.compare_digest(candidate, stored)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +149,7 @@ class OAuthClient:
     token_endpoint_auth_method: str
 
     @classmethod
-    def from_row(cls, row: Mapping[str, Any]) -> "OAuthClient":
+    def from_row(cls, row: Mapping[str, Any]) -> OAuthClient:
         return cls(
             client_id=row["clientId"],
             client_secret=row.get("clientSecret") or None,
@@ -310,8 +340,12 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
     # Auth: confidential clients require secret; public clients can omit if PKCE present.
     is_public = client.token_endpoint_auth_method == "none"
     if not is_public:
-        if not client_secret or not client.client_secret or not secrets.compare_digest(
-            client.client_secret, client_secret
+        if (
+            not client_secret
+            or not client.client_secret
+            or not _verify_secret(
+                opts.store_client_secret, client_secret, client.client_secret
+            )
         ):
             raise APIError(401, "INVALID_REQUEST", message="invalid client credentials")
 
@@ -366,20 +400,30 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
     if grant == "refresh_token":
         if not body.refresh_token:
             raise APIError(400, "INVALID_REQUEST", message="refresh_token required")
+        stored_token = _store_secret(opts.store_tokens, body.refresh_token)
         row = await ctx.auth.adapter.find_one(
             model="oauthRefreshToken",
-            where=(Where(field="token", value=body.refresh_token),),
+            where=(Where(field="token", value=stored_token),),
         )
         if not row:
             raise APIError(400, "INVALID_REQUEST", message="invalid_grant")
         if row.get("clientId") != client_id:
             raise APIError(400, "INVALID_REQUEST", message="client mismatch")
+        # RFC 9700 §4.14 reuse detection: replaying a token that was already
+        # rotated tears down the entire (client, user) family and rejects.
+        if row.get("revoked"):
+            await _invalidate_refresh_family(
+                ctx, client_id=client_id, user_id=row["userId"]
+            )
+            raise APIError(400, "INVALID_REQUEST", message="invalid_grant")
         if int(row.get("expiresAt", 0)) < now:
             raise APIError(400, "INVALID_REQUEST", message="refresh token expired")
-        # Rotate the refresh token
-        await ctx.auth.adapter.delete(
+        # Rotate: mark the presented token revoked (kept for replay detection),
+        # then mint a fresh one in the same family.
+        await ctx.auth.adapter.update(
             model="oauthRefreshToken",
-            where=(Where(field="token", value=body.refresh_token),),
+            where=(Where(field="token", value=stored_token),),
+            update={"revoked": now},
         )
         return await _issue_tokens(
             ctx,
@@ -401,6 +445,19 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         )
 
     raise APIError(400, "INVALID_REQUEST", message="unsupported_grant_type")
+
+
+async def _invalidate_refresh_family(
+    ctx: EndpointContext, *, client_id: str, user_id: str
+) -> None:
+    """Tear down every refresh token for a (client, user) pair (RFC 9700 §4.14)."""
+    await ctx.auth.adapter.delete_many(
+        model="oauthRefreshToken",
+        where=(
+            Where(field="clientId", value=client_id),
+            Where(field="userId", value=user_id),
+        ),
+    )
 
 
 async def _issue_tokens(
@@ -437,11 +494,12 @@ async def _issue_tokens(
         await ctx.auth.adapter.create(
             model="oauthRefreshToken",
             data={
-                "token": refresh,
+                "token": _store_secret(opts.store_tokens, refresh),
                 "clientId": client_id,
                 "userId": user_id,
                 "scope": scope,
                 "expiresAt": now + opts.refresh_token_ttl,
+                "revoked": None,
             },
         )
         out["refresh_token"] = refresh
@@ -501,11 +559,14 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
 
 
 async def _revoke(ctx: EndpointContext) -> dict[str, object]:
+    opts = _options(ctx.auth)
     body: RevokeBody = ctx.body
-    # Try refresh-token store
+    # Try refresh-token store (tokens stored hashed → hash the presented value).
     await ctx.auth.adapter.delete_many(
         model="oauthRefreshToken",
-        where=(Where(field="token", value=body.token),),
+        where=(
+            Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
+        ),
     )
     # RFC 7009: respond 200 regardless
     return {}
@@ -529,12 +590,14 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
         }
     except ValueError:
         pass
-    # Try as refresh token
+    # Try as refresh token (stored hashed → hash the presented value).
     row = await ctx.auth.adapter.find_one(
         model="oauthRefreshToken",
-        where=(Where(field="token", value=body.token),),
+        where=(
+            Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
+        ),
     )
-    if row and int(row.get("expiresAt", 0)) > int(time.time()):
+    if row and not row.get("revoked") and int(row.get("expiresAt", 0)) > int(time.time()):
         return {
             "active": True,
             "sub": row.get("userId"),
@@ -546,14 +609,12 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
     return {"active": False}
 
 
-async def _discovery(ctx: EndpointContext) -> dict[str, object]:
-    opts = _options(ctx.auth)
+def _metadata(opts: OAuthProviderOptions, *, openid: bool) -> dict[str, object]:
     base = opts.issuer.rstrip("/")
-    return {
+    doc: dict[str, object] = {
         "issuer": opts.issuer,
         "authorization_endpoint": f"{base}/oauth2/authorize",
         "token_endpoint": f"{base}/oauth2/token",
-        "userinfo_endpoint": f"{base}/oauth2/userinfo",
         "jwks_uri": f"{base}/jwks",
         "revocation_endpoint": f"{base}/oauth2/revoke",
         "introspection_endpoint": f"{base}/oauth2/introspect",
@@ -562,16 +623,34 @@ async def _discovery(ctx: EndpointContext) -> dict[str, object]:
         else None,
         "scopes_supported": list(opts.supported_scopes),
         "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
+        "grant_types_supported": [
+            "authorization_code",
+            "refresh_token",
+            "client_credentials",
+        ],
         "code_challenge_methods_supported": ["S256", "plain"],
-        "id_token_signing_alg_values_supported": ["ES256", "RS256", "EdDSA"],
         "token_endpoint_auth_methods_supported": [
             "client_secret_basic",
             "client_secret_post",
             "none",
         ],
-        "subject_types_supported": ["public"],
     }
+    if openid:
+        # OIDC discovery (RFC OpenID-Connect-Discovery) adds the identity layer.
+        doc["userinfo_endpoint"] = f"{base}/oauth2/userinfo"
+        doc["id_token_signing_alg_values_supported"] = ["ES256", "RS256", "EdDSA"]
+        doc["subject_types_supported"] = ["public"]
+    return doc
+
+
+async def _discovery(ctx: EndpointContext) -> dict[str, object]:
+    """OpenID Connect discovery — `/.well-known/openid-configuration`."""
+    return _metadata(_options(ctx.auth), openid=True)
+
+
+async def _as_metadata(ctx: EndpointContext) -> dict[str, object]:
+    """RFC 8414 OAuth 2.0 authorization-server metadata."""
+    return _metadata(_options(ctx.auth), openid=False)
 
 
 async def _register(ctx: EndpointContext) -> dict[str, object]:
@@ -584,11 +663,13 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
         "" if body.token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
     )
     now = int(time.time())
-    row = await ctx.auth.adapter.create(
+    await ctx.auth.adapter.create(
         model="oauthClient",
         data={
             "clientId": client_id,
-            "clientSecret": client_secret,
+            "clientSecret": _store_secret(opts.store_client_secret, client_secret)
+            if client_secret
+            else client_secret,
             "name": body.name,
             "redirectUris": ",".join(body.redirect_uris),
             "allowedScopes": ",".join(body.allowed_scopes),
@@ -641,6 +722,11 @@ DISCOVERY = create_auth_endpoint(
     EndpointOptions(method="GET"),
     _discovery,
 )
+AS_METADATA = create_auth_endpoint(
+    "/.well-known/oauth-authorization-server",
+    EndpointOptions(method="GET"),
+    _as_metadata,
+)
 REGISTER = create_auth_endpoint(
     "/oauth2/register",
     EndpointOptions(method="POST", body=RegisterBody),
@@ -655,6 +741,7 @@ _ENDPOINTS: tuple[AuthEndpoint, ...] = (
     REVOKE,
     INTROSPECT,
     DISCOVERY,
+    AS_METADATA,
     REGISTER,
 )
 
@@ -704,6 +791,7 @@ async def create_client(
     token_endpoint_auth_method: str = "client_secret_basic",
 ) -> OAuthClient:
     """Helper: register a client programmatically (no /register endpoint required)."""
+    opts = _options(auth)
     client_id = secrets.token_urlsafe(16)
     client_secret = "" if token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
     now = int(time.time())
@@ -711,7 +799,9 @@ async def create_client(
         model="oauthClient",
         data={
             "clientId": client_id,
-            "clientSecret": client_secret,
+            "clientSecret": _store_secret(opts.store_client_secret, client_secret)
+            if client_secret
+            else client_secret,
             "name": name,
             "redirectUris": ",".join(redirect_uris),
             "allowedScopes": ",".join(allowed_scopes),
