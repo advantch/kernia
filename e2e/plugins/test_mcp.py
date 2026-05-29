@@ -112,6 +112,34 @@ async def test_mcp_well_known(setup) -> None:
     assert j["resource_indicators_supported"] is True
 
 
+# Port of upstream describe("mcp discovery metadata (security)").
+# @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+# The discovery documents must never advertise the insecure `alg=none`.
+
+
+async def test_authorization_server_metadata_must_not_advertise_alg_none(setup) -> None:
+    """Port of "/.well-known/oauth-authorization-server must not advertise alg=none".
+
+    The RFC 8414 authorization-server metadata is served by the oauth_provider
+    plugin in this repo (the mcp package is the resource server). Its
+    ``id_token_signing_alg_values_supported`` must never contain ``none``.
+    """
+    _, driver, _, _ = setup
+    r = await driver.request("GET", "/.well-known/oauth-authorization-server")
+    assert r.status == 200
+    algs = r.json().get("id_token_signing_alg_values_supported") or []
+    assert "none" not in algs
+
+
+async def test_protected_resource_metadata_must_not_advertise_alg_none(setup) -> None:
+    """Port of "/.well-known/oauth-protected-resource must not advertise alg=none"."""
+    _, driver, _, _ = setup
+    r = await driver.request("GET", "/.well-known/oauth-protected-resource")
+    assert r.status == 200
+    algs = r.json().get("resource_signing_alg_values_supported") or []
+    assert "none" not in algs
+
+
 async def test_mcp_rejects_unknown_client(setup) -> None:
     _, driver, _, _ = setup
     r = await driver.request(
