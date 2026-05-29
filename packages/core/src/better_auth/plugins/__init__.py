@@ -36,6 +36,9 @@ _try_import("email_password", "email_and_password")
 _try_import("jwt", "jwt")
 _try_import("oauth_proxy", "oauth_proxy")
 _try_import("one_tap", "one_tap")
+# Upstream-parity custom-session response transformer (distinct from the
+# Python-only storage-provider `with_custom_session`).
+_try_import("custom_session", "custom_session")
 
 # In-flight parallel lanes — pulled in if their constructors have landed.
 for _name, _attr in (
