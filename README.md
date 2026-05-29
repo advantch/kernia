@@ -6,7 +6,7 @@ A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, 
 
 > **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and was removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
 >
-> By that gate we are **substantially advanced but not yet complete**: **1,508** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **43 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
+> By that gate we are **substantially advanced but not yet complete**: **1,578** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **45 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
 
 Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area, both measured directly (`uv run pytest --co` vs `grep` over `reference/**/*.test.ts`). A ratio ≥ 1.0 means we exercise the behavior at least as thoroughly as upstream; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
 
@@ -45,10 +45,10 @@ Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`te
 | **Behind — surface built, coverage lagging** | | | |
 | custom_session | 5 | 11 | 45 % |
 | stripe | 71 | 157 | 45 % — metered/upgrade/customer/webhook; checkout+schedule thin |
-| oauth_provider | 93 | 278 | 33 % — self-contained-JWT model; DB-token-table cases unported |
+| oauth_provider | 103 | 278 | 37 % — JWT + opaque-token models; remaining DB-token-table cases unported |
 | oidc_provider | shim | 47 | deprecated shim → oauth_provider |
 
-**Bottom line:** the Phase-0 core foundations (field model, schema resolution, `with_hooks`, transactions, plugin lifecycle) are in place, and the majority of plugins now meet or closely approach upstream test coverage — 17 areas are at or above upstream, 9 more are 45–81 %. The two remaining structural gaps are **oauth_provider (33 %)** and **stripe (45 %)**: oauth_provider/mcp are bounded by a deliberate architectural divergence (self-contained JWTs vs upstream's DB-backed `oauthAccessToken` table — the unported cases exercise that table directly), and stripe needs subscription-schedule phases, checkout, and seat-based-billing cases ported. These remain genuinely incomplete; no blanket "full parity" claim until they close.
+**Bottom line:** the Phase-0 core foundations (field model, schema resolution, `with_hooks`, transactions, plugin lifecycle) are in place, and the majority of plugins now meet or closely approach upstream test coverage — 17 areas are at or above upstream, 9 more are 45–81 %. The two remaining structural gaps are **oauth_provider (37 %)** and **stripe (45 %)**: oauth_provider now supports *both* the self-contained-JWT and the opaque DB-backed `oauthAccessToken` models (`jwt_access_token=False` selects upstream's opaque tokens, with prefix/introspection/userinfo/revocation parity), but many upstream cases still exercise that table's edge behaviour we haven't ported; stripe needs subscription-schedule phases, checkout, and seat-based-billing cases ported. These remain genuinely incomplete; no blanket "full parity" claim until they close.
 
 ### Plugins (28 built-in + 7 in standalone packages = 35)
 

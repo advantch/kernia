@@ -100,6 +100,30 @@ OAUTH_CONSENT_MODEL = ModelDef(
 )
 
 
+# Opaque access tokens. Upstream issues opaque (reference) access tokens by
+# default and only mints a self-contained JWT when an audience/`resource` is
+# present; this port defaults to JWTs (``jwt_access_token=True``) but supports
+# the opaque model when that option is disabled, so introspection / userinfo /
+# revocation can be exercised against reference tokens too. Per upstream's
+# schema doc, access tokens are created at issuance, read at introspection, and
+# destroyed at revoke — never updated.
+OAUTH_ACCESS_TOKEN_MODEL = ModelDef(
+    name="oauthAccessToken",
+    fields=(
+        FieldDef("id", "string", unique=True),
+        FieldDef("token", "string", unique=True),
+        FieldDef("clientId", "string"),
+        FieldDef("userId", "string", required=False),
+        # The subject as presented to the client (pairwise-resolved); kept so
+        # introspection/userinfo agree with the id_token without re-deriving it.
+        FieldDef("azp", "string", required=False),
+        FieldDef("scope", "string"),
+        FieldDef("expiresAt", "date"),
+        FieldDef("createdAt", "date"),
+    ),
+)
+
+
 @dataclass(frozen=True, slots=True)
 class OAuthProviderOptions:
     issuer: str
@@ -116,6 +140,17 @@ class OAuthProviderOptions:
     # How refresh tokens are kept at rest. "hashed" (default, mirrors upstream
     # `storeTokens: "hashed"`) means the raw token never lands in the DB.
     store_tokens: str = "hashed"
+    # Access-token format. When True (this port's default) the access token is a
+    # self-contained EdDSA JWT verified statelessly. When False the server mints
+    # an opaque reference token persisted in `oauthAccessToken` and validated by
+    # DB lookup — mirroring upstream's default opaque-token model. Introspection,
+    # userinfo and revocation transparently accept either format.
+    jwt_access_token: bool = True
+    # Optional fixed prefixes for opaque tokens (mirror upstream
+    # `accessTokenPrefix` / `refreshTokenPrefix`). Stored hashed, so the prefix
+    # is only visible on the wire — it aids token-type heuristics for clients.
+    opaque_access_token_prefix: str = ""
+    refresh_token_prefix: str = ""
     # Secret used to compute pairwise subject identifiers (HMAC-SHA256).
     # When set (min 32 chars), clients with `subject_type: "pairwise"` receive
     # unique, unlinkable `sub` values per sector identifier.
@@ -656,18 +691,35 @@ async def _issue_tokens(
         user_id if user_id.startswith("client:") else _resolve_sub(user_id, client, opts)
     )
     # `azp` records the client so introspection can recompute the pairwise sub.
-    access_token, _kid = await issue_jwt(
-        ctx.auth,
-        payload={
-            "sub": user_id,
-            "azp": client_id,
-            "aud": client_id,
-            "iss": opts.issuer,
-            "scope": scope,
-            "jti": secrets.token_urlsafe(16),
-        },
-        ttl=opts.access_token_ttl,
-    )
+    if opts.jwt_access_token:
+        access_token, _kid = await issue_jwt(
+            ctx.auth,
+            payload={
+                "sub": user_id,
+                "azp": client_id,
+                "aud": client_id,
+                "iss": opts.issuer,
+                "scope": scope,
+                "jti": secrets.token_urlsafe(16),
+            },
+            ttl=opts.access_token_ttl,
+        )
+    else:
+        # Opaque reference token, persisted hashed in `oauthAccessToken`. The
+        # row carries the real user id (for lookup) plus `azp` so introspection
+        # / userinfo can present the pairwise subject without re-deriving it.
+        access_token = opts.opaque_access_token_prefix + secrets.token_urlsafe(48)
+        await ctx.auth.adapter.create(
+            model="oauthAccessToken",
+            data={
+                "token": _store_secret(opts.store_tokens, access_token),
+                "clientId": client_id,
+                "userId": user_id,
+                "azp": client_id,
+                "scope": scope,
+                "expiresAt": now + opts.access_token_ttl,
+            },
+        )
     out: dict[str, object] = {
         "access_token": access_token,
         "token_type": "Bearer",
@@ -676,7 +728,7 @@ async def _issue_tokens(
     }
     scopes = set(scope.split())
     if "offline_access" in scopes:
-        refresh = secrets.token_urlsafe(48)
+        refresh = opts.refresh_token_prefix + secrets.token_urlsafe(48)
         await ctx.auth.adapter.create(
             model="oauthRefreshToken",
             data={
@@ -716,9 +768,19 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
     if not token:
         raise _oauth_error(401, "invalid_request", "authorization header not found")
     try:
-        claims = await verify_local_jwt(ctx.auth, token, issuer=opts.issuer)
-    except ValueError as e:
-        raise APIError(401, "UNAUTHORIZED", message=str(e)) from None
+        claims: Mapping[str, Any] = await verify_local_jwt(
+            ctx.auth, token, issuer=opts.issuer
+        )
+    except ValueError as jwt_err:
+        # Fall back to the opaque-token table; an unknown/expired token is 401.
+        row = await _lookup_opaque_access_token(ctx, opts, token)
+        if row is None:
+            raise APIError(401, "UNAUTHORIZED", message=str(jwt_err)) from None
+        claims = {
+            "sub": row.get("userId"),
+            "azp": row.get("azp") or row.get("clientId"),
+            "scope": row.get("scope", ""),
+        }
     scopes = set(str(claims.get("scope", "")).split())
     # OIDC: userinfo requires the openid scope (invalid_scope, 400).
     if "openid" not in scopes:
@@ -799,10 +861,20 @@ async def _revoke(ctx: EndpointContext) -> dict[str, object]:
     if hint == "refresh_token" and is_jwt:
         raise _oauth_error(400, "unsupported_token_type", "token type mismatch")
     # Only revoke tokens that belong to the authenticated client (RFC 7009 §2.1).
+    stored = _store_secret(opts.store_tokens, body.token)
     await ctx.auth.adapter.delete_many(
         model="oauthRefreshToken",
         where=(
-            Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
+            Where(field="token", value=stored),
+            Where(field="clientId", value=client_id),
+        ),
+    )
+    # Opaque access tokens live in their own table; revoke those too (a JWT
+    # access token has no row, so this is a harmless no-op for the JWT model).
+    await ctx.auth.adapter.delete_many(
+        model="oauthAccessToken",
+        where=(
+            Where(field="token", value=stored),
             Where(field="clientId", value=client_id),
         ),
     )
@@ -810,15 +882,39 @@ async def _revoke(ctx: EndpointContext) -> dict[str, object]:
     return {}
 
 
+async def _lookup_opaque_access_token(
+    ctx: EndpointContext, opts: OAuthProviderOptions, token: str
+) -> Mapping[str, Any] | None:
+    """Return the live `oauthAccessToken` row for an opaque token, or None.
+
+    A row is "live" only when present and unexpired; expired rows are treated as
+    absent (the introspection/userinfo callers report them inactive/unauthorized).
+    """
+    row = await ctx.auth.adapter.find_one(
+        model="oauthAccessToken",
+        where=(Where(field="token", value=_store_secret(opts.store_tokens, token)),),
+    )
+    if row is None:
+        return None
+    if int(row.get("expiresAt", 0)) <= int(time.time()):
+        return None
+    return row
+
+
 async def _is_access_token(
     ctx: EndpointContext, opts: OAuthProviderOptions, token: str
 ) -> bool:
-    """True when `token` verifies as a JWT access token issued by this server."""
+    """True when `token` is an access token issued by this server.
+
+    Recognises both the self-contained JWT format and the opaque reference
+    format (a live row in `oauthAccessToken`).
+    """
     try:
         await verify_local_jwt(ctx.auth, token, issuer=opts.issuer)
         return True
     except ValueError:
-        return False
+        pass
+    return await _lookup_opaque_access_token(ctx, opts, token) is not None
 
 
 async def _introspect(ctx: EndpointContext) -> dict[str, object]:
@@ -862,6 +958,22 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
             return out
         except ValueError:
             pass
+        # Opaque access-token lookup (same hint gating as the JWT path).
+        row = await _lookup_opaque_access_token(ctx, opts, body.token)
+        if row is not None:
+            sub = row.get("userId")
+            if isinstance(sub, str) and not sub.startswith("client:"):
+                sub = _resolve_sub(sub, client, opts)
+            return {
+                "active": True,
+                "sub": sub,
+                "client_id": row.get("azp") or row.get("clientId"),
+                "aud": row.get("clientId"),
+                "iss": opts.issuer,
+                "exp": row.get("expiresAt"),
+                "scope": row.get("scope"),
+                "token_type": "Bearer",
+            }
     # Refresh-token lookup is skipped when the caller pinned the hint to
     # access_token (a refresh token presented as an access token is inactive),
     # or when a JWT access token was presented under a refresh_token hint.
@@ -1112,6 +1224,7 @@ class _OAuthProviderPlugin:
                 OAUTH_AUTHORIZATION_CODE_MODEL,
                 OAUTH_REFRESH_TOKEN_MODEL,
                 OAUTH_CONSENT_MODEL,
+                OAUTH_ACCESS_TOKEN_MODEL,
             )
         )
     )
