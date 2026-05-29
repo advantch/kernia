@@ -16,9 +16,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from better_auth.types.context import AuthContext
+from better_auth.types.db_hooks import DatabaseHooks
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema
 
+from better_auth_stripe.hooks import build_customer_database_hooks
 from better_auth_stripe.routes import build_endpoints
 from better_auth_stripe.schema import StripeOptions, get_schema
 from better_auth_stripe.seat_sync import register_seat_sync
@@ -76,7 +78,7 @@ class _StripePlugin:
     version: str | None = None
     middlewares: None = None
     hooks: None = None
-    database_hooks: None = None
+    database_hooks: DatabaseHooks | None = None
     on_request: None = None
     on_response: None = None
     rate_limit: None = None
@@ -98,6 +100,7 @@ def stripe(options: StripeOptions) -> BetterAuthPlugin:
         schema=get_schema(options),
         endpoints=build_endpoints(options),
         error_codes=dict(STRIPE_ERROR_CODES),
+        database_hooks=build_customer_database_hooks(options),
         _options=options,
     )
 

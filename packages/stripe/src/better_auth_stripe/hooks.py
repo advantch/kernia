@@ -13,10 +13,12 @@ from typing import Any
 
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
+from better_auth.types.db_hooks import DatabaseHooks, HookOp, ModelHooks
 
-from better_auth_stripe.metadata import subscription_metadata
+from better_auth_stripe.metadata import customer_metadata, subscription_metadata
 from better_auth_stripe.schema import StripeOptions
 from better_auth_stripe.utils import (
+    escape_stripe_search_value,
     is_active_or_trialing,
     is_pending_cancel,
     is_stripe_pending_cancel,
@@ -393,7 +395,160 @@ async def on_subscription_deleted(
         _log.error("Stripe webhook failed: %s", e)
 
 
+# ----- createCustomerOnSignUp database hook --------------------------------
+#
+# Mirrors `reference/packages/stripe/src/index.ts` -> init() ->
+# options.databaseHooks.user.{create,update}.after. The core lifecycle
+# (`auth/__init__.py`) collects each plugin's `database_hooks` entry; the user
+# create/update `after` hooks fire when a user row is written *through*
+# `with_hooks`. (See NOTE in build_customer_database_hooks.)
+
+
+def _defu(primary: dict[str, Any], secondary: dict[str, Any] | None) -> dict[str, Any]:
+    """Deep-merge two dicts with `primary` taking priority (mirrors `defu`)."""
+    out: dict[str, Any] = dict(secondary or {})
+    for key, value in primary.items():
+        if (
+            isinstance(value, dict)
+            and isinstance(out.get(key), dict)
+        ):
+            out[key] = _defu(value, out[key])
+        else:
+            out[key] = value
+    return out
+
+
+async def _find_existing_user_customer(
+    options: StripeOptions, email: str
+) -> dict[str, Any] | None:
+    """Search (→ list fallback) for a non-organization Stripe customer by email.
+
+    Mirrors the upstream `customers.search` / `customers.list` fallback in the
+    `createCustomerOnSignUp` hook.
+    """
+    client = options.stripe_client
+    try:
+        result = await client.search_customers(
+            query=(
+                f'email:"{escape_stripe_search_value(email)}" AND '
+                f'-metadata["customerType"]:"organization"'
+            ),
+            limit=1,
+        )
+        data = (result or {}).get("data") or []
+        return data[0] if data else None
+    except Exception:
+        _log.warning(
+            "Stripe customers.search failed, falling back to customers.list"
+        )
+        listed = await client.list_customers(email=email, limit=100)
+        for customer in (listed or {}).get("data") or []:
+            if (customer.get("metadata") or {}).get("customerType") != "organization":
+                return customer
+    return None
+
+
+def build_customer_database_hooks(options: StripeOptions) -> DatabaseHooks:
+    """Build the `user` create/update `after` hooks for Stripe customer sync.
+
+    Mirrors `index.ts` init().options.databaseHooks. The core lifecycle collects
+    these as `plugin.database_hooks`.
+    """
+
+    async def on_user_create_after(user: dict[str, Any], ctx: Any) -> None:
+        if (
+            ctx is None
+            or not options.create_customer_on_sign_up
+            or user.get("stripeCustomerId")
+        ):
+            return
+        try:
+            existing = await _find_existing_user_customer(options, user["email"])
+            if existing:
+                await ctx.adapter.update(
+                    model="user",
+                    where=(Where(field="id", value=user["id"]),),
+                    update={"stripeCustomerId": existing["id"]},
+                )
+                await _call(
+                    options.on_customer_create,
+                    {
+                        "stripeCustomer": existing,
+                        "user": {**user, "stripeCustomerId": existing["id"]},
+                    },
+                    ctx,
+                )
+                return
+
+            extra_create_params: dict[str, Any] = {}
+            if options.get_customer_create_params is not None:
+                extra_create_params = (
+                    await _maybe_await_result(
+                        options.get_customer_create_params(user, ctx)
+                    )
+                    or {}
+                )
+
+            params = _defu(
+                {
+                    "email": user["email"],
+                    "name": user.get("name"),
+                    "metadata": customer_metadata.set(
+                        {"userId": user["id"], "customerType": "user"},
+                        extra_create_params.get("metadata"),
+                    ),
+                },
+                extra_create_params,
+            )
+            stripe_customer = await options.stripe_client.create_customer(**params)
+            await ctx.adapter.update(
+                model="user",
+                where=(Where(field="id", value=user["id"]),),
+                update={"stripeCustomerId": stripe_customer["id"]},
+            )
+            await _call(
+                options.on_customer_create,
+                {
+                    "stripeCustomer": stripe_customer,
+                    "user": {**user, "stripeCustomerId": stripe_customer["id"]},
+                },
+                ctx,
+            )
+        except Exception as e:  # pragma: no cover - best-effort, mirrors upstream
+            _log.error("Failed to create or link Stripe customer: %s", e)
+
+    async def on_user_update_after(user: dict[str, Any], ctx: Any) -> None:
+        if ctx is None or not user.get("stripeCustomerId"):
+            return
+        try:
+            stripe_customer = await options.stripe_client.get_customer(
+                user["stripeCustomerId"]
+            )
+            if stripe_customer.get("deleted"):
+                return
+            if stripe_customer.get("email") != user.get("email"):
+                await options.stripe_client.update_customer(
+                    user["stripeCustomerId"], email=user["email"]
+                )
+        except Exception as e:  # pragma: no cover
+            _log.error("Failed to sync email to Stripe customer: %s", e)
+
+    return {
+        "user": ModelHooks(
+            create=HookOp(after=on_user_create_after),
+            update=HookOp(after=on_user_update_after),
+        )
+    }
+
+
+async def _maybe_await_result(value: Any) -> Any:
+    if hasattr(value, "__await__"):
+        return await value
+    return value
+
+
 __all__ = [
+    "build_customer_database_hooks",
     "on_checkout_session_completed",
     "on_subscription_created",
     "on_subscription_deleted",

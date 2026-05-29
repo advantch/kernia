@@ -681,7 +681,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             if sub_to_update.get("referenceId") != reference_id:
                 raise _err("SUBSCRIPTION_NOT_FOUND")
 
-        await _ensure_user_customer(ctx, opts, metadata=body.metadata)
+        customer_id = await _ensure_user_customer(ctx, opts, metadata=body.metadata)
 
         line_items = await _build_line_items(
             opts, plan, annual=annual, seats=body.seats
@@ -689,12 +689,50 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         price_id = line_items[0].get("price")
         billing_interval = "year" if annual else "month"
 
-        if not body.subscriptionId:
-            # No specific subscription: this would create a checkout session in
-            # upstream. The harness tests always pass subscriptionId for upgrade.
-            raise _err("SUBSCRIPTION_NOT_FOUND")
+        # Resolve the active Stripe subscription (if any) to decide between the
+        # in-place proration update path and the new-checkout-session path.
+        target_stripe_sub_id = body.subscriptionId
+        if not target_stripe_sub_id and sub_to_update is None:
+            try:
+                listed = await opts.stripe_client.list_subscriptions(
+                    customer=customer_id
+                )
+            except Exception:
+                listed = {"data": []}
+            active = [
+                s
+                for s in (listed or {}).get("data") or []
+                if s.get("status") in ("active", "trialing")
+            ]
+            # Only adopt an active Stripe subscription that maps to a DB row for
+            # this referenceId (avoid mixing personal/org subscriptions).
+            for s in active:
+                db_row = await ctx.auth.adapter.find_one(
+                    model="subscription",
+                    where=(
+                        Where(field="stripeSubscriptionId", value=s.get("id")),
+                        Where(field="referenceId", value=reference_id),
+                    ),
+                )
+                if db_row is not None:
+                    target_stripe_sub_id = s.get("id")
+                    break
 
-        existing_sub = await opts.stripe_client.get_subscription(body.subscriptionId)
+        if not target_stripe_sub_id:
+            # No active subscription to prorate against: create (or reuse) an
+            # `incomplete` subscription row and open a Stripe Checkout session.
+            return await _upgrade_via_checkout(
+                ctx,
+                opts,
+                plan=plan,
+                reference_id=reference_id,
+                customer_id=customer_id,
+                line_items=line_items,
+                billing_interval=billing_interval,
+                body=body,
+            )
+
+        existing_sub = await opts.stripe_client.get_subscription(target_stripe_sub_id)
         sub_items = (existing_sub.get("items") or {}).get("data") or []
         update_items: list[dict[str, Any]] = []
         for idx, li in enumerate(line_items):
@@ -704,7 +742,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             update_items.append(entry)
 
         updated = await opts.stripe_client.update_subscription(
-            body.subscriptionId,
+            target_stripe_sub_id,
             items=update_items,
             proration_behavior=plan.proration_behavior,
             metadata={"referenceId": reference_id, "plan": plan.name},
@@ -713,7 +751,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         now = int(time.time())
         await ctx.auth.adapter.update(
             model="subscription",
-            where=(Where(field="stripeSubscriptionId", value=body.subscriptionId),),
+            where=(Where(field="stripeSubscriptionId", value=target_stripe_sub_id),),
             update={
                 "plan": plan.name,
                 "priceId": price_id,
@@ -732,6 +770,101 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         ),
         handler,
     )
+
+
+async def _upgrade_via_checkout(
+    ctx: EndpointContext,
+    opts: StripeOptions,
+    *,
+    plan: StripePlan,
+    reference_id: str,
+    customer_id: str,
+    line_items: list[dict[str, Any]],
+    billing_interval: str,
+    body: UpgradeSubscriptionBody,
+) -> dict[str, Any]:
+    """Upgrade path when no active Stripe subscription exists.
+
+    Mirrors upstream `routes.ts` (no `activeSubscription` branch): reuse an
+    `incomplete` subscription row if present, otherwise create one, then open a
+    Stripe Checkout session and return `{url, redirect}`.
+    """
+    seats = body.seats or 1
+    # Reuse an existing incomplete row for this reference, else create one.
+    existing = await ctx.auth.adapter.find_many(
+        model="subscription",
+        where=(Where(field="referenceId", value=reference_id),),
+    )
+    subscription = next(
+        (s for s in existing if s.get("status") == "incomplete"), None
+    )
+    now = int(time.time())
+    if subscription is None:
+        subscription = await ctx.auth.adapter.create(
+            model="subscription",
+            data={
+                "plan": plan.name.lower(),
+                "stripeCustomerId": customer_id,
+                "status": "incomplete",
+                "referenceId": reference_id,
+                "seats": seats,
+                "cancelAtPeriodEnd": False,
+                "createdAt": now,
+                "updatedAt": now,
+            },
+        )
+    else:
+        await ctx.auth.adapter.update(
+            model="subscription",
+            where=(Where(field="id", value=subscription["id"]),),
+            update={"plan": plan.name.lower(), "seats": seats, "updatedAt": now},
+        )
+
+    # Has this reference ever trialed? Prevents multiple trials by plan-hopping.
+    has_ever_trialed = any(
+        bool(s.get("trialStart") or s.get("trialEnd"))
+        or s.get("status") == "trialing"
+        for s in existing
+    )
+
+    sub_data: dict[str, Any] = {
+        "metadata": subscription_metadata.set(
+            {
+                "userId": ctx.session.user_id,
+                "subscriptionId": subscription["id"],
+                "referenceId": reference_id,
+            },
+            body.metadata,
+        )
+    }
+    if not has_ever_trialed and plan.free_trial:
+        sub_data["trial_period_days"] = plan.free_trial.days
+    elif not has_ever_trialed and plan.free_trial_days:
+        sub_data["trial_period_days"] = plan.free_trial_days
+
+    params: dict[str, Any] = {
+        "mode": "subscription",
+        "customer": customer_id,
+        "success_url": body.successUrl or body.returnUrl or "/",
+        "cancel_url": body.cancelUrl or body.returnUrl or "/",
+        "line_items": line_items,
+        "client_reference_id": reference_id,
+        "subscription_data": sub_data,
+        "metadata": subscription_metadata.set(
+            {
+                "userId": ctx.session.user_id,
+                "subscriptionId": subscription["id"],
+                "referenceId": reference_id,
+            },
+            body.metadata,
+        ),
+    }
+    session = await opts.stripe_client.create_checkout_session(**params)
+    return {
+        **session,
+        "url": session.get("url"),
+        "redirect": not body.disableRedirect,
+    }
 
 
 # ----- list -----------------------------------------------------------------

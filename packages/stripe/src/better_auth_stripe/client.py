@@ -58,7 +58,7 @@ class StripeClient:
 
     async def create_customer(
         self, *, email: str | None = None, name: str | None = None,
-        metadata: dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None, **extra: Any,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {}
         if email:
@@ -67,6 +67,11 @@ class StripeClient:
             body["name"] = name
         if metadata:
             body["metadata"] = metadata
+        # Pass through any additional Stripe customer params (e.g. address,
+        # phone) supplied via getCustomerCreateParams.
+        for key, value in extra.items():
+            if value is not None:
+                body[key] = value
         return await self._post("/v1/customers", body)
 
     async def get_customer(self, customer_id: str) -> dict[str, Any]:
