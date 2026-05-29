@@ -1,10 +1,54 @@
 # better-auth-python
 
-A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. No stubs, no smoke tests — every plugin and every adapter is a real implementation with real unit + integration coverage.
+A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, v1.6.11), structured to mirror the reference codebase directory-for-directory. Every plugin and adapter listed below is a real implementation (no empty stubs), but **this is a work in progress, not a finished 1:1 port.**
 
-## Status
+## Status — honest parity ledger
 
-**Full feature parity. 632 passing, 108 skipped (docker / external-dep gated). 14 of 14 implementation lanes complete.**
+> **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and has been removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
+>
+> By that gate we are **partial**: ~**687** ported/passing Python tests against ~**3,507** upstream test cases (≈ **20 %** by test-case count). We will only flip the headline to "full parity" when the ledger below reads 100 %, and we will not publish to PyPI before then.
+
+Test counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area. A high ratio means the behavior is well-exercised; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
+
+| Area | Python tests | Upstream cases | Notes |
+|---|---:|---:|---|
+| **At / near parity** | | | |
+| one_tap | 4 | 4 | ✅ |
+| haveibeenpwned | 5 | 4 | ✅ |
+| open_api | 11 | 10 | ✅ |
+| access (AC DSL) | 11 | 9 | ✅ |
+| multi_session | 12 | 9 | ✅ |
+| magic_link | 21 | 18 | ✅ |
+| one_time_token | 20 | 13 | ✅ |
+| bearer | 10 | 7 | ✅ |
+| captcha | 13 | 17 | strong |
+| phone_number | 21 | 32 | strong |
+| **Partial — surface built, coverage behind** | | | |
+| device_authorization | 11 | 36 | |
+| last_login_method | 12 | 21 | |
+| siwe | 11 | 18 | |
+| custom_session | 5 | 11 | |
+| anonymous | 9 | 13 | |
+| jwt | 11 | 38 | /jwks, /sign, /verify present |
+| username | 9 | 37 | |
+| email_otp | 26 | 73 | |
+| organization | 142 | 200 | 35 endpoints, teams, dynamic AC |
+| db / adapters | 57 | 67 | with_hooks, transactions, conformance |
+| **Large gaps — do not assume parity** | | | |
+| two_factor | 9 | 55 | |
+| generic_oauth | 8 | 60 | |
+| oauth_proxy | 3 | 18 | |
+| mcp (FastMCP) | 12 | 45 | OAuth-protected, RFC 9728 |
+| admin | 3 | 72 | RBAC/ban/impersonation thin |
+| stripe | 15 | 158 | metered + upgrade landed; lifecycle hooks thin |
+| passkey | 6 | 20 | |
+| scim | 10 | 78 | |
+| oauth_provider | 11 | 279 | issuer works; many RFC paths unported |
+| api_key | 6 | 178 | |
+| sso (SAML+OIDC) | 21 | 359 | |
+| oidc_provider | shim | 47 | deprecated shim → oauth_provider |
+
+**Bottom line:** the architecture and the Phase-0 core foundations (field model, schema resolution, `with_hooks`, transactions, plugin lifecycle) are in place and the highest-traffic plugins are well covered, but the standalone packages (sso, api_key, oauth_provider, scim, stripe) and a few core plugins (admin, two_factor, generic_oauth) need substantially more ported tests before any "full parity" claim is truthful.
 
 ### Plugins (28 built-in + 7 in standalone packages = 35)
 
@@ -80,6 +124,11 @@ python scripts/audit_layout.py
 ```
 
 ## Deferred (honestly)
+
+The parity ledger above is the authoritative picture of what's covered. The
+"Large gaps" tier there is the real backlog — those packages need many more
+ported upstream tests before parity is truthful. Beyond test coverage, these
+specific capabilities are known-incomplete:
 
 Remaining real deferrals:
 - **Wire-protocol conformance vs containerized better-auth Node server** — Lane J. Requires Docker and `reference/demo/` to spin up; the shape parity is enforced by the spec docs and the `open-api` plugin's generated OpenAPI, but a live cross-server cookie/JSON parity test hasn't run yet.

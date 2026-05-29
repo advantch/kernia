@@ -4,6 +4,16 @@ A Python port of [better-auth](https://better-auth.com), the framework-agnostic
 authentication library for TypeScript. Same plugin model, same database schema, same
 endpoints — wired for ASGI apps (FastAPI, Starlette) and Django.
 
+!!! warning "Work in progress — not full parity, not published"
+    This is an in-progress port. *Done* here means **better-auth's own test
+    suite (vitest→pytest) passes** for an area, and by that gate we're at
+    roughly **20 %** test-case coverage (~687 ported tests vs ~3,507 upstream).
+    The core foundations and high-traffic plugins are solid; the standalone
+    packages (SSO, API-key, OAuth-provider, SCIM, Stripe) and a few core
+    plugins (admin, two-factor, generic-oauth) are still well behind. See the
+    [honest parity ledger](https://github.com/better-auth/better-auth-python#status--honest-parity-ledger)
+    in the README. **Not yet published to PyPI.**
+
 ## Highlights
 
 - **Framework-agnostic core.** A pure-Python `init()` returns an ASGI router you can
@@ -19,8 +29,12 @@ endpoints — wired for ASGI apps (FastAPI, Starlette) and Django.
 
 ## Install
 
+!!! note
+    Not yet on PyPI. Install from source while parity work continues:
+
 ```bash
-pip install better-auth-python better-auth-cli
+git clone --recurse-submodules https://github.com/better-auth/better-auth-python
+cd better-auth-python && uv sync
 ```
 
 ## 30-second tour

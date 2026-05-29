@@ -1,11 +1,25 @@
 # Additional Fields
 
 > Module: `better_auth.plugins.additional_fields`
-> Constructor: `additional_fields`
+> Constructor: `AdditionalFieldsConfig`
 
-additional_fields — see reference/packages/better-auth/src/plugins/additional-fields/.
+additional_fields plugin — declare extra user/session fields on the schema.
 
-Implemented in Lane C/D/E/F per the parity plan.
+Mirrors `reference/packages/better-auth/src/plugins/additional-fields/`.
+
+Usage:
+
+    additional_fields({
+        "user": {
+            "company":    {"type": "string", "required": True},
+            "department": {"type": "string"},
+        }
+    })
+
+Declared fields are merged into the plugin schema (contributed via
+`PluginSchema.extend`). An `after` hook scoped to `/sign-up/email` pulls any
+declared user-shape fields from the raw request body and writes them onto the
+freshly created user row before the response is serialized.
 
 ## Endpoints
 
@@ -18,7 +32,7 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.additional_fields import additional_fields
+from better_auth.plugins.additional_fields import AdditionalFieldsConfig
 from better_auth import BetterAuthOptions
 from better_auth.auth import init
 
@@ -27,7 +41,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            additional_fields(),
+            AdditionalFieldsConfig(),
         ],
     )
 )

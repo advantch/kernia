@@ -18,6 +18,10 @@ build/
 *.swp
 .DS_Store
 
+# Docs build output
+/site/
+docs/site/
+
 # Local
 .env
 .env.local

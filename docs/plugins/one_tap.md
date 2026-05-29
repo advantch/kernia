@@ -3,9 +3,14 @@
 > Module: `better_auth.plugins.one_tap`
 > Constructor: `one_tap`
 
-one_tap — see reference/packages/better-auth/src/plugins/one-tap/.
+Google One Tap plugin.
 
-Implemented in Lane C/D/E/F per the parity plan.
+Mirrors `reference/packages/better-auth/src/plugins/one-tap/`. The browser
+obtains an id_token from Google's One Tap library and POSTs it here; we verify
+it via the existing `better_auth.oauth2.verify_id_token` against Google's JWKS
+and resolve a user via `handle_oauth_user_info`.
+
+Endpoint: POST /one-tap/verify
 
 ## Endpoints
 

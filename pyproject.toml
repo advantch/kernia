@@ -43,6 +43,7 @@ dev-dependencies = [
     "argon2-cffi>=23.1",
     "alembic>=1.13",
     "click>=8.1",
+    "mkdocs-material>=9.5",
 ]
 
 [tool.uv.workspace]
