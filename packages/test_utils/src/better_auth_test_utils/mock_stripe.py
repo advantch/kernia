@@ -305,7 +305,9 @@ class MockStripe:
             meta = self._collect_metadata(body)
             if meta:
                 obj["metadata"] = {**(obj.get("metadata") or {}), **meta}
-            self.capture_events.append({"type": "subscription.update", "object": obj})
+            self.capture_events.append(
+                {"type": "subscription.update", "object": obj, "params": dict(body)}
+            )
             return httpx.Response(200, json=obj)
         if path.startswith("/v1/subscriptions/") and method == "DELETE":
             sid = path.rsplit("/", 1)[-1]
