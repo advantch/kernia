@@ -787,7 +787,23 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                     target_stripe_sub_id = s.get("id")
                     break
 
-        if not target_stripe_sub_id:
+        # When a subscriptionId is supplied it may point at an *incomplete* DB
+        # row that has no live Stripe subscription yet (e.g. a checkout never
+        # completed). Retrieve it and only take the in-place proration path when
+        # Stripe reports it active/trialing; otherwise fall through to checkout.
+        existing_sub: dict[str, Any] | None = None
+        if target_stripe_sub_id:
+            try:
+                existing_sub = await opts.stripe_client.get_subscription(
+                    target_stripe_sub_id
+                )
+            except Exception:
+                existing_sub = None
+            if not existing_sub or not is_active_or_trialing(existing_sub):
+                existing_sub = None
+                target_stripe_sub_id = None
+
+        if not target_stripe_sub_id or existing_sub is None:
             # No active subscription to prorate against: create (or reuse) an
             # `incomplete` subscription row and open a Stripe Checkout session.
             return await _upgrade_via_checkout(
@@ -801,8 +817,6 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                 billing_interval=billing_interval,
                 body=body,
             )
-
-        existing_sub = await opts.stripe_client.get_subscription(target_stripe_sub_id)
 
         # The DB row backing this Stripe subscription (for schedule bookkeeping).
         db_row = await ctx.auth.adapter.find_one(
