@@ -98,6 +98,7 @@ class UpgradeSubscriptionBody(BaseModel):
     successUrl: str | None = None
     cancelUrl: str | None = None
     returnUrl: str | None = None
+    locale: str | None = None
     scheduleAtPeriodEnd: bool = False
     disableRedirect: bool = False
 
@@ -727,6 +728,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                 plan=plan,
                 reference_id=reference_id,
                 customer_id=customer_id,
+                customer_type=customer_type,
                 line_items=line_items,
                 billing_interval=billing_interval,
                 body=body,
@@ -779,6 +781,7 @@ async def _upgrade_via_checkout(
     plan: StripePlan,
     reference_id: str,
     customer_id: str,
+    customer_type: str = "user",
     line_items: list[dict[str, Any]],
     billing_interval: str,
     body: UpgradeSubscriptionBody,
@@ -827,38 +830,91 @@ async def _upgrade_via_checkout(
         for s in existing
     )
 
-    sub_data: dict[str, Any] = {
-        "metadata": subscription_metadata.set(
-            {
-                "userId": ctx.session.user_id,
-                "subscriptionId": subscription["id"],
-                "referenceId": reference_id,
-            },
-            body.metadata,
+    # Optional caller hook returning `{params, options}` to customise the
+    # Stripe Checkout session. Mirrors upstream `getCheckoutSessionParams`:
+    # plugin-owned routing fields are stripped from the hook's params, the
+    # remainder is spread *under* the library-owned fields, and a handful of
+    # fields (customer_update, locale, subscription_data, metadata) follow
+    # explicit precedence rules below.
+    user_row = await _get_user_row(ctx)
+    additional_params: dict[str, Any] = {}
+    hook_options: Any = None
+    if opts.get_checkout_session_params is not None:
+        hook_result = await _maybe_await(
+            opts.get_checkout_session_params(
+                {
+                    "user": user_row,
+                    "session": ctx.session,
+                    "plan": plan,
+                    "subscription": subscription,
+                },
+                ctx.request,
+                ctx,
+            )
         )
+        if hook_result:
+            raw = dict(hook_result.get("params") or {})
+            # Strip library-owned flow-routing fields so the hook can never
+            # hijack them (mirrors upstream's destructure-and-discard).
+            for owned in (
+                "mode",
+                "customer",
+                "customer_email",
+                "success_url",
+                "cancel_url",
+                "line_items",
+                "client_reference_id",
+            ):
+                raw.pop(owned, None)
+            additional_params = raw
+            hook_options = hook_result.get("options")
+
+    internal_metadata = {
+        "userId": ctx.session.user_id,
+        "subscriptionId": subscription["id"],
+        "referenceId": reference_id,
     }
+
+    sub_data: dict[str, Any] = {}
     if not has_ever_trialed and plan.free_trial:
         sub_data["trial_period_days"] = plan.free_trial.days
     elif not has_ever_trialed and plan.free_trial_days:
         sub_data["trial_period_days"] = plan.free_trial_days
+    # Hook-supplied subscription_data is layered over the library trial, then
+    # internal metadata is always re-applied on top so it can't be clobbered.
+    hook_sub_data = dict(additional_params.get("subscription_data") or {})
+    hook_sub_meta = hook_sub_data.pop("metadata", None)
+    sub_data.update(hook_sub_data)
+    sub_data["metadata"] = subscription_metadata.set(
+        internal_metadata, body.metadata, hook_sub_meta
+    )
+
+    # customer_update default depends on customer type; the hook may override.
+    default_customer_update = (
+        {"name": "auto", "address": "auto"}
+        if customer_type == "user"
+        else {"address": "auto"}
+    )
 
     params: dict[str, Any] = {
+        **additional_params,
         "mode": "subscription",
         "customer": customer_id,
+        "customer_update": additional_params.get("customer_update")
+        or default_customer_update,
+        "locale": body.locale or additional_params.get("locale"),
         "success_url": body.successUrl or body.returnUrl or "/",
         "cancel_url": body.cancelUrl or body.returnUrl or "/",
         "line_items": line_items,
         "client_reference_id": reference_id,
         "subscription_data": sub_data,
         "metadata": subscription_metadata.set(
-            {
-                "userId": ctx.session.user_id,
-                "subscriptionId": subscription["id"],
-                "referenceId": reference_id,
-            },
-            body.metadata,
+            internal_metadata, body.metadata, additional_params.get("metadata")
         ),
     }
+    if params.get("locale") is None:
+        params.pop("locale")
+    del hook_options  # request-level options (idempotency, etc.) — not in body
     session = await opts.stripe_client.create_checkout_session(**params)
     return {
         **session,

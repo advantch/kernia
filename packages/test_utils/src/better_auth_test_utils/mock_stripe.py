@@ -152,14 +152,21 @@ class MockStripe:
                 "url": f"https://checkout.stripe.test/c/{_new_id('pay')}",
                 "mode": body.get("mode", "subscription"),
                 "customer": body.get("customer"),
+                "customer_email": body.get("customer_email"),
                 "success_url": body.get("success_url"),
                 "cancel_url": body.get("cancel_url"),
+                "locale": body.get("locale"),
+                "customer_update": self._collect_nested(body, "customer_update"),
                 "line_items": self._collect_line_items(body),
                 "subscription_data": self._collect_subscription_data(body),
                 "metadata": self._collect_metadata(body),
             }
             self.sessions[obj["id"]] = obj
-            self.capture_events.append({"type": "checkout.session.create", "object": obj})
+            # The raw flat form params are surfaced so tests can assert on
+            # arbitrary pass-through fields (UX-only params, etc.).
+            self.capture_events.append(
+                {"type": "checkout.session.create", "object": obj, "params": dict(body)}
+            )
             return httpx.Response(200, json=obj)
         if path.startswith("/v1/checkout/sessions/") and method == "GET":
             sid = path.rsplit("/", 1)[-1]
@@ -443,25 +450,31 @@ class MockStripe:
         return out
 
     @staticmethod
-    def _collect_flow_data(body: dict[str, str]) -> dict[str, Any]:
-        """Reconstruct the nested `flow_data[...]` bracket form into a dict.
+    def _collect_nested(body: dict[str, str], root: str) -> dict[str, Any]:
+        """Reconstruct an arbitrarily-nested ``<root>[...]`` bracket form.
 
-        e.g. ``flow_data[type]=subscription_cancel`` and
-        ``flow_data[subscription_cancel][subscription]=sub_x`` become
+        e.g. for ``root="flow_data"``: ``flow_data[type]=subscription_cancel``
+        and ``flow_data[subscription_cancel][subscription]=sub_x`` become
         ``{"type": "subscription_cancel", "subscription_cancel": {"subscription": "sub_x"}}``.
         """
         out: dict[str, Any] = {}
+        open_br = f"{root}["
         for k, v in body.items():
-            if not k.startswith("flow_data["):
+            if not k.startswith(open_br):
                 continue
-            # Strip the leading "flow_data" and split the remaining brackets.
-            inner = k[len("flow_data") :]
+            # Strip the leading root and split the remaining brackets.
+            inner = k[len(root) :]
             keys = [seg.rstrip("]") for seg in inner.split("[") if seg]
             cursor = out
             for seg in keys[:-1]:
                 cursor = cursor.setdefault(seg, {})
             cursor[keys[-1]] = v
         return out
+
+    @staticmethod
+    def _collect_flow_data(body: dict[str, str]) -> dict[str, Any]:
+        """Reconstruct the nested `flow_data[...]` bracket form into a dict."""
+        return MockStripe._collect_nested(body, "flow_data")
 
     @staticmethod
     def _collect_line_items(
