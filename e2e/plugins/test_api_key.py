@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import time
 
+import pytest
 from better_auth.auth import init
 from better_auth.plugins.email_password import email_and_password
 from better_auth.types.adapter import Where
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_api_key import (
+    ApiKeyConfigurationOptions,
     ApiKeyOptions,
     KeyExpirationOptions,
     PermissionsOptions,
@@ -862,3 +864,175 @@ async def test_no_session_for_api_keys_when_disabled() -> None:
     r = await driver.request("GET", "/get-session", headers={"x-api-key": raw})
     # Without the hook, no session is attached.
     assert r.json() is None
+
+
+# --------------------------------------------------------------------------- multiple configurations
+# Ported from reference/packages/api-key/src/api-key.test.ts
+# describe("multiple configurations").
+
+
+_MULTI_CONFIGS = [
+    ApiKeyConfigurationOptions(
+        config_id="public-api",
+        default_prefix="pub_",
+        rate_limit=RateLimitOptions(enabled=True, max_requests=100, time_window=60000),
+    ),
+    ApiKeyConfigurationOptions(
+        config_id="internal-api",
+        default_prefix="int_",
+        rate_limit=RateLimitOptions(enabled=True, max_requests=1000, time_window=60000),
+    ),
+    ApiKeyConfigurationOptions(config_id="default", default_prefix="def_"),
+]
+
+
+async def _multi_config_driver() -> tuple[ASGIDriver, object]:
+    db = memory_adapter()
+    auth = init(
+        BetterAuthOptions(
+            database=db,
+            secret="test-secret-key",
+            plugins=[email_and_password(), api_key(list(_MULTI_CONFIGS))],
+        )
+    )
+    driver = ASGIDriver(app=auth.router.mount())
+    r = await driver.request(
+        "POST",
+        "/sign-up/email",
+        json_body={"email": "multi@example.com", "password": "secret123"},
+    )
+    assert r.status == 200, r.json()
+    return driver, auth
+
+
+async def test_multi_create_with_specific_config_id() -> None:
+    driver, _ = await _multi_config_driver()
+    pub = await _create(driver, configId="public-api")
+    assert pub["configId"] == "public-api"
+    assert pub["prefix"] == "pub_"
+    assert pub["rateLimitMax"] == 100
+
+    internal = await _create(driver, configId="internal-api")
+    assert internal["configId"] == "internal-api"
+    assert internal["prefix"] == "int_"
+    assert internal["rateLimitMax"] == 1000
+
+
+async def test_multi_uses_default_config_when_no_config_id() -> None:
+    driver, _ = await _multi_config_driver()
+    default_key = await _create(driver)
+    assert default_key["configId"] == "default"
+    assert default_key["prefix"] == "def_"
+
+
+async def test_multi_list_filtered_by_config_id() -> None:
+    driver, _ = await _multi_config_driver()
+    await _create(driver, configId="public-api")
+    await _create(driver, configId="internal-api")
+    await _create(driver, configId="default")
+
+    all_keys = (await driver.request("GET", "/api-key/list")).json()["apiKeys"]
+    assert len(all_keys) >= 3
+
+    pub = (
+        await driver.request("GET", "/api-key/list", query="configId=public-api")
+    ).json()["apiKeys"]
+    assert pub and all(k["configId"] == "public-api" for k in pub)
+
+    internal = (
+        await driver.request("GET", "/api-key/list", query="configId=internal-api")
+    ).json()["apiKeys"]
+    assert internal and all(k["configId"] == "internal-api" for k in internal)
+
+
+async def test_multi_verify_applies_correct_config() -> None:
+    driver, _ = await _multi_config_driver()
+    pub = await _create(driver, configId="public-api")
+    r = await driver.request(
+        "POST",
+        "/api-key/verify",
+        json_body={"configId": "public-api", "key": pub["key"]},
+    )
+    body = r.json()
+    assert body["valid"] is True
+    assert body["key"]["configId"] == "public-api"
+    assert body["key"]["rateLimitMax"] == 100
+
+
+async def test_multi_verify_wrong_config_id_is_invalid() -> None:
+    driver, _ = await _multi_config_driver()
+    pub = await _create(driver, configId="public-api")
+    # Verifying a public-api key against internal-api must fail.
+    r = await driver.request(
+        "POST",
+        "/api-key/verify",
+        json_body={"configId": "internal-api", "key": pub["key"]},
+    )
+    assert r.json()["valid"] is False
+
+
+async def test_multi_get_resolves_correct_config() -> None:
+    driver, _ = await _multi_config_driver()
+    internal = await _create(driver, configId="internal-api")
+    r = await driver.request(
+        "GET",
+        "/api-key/get",
+        query=f"id={internal['id']}&configId=internal-api",
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["configId"] == "internal-api"
+    assert r.json()["prefix"] == "int_"
+
+
+async def test_multi_update_preserves_config_id() -> None:
+    driver, _ = await _multi_config_driver()
+    key = await _create(driver, configId="public-api", name="original-name")
+    r = await driver.request(
+        "POST",
+        "/api-key/update",
+        json_body={
+            "keyId": key["id"],
+            "name": "updated-name",
+            "configId": "public-api",
+        },
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["configId"] == "public-api"
+    assert r.json()["name"] == "updated-name"
+
+
+async def test_multi_delete_from_specific_config() -> None:
+    driver, _ = await _multi_config_driver()
+    key = await _create(driver, configId="internal-api")
+    r = await driver.request(
+        "POST",
+        "/api-key/delete",
+        json_body={"keyId": key["id"], "configId": "internal-api"},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["success"] is True
+
+    g = await driver.request(
+        "GET", "/api-key/get", query=f"id={key['id']}&configId=internal-api"
+    )
+    assert g.status >= 400
+
+
+def test_multi_non_unique_config_ids_raises() -> None:
+    with pytest.raises(ValueError, match="configId must be unique"):
+        api_key(
+            [
+                ApiKeyConfigurationOptions(config_id="duplicate"),
+                ApiKeyConfigurationOptions(config_id="duplicate"),
+            ]
+        )
+
+
+def test_multi_missing_config_id_raises() -> None:
+    with pytest.raises(ValueError, match="configId is required"):
+        api_key(
+            [
+                ApiKeyConfigurationOptions(config_id="valid"),
+                ApiKeyConfigurationOptions(),  # missing configId
+            ]
+        )

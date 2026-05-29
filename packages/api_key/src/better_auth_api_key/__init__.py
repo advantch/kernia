@@ -12,6 +12,7 @@ and the starting characters are persisted.
 from better_auth_api_key.plugin import (
     API_KEY_ERROR_CODES,
     API_KEY_TABLE_NAME,
+    ApiKeyConfigurationOptions,
     ApiKeyOptions,
     KeyExpirationOptions,
     PermissionsOptions,
@@ -28,6 +29,7 @@ from better_auth_api_key.plugin import (
 __all__ = [
     "API_KEY_ERROR_CODES",
     "API_KEY_TABLE_NAME",
+    "ApiKeyConfigurationOptions",
     "ApiKeyOptions",
     "KeyExpirationOptions",
     "PermissionsOptions",
