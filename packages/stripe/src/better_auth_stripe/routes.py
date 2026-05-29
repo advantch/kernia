@@ -730,7 +730,19 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             if sub_to_update.get("referenceId") != reference_id:
                 raise _err("SUBSCRIPTION_NOT_FOUND")
 
-        customer_id = await _ensure_user_customer(ctx, opts, metadata=body.metadata)
+        # For organization upgrades the active subscription lives on the org's
+        # Stripe customer, not the acting user's. Resolve that first so the
+        # active-subscription lookup below queries the right customer; fall back
+        # to the user customer (creating one) when the org has none yet.
+        customer_id: str | None = None
+        if customer_type == "organization":
+            customer_id = await _customer_for_reference(
+                ctx, opts, customer_type, reference_id
+            )
+        if not customer_id:
+            customer_id = await _ensure_user_customer(
+                ctx, opts, metadata=body.metadata
+            )
 
         member_count = await _seat_member_count(
             ctx, plan, customer_type=customer_type, reference_id=reference_id
