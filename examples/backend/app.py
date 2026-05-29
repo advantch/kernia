@@ -1,6 +1,6 @@
 """Reference FastAPI app demonstrating better-auth-python end-to-end.
 
-This is what a consumer would write. Boots on port 8000. The vite frontend at
+This is what a consumer would write. Boots on port 5050. The vite frontend at
 `../frontend/` points its `better-auth/client` at this server's `/api/auth/*`.
 
 What's wired up:
@@ -50,9 +50,9 @@ def build_app() -> FastAPI:
         BetterAuthOptions(
             database=memory_adapter(),
             secret=os.environ.get("BETTER_AUTH_SECRET", "dev-only-secret-change-me"),
-            base_url="http://localhost:8000",
+            base_url="http://localhost:5050",
             base_path="/api/auth",
-            trusted_origins=[FRONTEND_ORIGIN, "http://localhost:8000"],
+            trusted_origins=[FRONTEND_ORIGIN, "http://localhost:5050"],
             plugins=[email_and_password(), organization(), open_api()],
             social_providers=social_providers,
             advanced={
@@ -103,4 +103,4 @@ app = build_app()
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=5050, log_level="info")

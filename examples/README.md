@@ -12,7 +12,7 @@ examples/
 │   └── run.sh          # boot helper
 └── frontend/
     ├── package.json
-    ├── vite.config.ts  # /api → :8000 proxy (same-origin cookies)
+    ├── vite.config.ts  # /api → :5050 proxy (same-origin cookies)
     ├── src/
     │   ├── App.tsx     # sign-up / sign-in / org list / org create UI
     │   └── auth-client.ts  # the official `better-auth` JS client
@@ -26,7 +26,7 @@ In one terminal:
 
 ```bash
 cd <repo>
-.venv/bin/python -m uvicorn examples.backend.app:app --port 8000 --reload
+.venv/bin/python -m uvicorn examples.backend.app:app --port 5050 --reload
 ```
 
 In another:
@@ -55,7 +55,7 @@ node scripts/wire-check.mjs
 Expected output:
 
 ```
-=== Wire check against http://localhost:8000/api/auth ===
+=== Wire check against http://localhost:5050/api/auth ===
 ✓ signUp.email
 ✓ getSession (after sign-up)
 ✓ signOut

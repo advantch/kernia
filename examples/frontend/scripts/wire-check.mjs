@@ -47,7 +47,7 @@ const { createAuthClient } = await import("better-auth/client");
 const { organizationClient } = await import("better-auth/client/plugins");
 
 const auth = createAuthClient({
-  baseURL: "http://localhost:8000/api/auth",
+  baseURL: "http://localhost:5050/api/auth",
   plugins: [organizationClient()],
 });
 
@@ -61,7 +61,7 @@ function step(name, ok, detail = "") {
   if (!ok) process.exitCode = 1;
 }
 
-console.log("=== Wire check against http://localhost:8000/api/auth ===");
+console.log("=== Wire check against http://localhost:5050/api/auth ===");
 
 // 1. sign up
 {
