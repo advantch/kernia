@@ -45,7 +45,7 @@ OAUTH_CLIENT_MODEL = ModelDef(
         FieldDef("name", "string", required=False),
         FieldDef("redirectUris", "text"),
         FieldDef("allowedScopes", "text"),
-        FieldDef("requirePKCE", "boolean", default=False),
+        FieldDef("requirePKCE", "boolean", default=True),
         FieldDef("tokenEndpointAuthMethod", "string", default="client_secret_basic"),
         FieldDef("subjectType", "string", required=False),
         FieldDef("createdAt", "date"),
@@ -139,6 +139,39 @@ class OAuthProviderOptions:
                 "pairwiseSecret must be at least 32 characters long for "
                 "adequate HMAC-SHA256 security"
             )
+        # Mirror upstream: every advertised scope must be a supported scope.
+        if self.advertised_scopes_supported is not None:
+            for scope in self.advertised_scopes_supported:
+                if scope not in self.supported_scopes:
+                    raise ValueError(
+                        f"advertisedMetadata.scopes_supported {scope} not found "
+                        f"in scopes"
+                    )
+
+
+# PKCE requirement reasons (mirror upstream `PKCERequirementErrors`).
+PKCE_PUBLIC_CLIENT = "pkce is required for public clients"
+PKCE_OFFLINE_ACCESS = "pkce is required when requesting offline_access scope"
+PKCE_CLIENT_REQUIRE = "pkce is required for this client"
+
+
+def _pkce_required(client: OAuthClient, requested_scopes: Sequence[str]) -> str | None:
+    """Return a non-None reason string when PKCE is mandatory for this request.
+
+    Mirrors upstream `isPKCERequired`:
+      * public clients (token_endpoint_auth_method == "none") always require PKCE,
+      * any request that asks for `offline_access` requires PKCE,
+      * confidential clients require PKCE unless `require_pkce` was explicitly
+        disabled (upstream default is `requirePKCE ?? true`).
+    """
+    is_public = client.token_endpoint_auth_method == "none"
+    if is_public:
+        return PKCE_PUBLIC_CLIENT
+    if "offline_access" in requested_scopes:
+        return PKCE_OFFLINE_ACCESS
+    if client.require_pkce:
+        return PKCE_CLIENT_REQUIRE
+    return None
 
 
 def _oauth_error(
@@ -226,7 +259,10 @@ class OAuthClient:
             name=row.get("name"),
             redirect_uris=tuple((row.get("redirectUris") or "").split(",")),
             allowed_scopes=tuple((row.get("allowedScopes") or "").split(",")),
-            require_pkce=bool(row.get("requirePKCE")),
+            # Upstream default is `requirePKCE ?? true`: absent means required.
+            require_pkce=(
+                True if row.get("requirePKCE") is None else bool(row.get("requirePKCE"))
+            ),
             token_endpoint_auth_method=row.get("tokenEndpointAuthMethod")
             or "client_secret_basic",
             subject_type=row.get("subjectType") or None,
@@ -240,9 +276,11 @@ class RegisterBody(BaseModel):
     name: str
     redirect_uris: list[str]
     allowed_scopes: list[str] = ["openid", "profile", "email"]
-    require_pkce: bool = False
+    require_pkce: bool = True
     token_endpoint_auth_method: str = "client_secret_basic"
     subject_type: str | None = None
+    response_types: list[str] | None = None
+    type: str | None = None
 
 
 class TokenBody(BaseModel):
@@ -352,9 +390,19 @@ async def _authorize(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(400, "INVALID_REQUEST", message="redirect_uri not registered")
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED", message="login required")
-    if client.require_pkce and not code_challenge:
-        raise APIError(400, "INVALID_REQUEST", message="PKCE required")
     requested_scopes = [s for s in scope.split() if s]
+    # PKCE gate (mirrors upstream `isPKCERequired`): public clients, the
+    # offline_access scope, and confidential clients with require_pkce all
+    # mandate a code_challenge. The error_description carries the precise reason.
+    pkce_reason = _pkce_required(client, requested_scopes)
+    if pkce_reason and not code_challenge:
+        raise _oauth_error(400, "invalid_request", pkce_reason)
+    if code_challenge_method and code_challenge_method != "S256":
+        raise _oauth_error(
+            400,
+            "invalid_request",
+            "invalid code_challenge method, only S256 is supported",
+        )
     disallowed = set(requested_scopes) - set(client.allowed_scopes) - set(opts.supported_scopes)
     if disallowed:
         raise APIError(400, "INVALID_REQUEST", message=f"scope not allowed: {sorted(disallowed)}")
@@ -394,7 +442,10 @@ async def _authorize(ctx: EndpointContext) -> dict[str, object]:
             },
         )
 
-    params: dict[str, str] = {"code": code}
+    # RFC 9207: advertise the issuer in the authorization response so the
+    # client can detect mix-up attacks. The metadata sets
+    # `authorization_response_iss_parameter_supported: true`, so we must emit it.
+    params: dict[str, str] = {"code": code, "iss": opts.issuer}
     if state:
         params["state"] = state
     redirect = f"{redirect_uri}?{urlencode(params)}"
@@ -445,20 +496,41 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             raise APIError(400, "INVALID_REQUEST", message="client mismatch")
         if record.get("redirectUri") != body.redirect_uri:
             raise APIError(400, "INVALID_REQUEST", message="redirect_uri mismatch")
+        scope = record.get("scope") or ""
+        requested_scopes = [s for s in scope.split() if s]
         challenge = record.get("codeChallenge")
-        if challenge:
-            if not body.code_verifier:
-                raise APIError(400, "INVALID_REQUEST", message="code_verifier required")
+        pkce_used_in_auth = bool(challenge)
+        pkce_used_in_token = bool(body.code_verifier)
+        # Mirror upstream consistency checks (token.ts):
+        #   * PKCE required for this request but no verifier -> invalid_request
+        #   * verifier without a prior challenge -> invalid_request
+        #   * challenge without a verifier -> invalid_request
+        #   * mismatched verifier -> "code verification failed"
+        pkce_reason = _pkce_required(client, requested_scopes)
+        if pkce_reason and not pkce_used_in_token:
+            raise _oauth_error(401, "invalid_request", PKCE_CLIENT_REQUIRE)
+        if pkce_used_in_auth and not pkce_used_in_token:
+            raise _oauth_error(
+                401,
+                "invalid_request",
+                "code_verifier required because PKCE was used in authorization",
+            )
+        if pkce_used_in_token and not pkce_used_in_auth:
+            raise _oauth_error(
+                401,
+                "invalid_request",
+                "code_verifier provided but PKCE was not used in authorization",
+            )
+        if pkce_used_in_auth and pkce_used_in_token:
             method = record.get("codeChallengeMethod") or "S256"
             computed = (
-                pkce_challenge(body.code_verifier) if method == "S256" else body.code_verifier
+                pkce_challenge(body.code_verifier)
+                if method == "S256"
+                else body.code_verifier
             )
             if computed != challenge:
-                raise APIError(400, "INVALID_REQUEST", message="invalid_grant: PKCE")
-        elif client.require_pkce or (is_public and opts.require_pkce_for_public):
-            raise APIError(400, "INVALID_REQUEST", message="PKCE required")
+                raise _oauth_error(401, "invalid_request", "code verification failed")
 
-        scope = record.get("scope") or ""
         user_id = record["userId"]
         return await _issue_tokens(
             ctx,
@@ -490,6 +562,19 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             raise APIError(400, "INVALID_REQUEST", message="invalid_grant")
         if int(row.get("expiresAt", 0)) < now:
             raise APIError(400, "INVALID_REQUEST", message="refresh token expired")
+        # Scope handling: a `scope` param may narrow (subset of) the original
+        # grant, but may never widen it (RFC 6749 §6).
+        granted_scope = row.get("scope") or ""
+        granted_scopes = [s for s in granted_scope.split() if s]
+        if body.scope is not None:
+            requested_scopes = [s for s in body.scope.split() if s]
+            if set(requested_scopes) - set(granted_scopes):
+                raise _oauth_error(
+                    400, "invalid_scope", "requested scope exceeds original grant"
+                )
+            new_scope = " ".join(requested_scopes)
+        else:
+            new_scope = granted_scope
         # Rotate: mark the presented token revoked (kept for replay detection),
         # then mint a fresh one in the same family.
         await ctx.auth.adapter.update(
@@ -502,7 +587,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             opts,
             client=client,
             user_id=row["userId"],
-            scope=row.get("scope") or "",
+            scope=new_scope,
         )
 
     if grant == "client_credentials":
@@ -616,11 +701,7 @@ async def _issue_tokens(
         if nonce:
             payload["nonce"] = nonce
         if user:
-            if "email" in scopes and user.get("email"):
-                payload["email"] = user["email"]
-                payload["email_verified"] = bool(user.get("emailVerified", False))
-            if "profile" in scopes and user.get("name"):
-                payload["name"] = user["name"]
+            payload.update(_user_normal_claims(user, scopes))
         id_token, _kid = await issue_jwt(ctx.auth, payload=payload, ttl=opts.access_token_ttl)
         out["id_token"] = id_token
     return out
@@ -629,16 +710,22 @@ async def _issue_tokens(
 async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
     opts = _options(ctx.auth)
     auth_header = ctx.request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise APIError(401, "UNAUTHORIZED")
-    token = auth_header[len("Bearer "):]
+    # Upstream accepts either "Bearer <token>" or a bare token, and reports a
+    # missing/empty value as invalid_request / "authorization header not found".
+    token = auth_header[len("Bearer "):] if auth_header.startswith("Bearer ") else auth_header
+    if not token:
+        raise _oauth_error(401, "invalid_request", "authorization header not found")
     try:
         claims = await verify_local_jwt(ctx.auth, token, issuer=opts.issuer)
     except ValueError as e:
         raise APIError(401, "UNAUTHORIZED", message=str(e)) from None
+    scopes = set(str(claims.get("scope", "")).split())
+    # OIDC: userinfo requires the openid scope (invalid_scope, 400).
+    if "openid" not in scopes:
+        raise _oauth_error(400, "invalid_scope", "Missing required scope")
     sub = claims.get("sub")
     if not isinstance(sub, str):
-        raise APIError(401, "UNAUTHORIZED")
+        raise _oauth_error(400, "invalid_request", "user not found")
     if sub.startswith("client:"):
         return {"sub": sub}
     # The access token `sub` is the real user id (for lookup). The response
@@ -655,15 +742,33 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
         client = await _load_client(ctx.auth, azp)
         response_sub = _resolve_sub(sub, client, opts)
     out: dict[str, object] = {"sub": response_sub}
-    scopes = set(str(claims.get("scope", "")).split())
-    if "email" in scopes:
-        out["email"] = user.get("email")
-        out["email_verified"] = bool(user.get("emailVerified"))
+    out.update(_user_normal_claims(user, scopes))
+    return out
+
+
+def _user_normal_claims(
+    user: Mapping[str, Any], scopes: set[str]
+) -> dict[str, object]:
+    """Build profile/email claims (mirrors upstream `userNormalClaims`).
+
+    Splits `name` into `given_name`/`family_name` when more than one part.
+    @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
+    """
+    out: dict[str, object] = {}
     if "profile" in scopes:
-        if user.get("name"):
-            out["name"] = user["name"]
+        name = (user.get("name") or "").strip()
+        if name:
+            out["name"] = name
+            parts = [p for p in name.split(" ") if p]
+            if len(parts) > 1:
+                out["given_name"] = " ".join(parts[:-1])
+                out["family_name"] = parts[-1]
         if user.get("image"):
             out["picture"] = user["image"]
+    if "email" in scopes:
+        if user.get("email"):
+            out["email"] = user["email"]
+        out["email_verified"] = bool(user.get("emailVerified", False))
     return out
 
 
@@ -685,6 +790,14 @@ async def _revoke(ctx: EndpointContext) -> dict[str, object]:
             )
         ):
             raise _oauth_error(401, "invalid_client", "invalid client credentials")
+    hint = body.token_type_hint
+    # Classify the presented token so a token_type_hint mismatch is rejected
+    # (mirrors upstream revoke: a hint that contradicts the token -> 400).
+    is_jwt = await _is_access_token(ctx, opts, body.token)
+    if hint == "access_token" and not is_jwt:
+        raise _oauth_error(400, "unsupported_token_type", "token type mismatch")
+    if hint == "refresh_token" and is_jwt:
+        raise _oauth_error(400, "unsupported_token_type", "token type mismatch")
     # Only revoke tokens that belong to the authenticated client (RFC 7009 §2.1).
     await ctx.auth.adapter.delete_many(
         model="oauthRefreshToken",
@@ -695,6 +808,17 @@ async def _revoke(ctx: EndpointContext) -> dict[str, object]:
     )
     # RFC 7009: respond 200 regardless of whether the token existed.
     return {}
+
+
+async def _is_access_token(
+    ctx: EndpointContext, opts: OAuthProviderOptions, token: str
+) -> bool:
+    """True when `token` verifies as a JWT access token issued by this server."""
+    try:
+        await verify_local_jwt(ctx.auth, token, issuer=opts.issuer)
+        return True
+    except ValueError:
+        return False
 
 
 async def _introspect(ctx: EndpointContext) -> dict[str, object]:
@@ -712,43 +836,59 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
         )
     ):
         raise _oauth_error(401, "invalid_client", "invalid client credentials")
-    # Try as JWT access token
-    try:
-        claims = await verify_local_jwt(ctx.auth, body.token, issuer=opts.issuer)
-        token_sub = claims.get("sub")
-        # Resolve the pairwise sub at the presentation layer (mirrors upstream
-        # `resolveIntrospectionSub`): the token carries the real user id, but
-        # the response presents the sector-scoped identifier for the client.
-        if isinstance(token_sub, str) and not token_sub.startswith("client:"):
-            token_sub = _resolve_sub(token_sub, client, opts)
-        return {
-            "active": True,
-            "sub": token_sub,
-            "aud": claims.get("aud"),
-            "iss": claims.get("iss"),
-            "exp": claims.get("exp"),
-            "iat": claims.get("iat"),
-            "scope": claims.get("scope"),
-            "token_type": "Bearer",
-        }
-    except ValueError:
-        pass
-    # Try as refresh token (stored hashed → hash the presented value).
-    row = await ctx.auth.adapter.find_one(
-        model="oauthRefreshToken",
-        where=(
-            Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
-        ),
+    hint = body.token_type_hint
+    # Try as JWT access token (skipped when the caller pins token_type_hint to
+    # refresh_token, mirroring upstream's hint-aware lookup).
+    if hint != "refresh_token":
+        try:
+            claims = await verify_local_jwt(ctx.auth, body.token, issuer=opts.issuer)
+            token_sub = claims.get("sub")
+            # Resolve the pairwise sub at the presentation layer (mirrors upstream
+            # `resolveIntrospectionSub`): the token carries the real user id, but
+            # the response presents the sector-scoped identifier for the client.
+            if isinstance(token_sub, str) and not token_sub.startswith("client:"):
+                token_sub = _resolve_sub(token_sub, client, opts)
+            out: dict[str, object] = {
+                "active": True,
+                "sub": token_sub,
+                "client_id": claims.get("azp") or claims.get("aud"),
+                "aud": claims.get("aud"),
+                "iss": claims.get("iss"),
+                "exp": claims.get("exp"),
+                "iat": claims.get("iat"),
+                "scope": claims.get("scope"),
+                "token_type": "Bearer",
+            }
+            return out
+        except ValueError:
+            pass
+    # Refresh-token lookup is skipped when the caller pinned the hint to
+    # access_token (a refresh token presented as an access token is inactive),
+    # or when a JWT access token was presented under a refresh_token hint.
+    refresh_token_jwt_mismatch = hint == "refresh_token" and await _is_access_token(
+        ctx, opts, body.token
     )
-    if row and not row.get("revoked") and int(row.get("expiresAt", 0)) > int(time.time()):
-        return {
-            "active": True,
-            "sub": row.get("userId"),
-            "client_id": row.get("clientId"),
-            "scope": row.get("scope"),
-            "exp": row.get("expiresAt"),
-            "token_type": "refresh_token",
-        }
+    if hint != "access_token" and not refresh_token_jwt_mismatch:
+        # Try as refresh token (stored hashed → hash the presented value).
+        row = await ctx.auth.adapter.find_one(
+            model="oauthRefreshToken",
+            where=(
+                Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
+            ),
+        )
+        if (
+            row
+            and not row.get("revoked")
+            and int(row.get("expiresAt", 0)) > int(time.time())
+        ):
+            return {
+                "active": True,
+                "sub": row.get("userId"),
+                "client_id": row.get("clientId"),
+                "scope": row.get("scope"),
+                "exp": row.get("expiresAt"),
+                "token_type": "refresh_token",
+            }
     return {"active": False}
 
 
@@ -846,6 +986,28 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(404, "NOT_FOUND")
     body: RegisterBody = ctx.body
     _validate_subject_type(body.subject_type, body.redirect_uris, opts)
+    # RFC 7591: only the authorization_code response type ("code") is supported.
+    if body.response_types is not None and body.response_types != ["code"]:
+        raise _oauth_error(
+            400,
+            "invalid_client_metadata",
+            "only the 'code' response_type is supported",
+        )
+    # Public/confidential consistency: a public client (auth method "none") may
+    # not declare a confidential client type, and vice versa.
+    is_public = body.token_endpoint_auth_method == "none"
+    confidential_types = {"web"}
+    public_types = {"native", "user-agent-based"}
+    if is_public and body.type in confidential_types:
+        raise _oauth_error(
+            400, "invalid_client_metadata", "public client cannot be type 'web'"
+        )
+    if not is_public and body.type in public_types:
+        raise _oauth_error(
+            400,
+            "invalid_client_metadata",
+            f"confidential client cannot be type '{body.type}'",
+        )
     client_id = secrets.token_urlsafe(16)
     client_secret = (
         "" if body.token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
@@ -1007,7 +1169,7 @@ async def create_client(
     name: str,
     redirect_uris: Sequence[str],
     allowed_scopes: Sequence[str] = ("openid", "profile", "email"),
-    require_pkce: bool = False,
+    require_pkce: bool = True,
     token_endpoint_auth_method: str = "client_secret_basic",
     subject_type: str | None = None,
 ) -> OAuthClient:

@@ -83,11 +83,13 @@ async def test_full_authorization_code_flow(setup) -> None:
     _, driver, client = setup
     await _signup_signin(driver)
 
-    # 1. Hit authorize with the session cookie set
+    # 1. Hit authorize with the session cookie set (PKCE: offline_access requires it)
+    verifier = pkce_verifier()
+    challenge = pkce_challenge(verifier)
     query = (
         f"response_type=code&client_id={client.client_id}"
         f"&redirect_uri=https://client.test/cb&scope=openid%20email%20profile%20offline_access"
-        f"&state=xyz"
+        f"&state=xyz&code_challenge={challenge}&code_challenge_method=S256"
     )
     r = await driver.request("GET", "/oauth2/authorize", query=query)
     assert r.status == 200, r.json()
@@ -104,6 +106,7 @@ async def test_full_authorization_code_flow(setup) -> None:
             "redirect_uri": "https://client.test/cb",
             "client_id": client.client_id,
             "client_secret": client.client_secret,
+            "code_verifier": verifier,
         },
     )
     assert r.status == 200, r.json()
@@ -223,7 +226,7 @@ async def test_pkce_round_trip(setup) -> None:
     assert r.status == 200
     code = r.json()["code"]
 
-    # Wrong verifier → 400
+    # Wrong verifier → 401 (mirrors upstream "code verification failed")
     r = await driver.request(
         "POST",
         "/oauth2/token",
@@ -236,7 +239,7 @@ async def test_pkce_round_trip(setup) -> None:
             "code_verifier": "wrong-verifier",
         },
     )
-    assert r.status == 400
+    assert r.status == 401
 
 
 async def test_dynamic_registration(setup) -> None:
@@ -311,9 +314,12 @@ async def test_refresh_token_reuse_invalidates_family(setup) -> None:
     # also revoked.
     _, driver, client = setup
     await _signup_signin(driver)
+    verifier = pkce_verifier()
+    challenge = pkce_challenge(verifier)
     query = (
         f"response_type=code&client_id={client.client_id}"
         f"&redirect_uri=https://client.test/cb&scope=openid%20offline_access"
+        f"&code_challenge={challenge}&code_challenge_method=S256"
     )
     r = await driver.request("GET", "/oauth2/authorize", query=query)
     code = r.json()["code"]
@@ -326,6 +332,7 @@ async def test_refresh_token_reuse_invalidates_family(setup) -> None:
             "redirect_uri": "https://client.test/cb",
             "client_id": client.client_id,
             "client_secret": client.client_secret,
+            "code_verifier": verifier,
         },
     )
     original_refresh = r.json()["refresh_token"]
@@ -497,25 +504,28 @@ async def pairwise_setup():
 
 async def _get_tokens(driver: ASGIDriver, client) -> dict:
     redirect_uri = client.redirect_uris[0]
+    verifier = pkce_verifier()
+    challenge = pkce_challenge(verifier)
     query = (
         f"response_type=code&client_id={client.client_id}"
         f"&redirect_uri={redirect_uri}"
         f"&scope=openid%20profile%20email%20offline_access"
+        f"&code_challenge={challenge}&code_challenge_method=S256"
     )
     r = await driver.request("GET", "/oauth2/authorize", query=query)
     assert r.status == 200, r.json()
     code = r.json()["code"]
-    r = await driver.request(
-        "POST",
-        "/oauth2/token",
-        json_body={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client.client_id,
-            "client_secret": client.client_secret,
-        },
-    )
+    body = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client.client_id,
+        "client_secret": client.client_secret,
+        "code_verifier": verifier,
+    }
+    if client.client_secret is None:
+        body.pop("client_secret")
+    r = await driver.request("POST", "/oauth2/token", json_body=body)
     assert r.status == 200, r.json()
     return r.json()
 
