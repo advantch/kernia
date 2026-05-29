@@ -13,7 +13,6 @@ import click
 
 from better_auth_cli.commands.secret import generate_secret
 
-
 ADAPTER_IMPORTS: dict[str, tuple[str, str]] = {
     "memory": (
         "from better_auth_memory_adapter import memory_adapter",

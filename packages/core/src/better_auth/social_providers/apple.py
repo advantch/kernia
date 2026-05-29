@@ -24,7 +24,6 @@ from urllib.parse import urlencode
 
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
 
-
 AUTHORIZATION_URL = "https://appleid.apple.com/auth/authorize"
 TOKEN_URL = "https://appleid.apple.com/auth/token"
 JWKS_URL = "https://appleid.apple.com/auth/keys"

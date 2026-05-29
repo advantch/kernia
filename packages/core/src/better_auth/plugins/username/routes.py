@@ -1,11 +1,23 @@
 """Username plugin endpoint handlers.
 
 Mirrors `reference/packages/better-auth/src/plugins/username/index.ts`.
+
+Two architectural notes vs. the JS reference:
+
+  * Upstream has no `/sign-up/username` endpoint; usernames are attached to the
+    shared `/sign-up/email` body and persisted via `databaseHooks`. The Python
+    `/sign-up/email` body is a fixed dataclass that drops unknown fields, so this
+    port keeps a dedicated `/sign-up/username` endpoint instead. The validation
+    rules, normalization, and error codes match upstream.
+  * Per-instance options (min/max length, validators, normalizers) are stashed in
+    `ctx.auth.plugin_state["username"]` by the plugin `init` so multiple `init()`
+    instances can carry different config.
 """
 
 from __future__ import annotations
 
-import time
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from better_auth.api.endpoint import create_auth_endpoint
@@ -15,6 +27,56 @@ from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
+
+_DEFAULT_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
+
+
+@dataclass(frozen=True, slots=True)
+class UsernameOptions:
+    """Resolved username options. Mirrors upstream `UsernameOptions`."""
+
+    min_username_length: int = 3
+    max_username_length: int = 30
+    username_validator: Callable[[str], bool] | None = None
+    display_username_validator: Callable[[str], bool] | None = None
+    username_normalization: Callable[[str], str] | bool | None = None
+    display_username_normalization: Callable[[str], str] | bool | None = None
+    username_validation_order: str = "pre-normalization"
+    display_username_validation_order: str = "pre-normalization"
+
+    def normalize(self, username: str) -> str:
+        if self.username_normalization is False:
+            return username
+        if callable(self.username_normalization):
+            return self.username_normalization(username)
+        return username.lower()
+
+    def normalize_display(self, display_username: str) -> str:
+        if callable(self.display_username_normalization):
+            return self.display_username_normalization(display_username)
+        return display_username
+
+
+_DEFAULT = UsernameOptions()
+
+
+def _opts(ctx: EndpointContext) -> UsernameOptions:
+    opts = ctx.auth.plugin_state.get("username")
+    return opts if isinstance(opts, UsernameOptions) else _DEFAULT
+
+
+def _default_validator(username: str) -> bool:
+    return bool(_DEFAULT_RE.match(username))
+
+
+def _validate(opts: UsernameOptions, username: str, *, status: int) -> None:
+    if len(username) < opts.min_username_length:
+        raise APIError(status, "USERNAME_TOO_SHORT")
+    if len(username) > opts.max_username_length:
+        raise APIError(status, "USERNAME_TOO_LONG")
+    validator = opts.username_validator or _default_validator
+    if not validator(username):
+        raise APIError(status, "INVALID_USERNAME")
 
 
 # ----- request body shapes -----
@@ -34,31 +96,38 @@ class SignInUsernameBody:
     username: str
     password: str
     remember_me: bool = True
+    callback_url: str | None = None
 
 
-def _normalize(username: str) -> str:
-    return username.lower()
+@dataclass(frozen=True, slots=True)
+class IsUsernameAvailableBody:
+    username: str
 
 
-def _validate(username: str) -> None:
-    if len(username) < 3:
-        raise APIError(422, "USERNAME_TOO_SHORT")
-    if len(username) > 30:
-        raise APIError(422, "USERNAME_TOO_LONG")
-    # default validator: alphanumeric + underscore + dot
-    for c in username:
-        if not (c.isalnum() or c in "_."):
-            raise APIError(422, "INVALID_USERNAME")
+# ----- handlers -----
 
 
 async def _sign_up_username(ctx: EndpointContext) -> dict[str, object]:
     body: SignUpUsernameBody = ctx.body
-    _validate(body.username)
+    opts = _opts(ctx)
+
+    normalized = opts.normalize(body.username)
+    to_validate = (
+        normalized
+        if opts.username_validation_order == "post-normalization"
+        else body.username
+    )
+    _validate(opts, to_validate, status=422)
 
     if len(body.password) < ctx.auth.options.email_and_password.min_password_length:
         raise APIError(400, "PASSWORD_TOO_SHORT")
 
-    normalized = _normalize(body.username)
+    display = opts.normalize_display(body.display_username or body.username)
+
+    if opts.display_username_validator is not None:
+        if not opts.display_username_validator(body.display_username or body.username):
+            raise APIError(400, "INVALID_DISPLAY_USERNAME")
+
     existing = await ctx.auth.adapter.find_one(
         model="user",
         where=(Where(field="username", value=normalized),),
@@ -74,6 +143,8 @@ async def _sign_up_username(ctx: EndpointContext) -> dict[str, object]:
         if existing_email is not None:
             raise APIError(409, "EMAIL_ALREADY_IN_USE")
 
+    import time
+
     now = int(time.time())
     email = body.email or f"{normalized}@username.local"
     user = await ctx.auth.adapter.create(
@@ -82,7 +153,7 @@ async def _sign_up_username(ctx: EndpointContext) -> dict[str, object]:
             "email": email,
             "name": body.name,
             "username": normalized,
-            "displayUsername": body.display_username or body.username,
+            "displayUsername": display,
             "emailVerified": False,
             "createdAt": now,
             "updatedAt": now,
@@ -117,12 +188,18 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
     body: SignInUsernameBody = ctx.body
     if not body.username or not body.password:
         raise APIError(401, "INVALID_USERNAME_OR_PASSWORD")
-    _validate(body.username)
-    normalized = _normalize(body.username)
+    opts = _opts(ctx)
+
+    username = (
+        opts.normalize(body.username)
+        if opts.username_validation_order == "pre-normalization"
+        else body.username
+    )
+    _validate(opts, username, status=422)
 
     user = await ctx.auth.adapter.find_one(
         model="user",
-        where=(Where(field="username", value=normalized),),
+        where=(Where(field="username", value=opts.normalize(username)),),
     )
     if not user:
         # Hash to mitigate timing side channel.
@@ -141,6 +218,12 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
     if not verify_password(body.password, account["password"]):
         raise APIError(401, "INVALID_USERNAME_OR_PASSWORD")
 
+    if (
+        ctx.auth.options.email_and_password.require_email_verification
+        and not user.get("emailVerified")
+    ):
+        raise APIError(403, "EMAIL_NOT_VERIFIED")
+
     session, cookies = await create_session(
         ctx.auth,
         user_id=user["id"],
@@ -149,7 +232,12 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
         remember_me=body.remember_me,
     )
     ctx.set_cookies.extend(cookies)
+    if body.callback_url:
+        ctx.response_headers["Location"] = body.callback_url
     return {
+        "redirect": bool(body.callback_url),
+        "token": session.token,
+        "url": body.callback_url,
         "user": {
             "id": user["id"],
             "username": user.get("username"),
@@ -158,6 +246,21 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
         },
         "session": {"id": session.id, "expiresAt": session.expires_at},
     }
+
+
+async def _is_username_available(ctx: EndpointContext) -> dict[str, object]:
+    body: IsUsernameAvailableBody = ctx.body
+    opts = _opts(ctx)
+    username = body.username
+    if not username:
+        raise APIError(422, "INVALID_USERNAME")
+    _validate(opts, username, status=422)
+
+    user = await ctx.auth.adapter.find_one(
+        model="user",
+        where=(Where(field="username", value=opts.normalize(username)),),
+    )
+    return {"available": user is None}
 
 
 SIGN_UP_USERNAME = create_auth_endpoint(
@@ -172,5 +275,15 @@ SIGN_IN_USERNAME = create_auth_endpoint(
     _sign_in_username,
 )
 
+IS_USERNAME_AVAILABLE = create_auth_endpoint(
+    "/is-username-available",
+    EndpointOptions(method="POST", body=IsUsernameAvailableBody),
+    _is_username_available,
+)
 
-ALL: tuple[AuthEndpoint, ...] = (SIGN_UP_USERNAME, SIGN_IN_USERNAME)
+
+ALL: tuple[AuthEndpoint, ...] = (
+    SIGN_UP_USERNAME,
+    SIGN_IN_USERNAME,
+    IS_USERNAME_AVAILABLE,
+)

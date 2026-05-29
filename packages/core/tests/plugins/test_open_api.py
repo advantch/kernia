@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
 from better_auth.plugins.open_api import build_openapi_document, open_api, scalar_html

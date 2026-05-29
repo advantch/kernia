@@ -19,9 +19,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from better_auth.oauth2 import exchange_code, fetch_userinfo, pkce_challenge
+from better_auth.oauth2 import exchange_code, pkce_challenge
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
-
 
 ProfileMapper = Callable[[Mapping[str, Any]], OAuthUserProfile]
 

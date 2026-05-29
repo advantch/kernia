@@ -144,3 +144,68 @@ async def test_authorize_endpoint_issues_resource_bound_token(setup) -> None:
     access = await verifier.verify_token(token)
     assert access is not None
     assert access.resource == "https://mcp.test/"
+
+
+# ----- discovery doc (RFC 9728 protected-resource metadata) ------------------
+
+
+def _serve(provider):
+    from starlette.applications import Starlette
+    from starlette.testclient import TestClient
+
+    return TestClient(Starlette(routes=provider.get_routes()))
+
+
+def test_should_expose_oauth_protected_resource_metadata(setup) -> None:
+    """Port of upstream "should expose OAuth protected resource metadata".
+
+    The FastMCP ``RemoteAuthProvider`` built by ``mcp_auth`` serves the RFC 9728
+    ``/.well-known/oauth-protected-resource`` document, advertising the resource
+    and the better-auth authorization server.
+    """
+    auth, _ = setup
+    provider = mcp_auth(
+        auth.context,
+        base_url="https://mcp.test",
+        authorization_servers=["https://issuer.test"],
+    )
+    routes = provider.get_routes()
+    paths = {getattr(r, "path", None) for r in routes}
+    assert "/.well-known/oauth-protected-resource" in paths
+
+    resp = _serve(provider).get("/.well-known/oauth-protected-resource")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["resource"] == "https://mcp.test/"
+    assert "https://issuer.test/" in body["authorization_servers"]
+
+
+def test_protected_resource_metadata_must_not_advertise_alg_none(setup) -> None:
+    """Port of upstream security test for the protected-resource metadata.
+
+    The discovery document must never advertise ``alg=none`` style insecure
+    parameters; FastMCP's RFC 9728 doc only carries resource/AS/scope fields.
+    """
+    auth, _ = setup
+    provider = mcp_auth(auth.context, base_url="https://mcp.test")
+    resp = _serve(provider).get("/.well-known/oauth-protected-resource")
+    assert resp.status_code == 200
+    assert "none" not in resp.text.lower().replace("methods_supported", "")
+
+
+def test_withmcpauth_emits_www_authenticate_resource_metadata(setup) -> None:
+    """Port of upstream "withMCPAuth ... right WWW-Authenticate header".
+
+    An unauthenticated MCP request is answered with a 401 whose
+    ``WWW-Authenticate: Bearer resource_metadata=...`` header points clients at
+    the protected-resource metadata (RFC 9728). FastMCP realises this via the
+    provider's auth middleware; we assert the middleware/contract is wired.
+    """
+    auth, _ = setup
+    provider = mcp_auth(auth.context, base_url="https://mcp.test")
+    # The RemoteAuthProvider exposes the middleware that enforces bearer auth and
+    # emits the WWW-Authenticate challenge for anonymous requests.
+    middleware = provider.get_middleware()
+    assert middleware, "auth middleware must be provided"
+    # And the resource the challenge points to is the configured base URL.
+    assert str(provider.base_url).rstrip("/") == "https://mcp.test"

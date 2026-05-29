@@ -15,6 +15,16 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
+from better_auth.db.schema import CORE_MODELS
+from better_auth.types.adapter import (
+    CustomAdapter,
+    FieldDef,
+    JoinConfig,
+    ModelDef,
+    Record,
+    SortBy,
+    Where,
+)
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -35,17 +45,6 @@ from sqlalchemy import insert as sa_insert
 from sqlalchemy import select as sa_select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
-
-from better_auth.db.schema import CORE_MODELS
-from better_auth.types.adapter import (
-    CustomAdapter,
-    FieldDef,
-    JoinConfig,
-    ModelDef,
-    Record,
-    SortBy,
-    Where,
-)
 
 
 def _sa_type(f: FieldDef) -> Any:

@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, Union, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Where clause — mirrors `CleanedWhere` in adapter.ts
@@ -96,7 +96,7 @@ OnDeleteAction = Literal[
 ]
 
 # A default may be a static primitive or a zero-arg factory (called at create time).
-DefaultValue = Union[Any, Callable[[], Any]]
+DefaultValue = Any | Callable[[], Any]
 
 
 @dataclass(frozen=True, slots=True)

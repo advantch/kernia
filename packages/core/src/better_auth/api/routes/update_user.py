@@ -14,7 +14,7 @@ import time
 from pydantic import BaseModel
 
 from better_auth.api.endpoint import create_auth_endpoint
-from better_auth.crypto import hash_password, needs_rehash, verify_password
+from better_auth.crypto import hash_password, verify_password
 from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext

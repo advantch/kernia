@@ -19,7 +19,7 @@ import secrets
 import time
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.error import APIError
@@ -33,7 +33,6 @@ from better_auth.plugins.organization.access_control import (
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
-
 
 # ---------------------------------------------------------------------------
 # Pydantic bodies

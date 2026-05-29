@@ -11,8 +11,8 @@ import base64
 import json
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
 from better_auth.plugins.jwt import JwtOptions, jwt

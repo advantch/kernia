@@ -32,9 +32,8 @@ def _ensure_django() -> None:
 
 _ensure_django()
 
-from django.test import RequestFactory  # noqa: E402
-
 from better_auth_django.views import django_request_to_scope  # noqa: E402
+from django.test import RequestFactory  # noqa: E402
 
 
 def test_translator_basic_get() -> None:

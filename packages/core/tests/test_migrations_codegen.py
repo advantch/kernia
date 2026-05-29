@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.db.migrations import emit_migration, resolve_full_schema
 from better_auth.db.schema import CORE_MODELS
 from better_auth.types.adapter import FieldDef, ModelDef

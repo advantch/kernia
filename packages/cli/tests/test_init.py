@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from click.testing import CliRunner
-
 from better_auth_cli.commands.init_cmd import init
+from click.testing import CliRunner
 
 
 def test_init_writes_files(tmp_path: Path) -> None:

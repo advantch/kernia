@@ -14,7 +14,6 @@ import secrets
 import time
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
-from typing import Any
 
 from better_auth.types.adapter import (
     CustomAdapter,

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from click.testing import CliRunner
-
 from better_auth_cli.commands.secret import secret
+from click.testing import CliRunner
 
 
 def test_secret_prints_env_hint() -> None:

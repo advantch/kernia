@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins.siwe import siwe
 from better_auth.types.adapter import Where
@@ -30,8 +29,6 @@ def _make_resolver(table: dict[str, str | None]):
 
 async def _signed_in(driver: ASGIDriver, *, address: str, ens: bool = False) -> dict:
     """Drive the SIWE flow through the public endpoints with a real signature."""
-    from eth_account import Account
-    from eth_account.messages import encode_defunct
 
     # 1. Nonce
     r = await driver.request("GET", "/siwe/nonce", query=f"address={address}")

@@ -12,7 +12,6 @@ from typing import Any
 from urllib.parse import urlencode
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins.magic_link import magic_link
 from better_auth.types.init_options import BetterAuthOptions
@@ -49,6 +48,19 @@ def _build_driver(adapter: Any, smtp: MockSMTP, *, disable_sign_up: bool = False
                 },
                 "disable_csrf_check": True,
             },
+        )
+    )
+    return ASGIDriver(app=auth.router.mount()), auth
+
+
+def _build_with(adapter: Any, magic_opts: dict[str, Any]):
+    auth = init(
+        BetterAuthOptions(
+            database=adapter,
+            secret="test-secret",
+            base_url="http://localhost:3000",
+            plugins=[magic_link()],
+            advanced={"magic-link": magic_opts, "disable_csrf_check": True},
         )
     )
     return ASGIDriver(app=auth.router.mount()), auth
@@ -126,3 +138,156 @@ async def test_magic_link_sign_up_disabled(adapter_factory) -> None:
     )
     assert r.status == 403
     assert r.json()["code"] == "MAGIC_LINK_SIGN_UP_DISABLED"
+
+
+# ----- ported from reference magic-link.test.ts -----
+
+
+def _captured() -> tuple[list[dict[str, Any]], Any]:
+    captured: list[dict[str, Any]] = []
+
+    async def send_magic_link(data: dict[str, Any], ctx: Any = None) -> None:
+        # Upstream single-dict signature: (data, ctx).
+        captured.append(data)
+
+    return captured, send_magic_link
+
+
+async def test_send_magic_link_url_and_no_metadata() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
+    r = await driver.request(
+        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
+    )
+    assert r.status == 200, r.json()
+    assert len(captured) == 1
+    assert captured[0]["email"] == "a@b.com"
+    assert "http://localhost:3000/magic-link/verify" in captured[0]["url"]
+    assert "metadata" not in captured[0]
+
+
+async def test_metadata_forwarded() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
+    r = await driver.request(
+        "POST",
+        "/sign-in/magic-link",
+        json_body={"email": "a@b.com", "metadata": {"inviteId": "123"}},
+    )
+    assert r.status == 200, r.json()
+    assert captured[0]["metadata"] == {"inviteId": "123"}
+
+
+async def test_custom_generate_token() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    driver, _ = _build_with(
+        memory_adapter(),
+        {"send_magic_link": send, "generate_token": lambda _email: "custom_token"},
+    )
+    r = await driver.request(
+        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
+    )
+    assert r.status == 200, r.json()
+    assert captured[0]["token"] == "custom_token"
+
+
+async def test_sign_up_with_name() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
+    await driver.request(
+        "POST",
+        "/sign-in/magic-link",
+        json_body={"email": "new-email@email.com", "name": "test"},
+    )
+    token = captured[0]["token"]
+    r = await driver.request(
+        "GET", "/magic-link/verify", query=urlencode({"token": token})
+    )
+    assert r.status == 200, r.json()
+    user = r.json()["user"]
+    assert user["name"] == "test"
+    assert user["email"] == "new-email@email.com"
+    assert user["emailVerified"] is True
+
+
+async def test_store_token_hashed() -> None:
+    from better_auth.plugins.magic_link.routes import default_key_hasher
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    adapter = memory_adapter()
+    driver, _ = _build_with(
+        adapter, {"send_magic_link": send, "store_token": "hashed"}
+    )
+    await driver.request(
+        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
+    )
+    token = captured[0]["token"]
+    # Stored under the hashed identifier; verifying with the plaintext token works.
+    from better_auth.types.adapter import Where
+
+    hashed = default_key_hasher(token)
+    rec = await adapter.find_one(
+        model="verification", where=(Where(field="identifier", value=hashed),)
+    )
+    assert rec is not None
+    r = await driver.request(
+        "GET", "/magic-link/verify", query=urlencode({"token": token})
+    )
+    assert r.status == 200, r.json()
+
+
+async def test_store_token_custom_hasher() -> None:
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    adapter = memory_adapter()
+    driver, _ = _build_with(
+        adapter,
+        {
+            "send_magic_link": send,
+            "store_token": {
+                "type": "custom-hasher",
+                "hash": lambda token: token + "hashed",
+            },
+        },
+    )
+    await driver.request(
+        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
+    )
+    token = captured[0]["token"]
+    rec = await adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value=f"{token}hashed"),),
+    )
+    assert rec is not None
+    r = await driver.request(
+        "GET", "/magic-link/verify", query=urlencode({"token": token})
+    )
+    assert r.status == 200, r.json()
+
+
+async def test_verify_last_magic_link() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    captured, send = _captured()
+    driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
+    for _ in range(3):
+        await driver.request(
+            "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
+        )
+    last_token = captured[-1]["token"]
+    r = await driver.request(
+        "GET", "/magic-link/verify", query=urlencode({"token": last_token})
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["session"]["id"]

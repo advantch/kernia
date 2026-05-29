@@ -41,7 +41,6 @@ from better_auth.types.plugin import (
     RateLimitRule,
 )
 
-
 SendInvitation = Callable[[Mapping[str, Any]], Awaitable[None]]
 
 

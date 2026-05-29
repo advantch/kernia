@@ -14,8 +14,6 @@ from urllib.parse import urlencode
 import httpx
 
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
-from better_auth.social_providers._helpers import make_provider
-
 
 _AUTH_URL = "https://open.weixin.qq.com/connect/qrconnect"
 _TOKEN_URL = "https://api.weixin.qq.com/sns/oauth2/access_token"

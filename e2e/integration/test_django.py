@@ -18,17 +18,15 @@ pytest.importorskip("django")
 @pytest.fixture
 def django_setup():
     import django
-    from django.conf import settings
-
     from better_auth.auth import init
     from better_auth.plugins.email_password import email_and_password
     from better_auth.types.init_options import BetterAuthOptions
     from better_auth_django import (
-        BetterAuthMiddleware,
         require_session,
     )
     from better_auth_django import setup as ba_setup
     from better_auth_memory_adapter import memory_adapter
+    from django.conf import settings
     from django.http import JsonResponse
     from django.urls import path
 

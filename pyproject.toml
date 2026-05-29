@@ -109,6 +109,16 @@ extend-exclude = ["reference"]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "PT", "RUF"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# pytest stylistic conventions (assertion granularity, raises specificity,
+# parametrize tuple form, fixture naming) are not enforced in this codebase.
+"**/tests/**" = ["PT"]
+"e2e/**" = ["PT"]
+"packages/test_utils/**" = ["PT"]
+# FastAPI's `Depends()`/`Body()` defaults are the documented idiom, not a B008 bug.
+"examples/**" = ["B008"]
+"e2e/integration/test_fastapi.py" = ["B008"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

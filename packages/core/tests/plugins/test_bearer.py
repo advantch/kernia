@@ -7,8 +7,9 @@ from better_auth.plugins.bearer.plugin import BearerOptions, _make_on_request
 
 
 def test_bearer_options_default_requires_signature() -> None:
+    # Upstream parity: `requireSignature` defaults to false.
     opts = BearerOptions()
-    assert opts.require_signature is True
+    assert opts.require_signature is False
 
 
 def test_bearer_signed_token_format_is_compatible_with_cookie() -> None:

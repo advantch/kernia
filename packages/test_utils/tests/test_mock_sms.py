@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth_test_utils import MockSMS
 
 

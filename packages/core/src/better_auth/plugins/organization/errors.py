@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
-
 ORGANIZATION_ERROR_CODES: Final[Mapping[str, str]] = {
     "ORGANIZATION_NOT_FOUND": "Organization not found.",
     "NOT_MEMBER": "You are not a member of this organization.",

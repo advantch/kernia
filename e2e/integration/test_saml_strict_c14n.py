@@ -12,8 +12,6 @@ with strict + signature-required settings.
 
 from __future__ import annotations
 
-import base64
-
 import pytest
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -54,7 +52,6 @@ def _settings(idp, sp_entity: str, sp_acs: str):
 def test_python3_saml_strict_accepts_mock_idp_assertion() -> None:
     from better_auth_test_utils import MockSAMLIdP
     from onelogin.saml2.response import OneLogin_Saml2_Response
-    from onelogin.saml2.utils import OneLogin_Saml2_Utils
 
     idp = MockSAMLIdP(entity_id="https://idp.example.com", sso_url="https://idp.example.com/sso")
     sp_acs = "https://sp.example.com/acs"
@@ -107,8 +104,8 @@ def test_python3_saml_strict_rejects_wrong_cert() -> None:
     # Borrow only the cert; keep entity_id/sso_url so settings build cleanly.
     decoy_for_settings.entity_id = real.entity_id
     decoy_for_settings.sso_url = real.sso_url
-    decoy_for_settings._cert = decoy._cert  # noqa: SLF001
-    decoy_for_settings._key = decoy._key  # noqa: SLF001
+    decoy_for_settings._cert = decoy._cert
+    decoy_for_settings._key = decoy._key
     settings = _settings(decoy_for_settings, sp_entity="sp-strict", sp_acs="https://sp.example.com/acs")
     response = OneLogin_Saml2_Response(settings, response_b64)
     is_valid = response.is_valid(request_data={

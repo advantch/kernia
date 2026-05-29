@@ -14,7 +14,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from authlib.jose import JsonWebKey, jwt as jose_jwt
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.error import APIError
@@ -22,7 +23,6 @@ from better_auth.types.adapter import FieldDef, ModelDef, Where
 from better_auth.types.context import AuthContext, EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
-
 
 # ----- schema -----
 

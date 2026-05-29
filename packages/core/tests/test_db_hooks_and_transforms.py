@@ -13,8 +13,9 @@ Mirrors the behaviour locked by better-auth's own `db/with-hooks` and
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from better_auth.auth import init
 from better_auth.db.hook_queue import collect_after_hooks
 from better_auth.db.schema.resolve import resolve_tables
@@ -29,7 +30,6 @@ from better_auth.types.db_hooks import (
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth.types.plugin import PluginSchema
 from better_auth_memory_adapter import memory_adapter
-
 
 # --------------------------------------------------------------------------
 # helpers
@@ -304,7 +304,9 @@ async def test_init_collects_options_and_plugin_database_hooks():
     class HookPlugin(_Plugin):
         id = "hooky"
         schema = None
-        database_hooks = {"user": ModelHooks(create=HookOp(before=lambda d, c: calls.append("plugin")))}
+        database_hooks: ClassVar = {
+            "user": ModelHooks(create=HookOp(before=lambda d, c: calls.append("plugin")))
+        }
 
     raw = memory_adapter()
     handle = init(

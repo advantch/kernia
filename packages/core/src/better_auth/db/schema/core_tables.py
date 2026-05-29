@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from better_auth.types.adapter import FieldDef, ModelDef
 
-
 USER_MODEL = ModelDef(
     name="user",
     fields=(

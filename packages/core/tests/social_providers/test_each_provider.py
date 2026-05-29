@@ -13,9 +13,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-
 from better_auth import social_providers as sp
-
 
 PKCE_VERIFIER = "v" * 64
 
@@ -114,7 +112,7 @@ def test_provider_ids_match_reference() -> None:
         "zoom",
     }
     actual_ids = set()
-    for pid, factory, extra in PROVIDERS:
+    for _pid, factory, extra in PROVIDERS:
         p = factory(client_id="x", client_secret="y", **extra)
         actual_ids.add(p.id)
     # Allow id to differ from key for microsoft-entra-id-style providers but

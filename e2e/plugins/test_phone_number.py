@@ -17,7 +17,6 @@ import secrets
 from typing import Any
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.db.schema import CORE_MODELS
 from better_auth.plugins.phone_number import phone_number, phone_number_schema
@@ -28,7 +27,6 @@ from better_auth_test_utils import (
     MockSMS,
     docker_available,
 )
-
 
 # ---------- adapter factories with phone-number schema extension --------------
 
@@ -48,10 +46,8 @@ async def _memory_factory() -> Any:
 
 async def _sqlite_factory() -> Any:
     """SQLAlchemy on shared-cache in-memory SQLite, with the extended user table."""
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    from better_auth.types.adapter import ModelDef
     from better_auth_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -111,6 +107,19 @@ def _build_driver(adapter: Any, sms: MockSMS, *, disable_sign_up: bool = False):
                 },
                 "disable_csrf_check": True,
             },
+        )
+    )
+    return ASGIDriver(app=auth.router.mount()), auth
+
+
+def _build_driver_opts(adapter: Any, sms: MockSMS, **opts: Any):
+    phone_opts: dict[str, Any] = {"send_sms": sms.send, "expires_in": 60, **opts}
+    auth = init(
+        BetterAuthOptions(
+            database=adapter,
+            secret="test-secret",
+            plugins=[phone_number()],
+            advanced={"phone-number": phone_opts, "disable_csrf_check": True},
         )
     )
     return ASGIDriver(app=auth.router.mount()), auth
@@ -238,3 +247,135 @@ async def test_phone_number_signup_disabled(adapter_factory) -> None:
     )
     assert r.status == 403
     assert r.json()["code"] == "PHONE_NUMBER_SIGN_UP_DISABLED"
+
+
+# ----- ported from reference phone-number.test.ts (owned-endpoint subset) -----
+
+
+async def test_verify_otp_not_found() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    driver, _ = _build_driver(memory_adapter(), MockSMS())
+    # No send-otp first, so the verification row doesn't exist.
+    r = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": "+15559990000", "otp": "123456"},
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "OTP_NOT_FOUND"
+
+
+async def test_verify_accepts_code_alias() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver(memory_adapter(), sms)
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": "+15559991111"}
+    )
+    otp = sms.find_otp("+15559991111")
+    r = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": "+15559991111", "code": otp},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["status"] is True
+
+
+async def test_verify_disable_session() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver(memory_adapter(), sms)
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": "+15559992222"}
+    )
+    otp = sms.find_otp("+15559992222")
+    r = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={
+            "phone_number": "+15559992222",
+            "otp": otp,
+            "disable_session": True,
+        },
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body["status"] is True
+    assert body["token"] is None
+    assert "better-auth.session_token" not in driver.cookies
+
+
+async def test_too_many_attempts() -> None:
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver_opts(memory_adapter(), sms, allowed_attempts=2)
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": "+15559993333"}
+    )
+    # Two wrong attempts increment the counter; the third trips TOO_MANY_ATTEMPTS.
+    for _ in range(2):
+        bad = await driver.request(
+            "POST",
+            "/phone-number/verify",
+            json_body={"phone_number": "+15559993333", "otp": "000000"},
+        )
+        assert bad.status == 400
+        assert bad.json()["code"] == "INVALID_OTP"
+    third = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": "+15559993333", "otp": "000000"},
+    )
+    assert third.status == 403
+    assert third.json()["code"] == "TOO_MANY_ATTEMPTS"
+
+
+async def test_sign_in_requires_verification() -> None:
+    import time
+
+    from better_auth.crypto import hash_password
+    from better_auth_memory_adapter import memory_adapter
+
+    adapter = memory_adapter()
+    sms = MockSMS()
+    driver, _ = _build_driver_opts(adapter, sms, require_verification=True)
+
+    # Seed an UNVERIFIED phone user directly with a credential password.
+    now = int(time.time())
+    user = await adapter.create(
+        model="user",
+        data={
+            "email": "unverified@phone.local",
+            "emailVerified": False,
+            "phoneNumber": "+15559994444",
+            "phoneNumberVerified": False,
+            "createdAt": now,
+            "updatedAt": now,
+        },
+    )
+    await adapter.create(
+        model="account",
+        data={
+            "userId": user["id"],
+            "accountId": user["id"],
+            "providerId": "credential",
+            "password": hash_password("phonesecret"),
+            "createdAt": now,
+            "updatedAt": now,
+        },
+    )
+
+    # Sign-in is gated: 401 PHONE_NUMBER_NOT_VERIFIED and an OTP is dispatched.
+    r = await driver.request(
+        "POST",
+        "/sign-in/phone-number",
+        json_body={"phone_number": "+15559994444", "password": "phonesecret"},
+    )
+    assert r.status == 401
+    assert r.json()["code"] == "PHONE_NUMBER_NOT_VERIFIED"
+    assert sms.find_otp("+15559994444") is not None

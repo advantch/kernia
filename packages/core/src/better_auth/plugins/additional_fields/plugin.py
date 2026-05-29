@@ -7,12 +7,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from better_auth.error import APIError
-from better_auth.types.adapter import FieldDef, FieldType, Where
+from better_auth.types.adapter import FieldDef, Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import AfterHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema
-
 
 AdditionalFieldsConfig = Mapping[str, Mapping[str, Mapping[str, Any]]]
 # Shape: { "<modelName>": { "<fieldName>": {"type": "string", "required": True, ...} } }

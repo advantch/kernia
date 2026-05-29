@@ -13,7 +13,6 @@ import httpx
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
 from better_auth.social_providers._helpers import make_provider
 
-
 _QUERY = "query Me { viewer { id name email avatarUrl } }"
 
 

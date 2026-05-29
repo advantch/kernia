@@ -20,7 +20,6 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import AfterHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
 MULTI_SESSION_ERROR_CODES: Mapping[str, str] = {
     "INVALID_SESSION_TOKEN": "The session token is invalid or expired.",
     "MULTI_SESSION_LIMIT_REACHED": "Reached the maximum number of concurrent sessions.",

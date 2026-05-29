@@ -8,13 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
 from better_auth.plugins.email_password import routes
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
-
 
 EMAIL_PASSWORD_ERROR_CODES: Mapping[str, str] = {
     "EMAIL_ALREADY_IN_USE": "An account with that email already exists.",

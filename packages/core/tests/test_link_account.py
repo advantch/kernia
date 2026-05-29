@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.error import APIError
 from better_auth.oauth2.link_account import handle_oauth_user_info

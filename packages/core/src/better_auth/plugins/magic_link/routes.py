@@ -16,9 +16,14 @@ it into a real HTTP redirect.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import inspect
 import json
 import secrets
+import string
 import time
+from typing import Any
 from urllib.parse import urlencode
 
 from pydantic import BaseModel, Field
@@ -31,11 +36,32 @@ from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 
 
+def default_key_hasher(token: str) -> str:
+    """SHA-256 + unpadded base64url. Mirrors `magic-link/utils.ts`."""
+    digest = hashlib.sha256(token.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+_TOKEN_ALPHABET = string.ascii_lowercase + string.ascii_uppercase
+
+
+def _generate_random_string(length: int) -> str:
+    # Mirrors `generateRandomString(32, "a-z", "A-Z")`.
+    return "".join(secrets.choice(_TOKEN_ALPHABET) for _ in range(length))
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 class SignInMagicLinkBody(BaseModel):
     email: str
     callback_url: str = Field(default="/", alias="callbackURL")
     new_user_callback_url: str | None = Field(default=None, alias="newUserCallbackURL")
     name: str | None = None
+    metadata: dict[str, Any] | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -59,6 +85,22 @@ def _now() -> int:
     return int(time.time())
 
 
+async def _store_token(opts: dict[str, object], token: str) -> str:
+    """Apply the configured `store_token` policy (plain/hashed/custom-hasher).
+
+    Mirrors `storeToken()` in `magic-link/index.ts`. The *sent* token is always
+    the plaintext one; only the DB identifier changes.
+    """
+    store = opts.get("store_token", "plain")
+    if store == "hashed":
+        return default_key_hasher(token)
+    if isinstance(store, dict) and store.get("type") == "custom-hasher":
+        hasher = store.get("hash")
+        if hasher is not None:
+            return await _maybe_await(hasher(token))  # type: ignore[operator]
+    return token
+
+
 async def _sign_in_magic_link(ctx: EndpointContext) -> dict[str, object]:
     body: SignInMagicLinkBody = ctx.body
     opts = _opts(ctx)
@@ -71,12 +113,18 @@ async def _sign_in_magic_link(ctx: EndpointContext) -> dict[str, object]:
             message="send_magic_link callable is not configured",
         )
 
-    token = secrets.token_urlsafe(32)
+    generate_token = opts.get("generate_token")
+    if generate_token is not None:
+        token = await _maybe_await(generate_token(body.email))  # type: ignore[operator]
+    else:
+        token = _generate_random_string(32)
+
+    stored_identifier = await _store_token(opts, token)
     payload = json.dumps({"email": body.email, "name": body.name})
     await ctx.auth.adapter.create(
         model="verification",
         data={
-            "identifier": f"magic-link:{token}",
+            "identifier": stored_identifier,
             "value": payload,
             "expiresAt": _now() + expires_in,
             "createdAt": _now(),
@@ -87,8 +135,41 @@ async def _sign_in_magic_link(ctx: EndpointContext) -> dict[str, object]:
     if body.new_user_callback_url:
         query["newUserCallbackURL"] = body.new_user_callback_url
     url = f"{ctx.auth.base_url}/magic-link/verify?{urlencode(query)}"
-    await send_magic_link(body.email, url, token)  # type: ignore[misc]
+    await _dispatch_magic_link(send_magic_link, body, url, token, ctx)
     return {"success": True, "status": True}
+
+
+async def _dispatch_magic_link(
+    send_magic_link: Any,
+    body: SignInMagicLinkBody,
+    url: str,
+    token: str,
+    ctx: EndpointContext,
+) -> None:
+    """Invoke the user callback, supporting both the Python 3-arg signature
+    ``(email, url, token)`` and the upstream single-dict signature
+    ``({email, url, token, metadata}, ctx)``.
+    """
+    try:
+        sig = inspect.signature(send_magic_link)
+        params = [
+            p
+            for p in sig.parameters.values()
+            if p.kind
+            in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+        ]
+        positional = len([p for p in params if p.kind != p.VAR_POSITIONAL])
+        has_varargs = any(p.kind == p.VAR_POSITIONAL for p in params)
+    except (TypeError, ValueError):
+        positional, has_varargs = 3, False
+
+    if positional >= 3 or has_varargs:
+        await _maybe_await(send_magic_link(body.email, url, token))
+        return
+    data = {"email": body.email, "url": url, "token": token}
+    if body.metadata is not None:
+        data["metadata"] = body.metadata
+    await _maybe_await(send_magic_link(data, ctx))
 
 
 async def _verify(ctx: EndpointContext) -> dict[str, object]:
@@ -97,12 +178,12 @@ async def _verify(ctx: EndpointContext) -> dict[str, object]:
         query = MagicLinkVerifyQuery.model_validate({
             k: (v[0] if isinstance(v, list) else v) for k, v in raw_query.items()
         })
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise APIError(400, "INVALID_REQUEST", message=str(e)) from None
 
     opts = _opts(ctx)
     disable_sign_up = bool(opts.get("disable_sign_up", False))
-    identifier = f"magic-link:{query.token}"
+    identifier = await _store_token(opts, query.token)
     where = (Where(field="identifier", value=identifier),)
 
     consume_one = getattr(ctx.auth.adapter, "consume_one", None)

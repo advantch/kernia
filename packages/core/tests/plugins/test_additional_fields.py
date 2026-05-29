@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins.additional_fields import additional_fields
 from better_auth.plugins.email_password import email_and_password

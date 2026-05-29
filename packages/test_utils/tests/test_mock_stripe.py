@@ -7,7 +7,6 @@ import hmac
 import json
 
 import httpx
-
 from better_auth_test_utils import MockStripe
 
 

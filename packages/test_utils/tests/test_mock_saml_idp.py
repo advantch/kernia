@@ -8,10 +8,9 @@ from __future__ import annotations
 import base64
 import xml.etree.ElementTree as ET
 
+from better_auth_test_utils import MockSAMLIdP
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-
-from better_auth_test_utils import MockSAMLIdP
 
 NS = {
     "samlp": "urn:oasis:names:tc:SAML:2.0:protocol",
@@ -87,7 +86,7 @@ def test_signature_verifies_over_c14n_signed_info() -> None:
         signed_info, method="c14n", exclusive=True, with_comments=False
     )
 
-    pub = idp._key.public_key()  # noqa: SLF001 — test-internal access
+    pub = idp._key.public_key()  # — test-internal access
     pub.verify(
         signature,
         signed_info_c14n,
@@ -101,8 +100,8 @@ def test_reference_digest_matches_c14n_of_assertion_minus_signature() -> None:
     matching the Reference's enveloped-signature + exc-c14n Transforms chain.
     This is the second half of the XML-DSIG round-trip that python3-saml runs.
     """
-    from lxml import etree
     from cryptography.hazmat.primitives import hashes as _h
+    from lxml import etree
 
     idp = MockSAMLIdP()
     encoded = idp.create_assertion(

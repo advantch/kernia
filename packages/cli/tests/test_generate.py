@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from click.testing import CliRunner
-
 from better_auth_cli.commands.generate import generate
+from click.testing import CliRunner
 
 
 def test_generate_emits_migration(tmp_path: Path, fixture_config_path: Path) -> None:

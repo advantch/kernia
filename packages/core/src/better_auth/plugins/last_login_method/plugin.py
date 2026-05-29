@@ -2,41 +2,50 @@
 
 When the user signs in successfully, sets a cookie naming the auth method
 (`email`, `google`, `github`, etc.). The sign-in page reads this on the next
-visit to highlight the most-recently used button.
+visit to highlight the most-recently used button. Optionally persists the method
+on the user row (`storeInDatabase`).
 
 Mirrors `reference/packages/better-auth/src/plugins/last-login-method/index.ts`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from better_auth.types.cookie import SESSION_TOKEN_COOKIE, CookieAttributes
+from better_auth.cookies import verify as _verify_cookie
+from better_auth.types.adapter import FieldDef, Where
 from better_auth.types.context import EndpointContext
+from better_auth.types.cookie import SESSION_TOKEN_COOKIE, CookieAttributes
 from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
-DEFAULT_COOKIE_NAME = "better-auth.last_login_method"
+# Matches upstream: `better-auth.last_used_login_method`.
+DEFAULT_COOKIE_NAME = "better-auth.last_used_login_method"
 DEFAULT_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+
+CustomResolveMethod = Callable[[EndpointContext], "str | None"]
 
 
 @dataclass(frozen=True, slots=True)
 class LastLoginMethodOptions:
     cookie_name: str = DEFAULT_COOKIE_NAME
     max_age: int = DEFAULT_MAX_AGE
+    custom_resolve_method: CustomResolveMethod | None = None
+    store_in_database: bool = False
 
 
-def _resolve_method(path: str) -> str | None:
+def _default_resolve_method(ctx: EndpointContext) -> str | None:
+    path = ctx.request.path if ctx.request is not None else None
     if not path:
         return None
-    if path.startswith("/callback/"):
-        return path.rsplit("/", 1)[-1] or None
-    if path.startswith("/oauth2/callback/"):
-        return path.rsplit("/", 1)[-1] or None
+    # OAuth callbacks: /callback/:id or /oauth2/callback/:providerId
+    if path.startswith("/callback/") or path.startswith("/oauth2/callback/"):
+        params = ctx.path_params or {}
+        return params.get("id") or params.get("providerId") or (path.rsplit("/", 1)[-1] or None)
     if path == "/sign-in/email" or path == "/sign-up/email":
         return "email"
     if "siwe" in path:
@@ -48,20 +57,31 @@ def _resolve_method(path: str) -> str | None:
     return None
 
 
+def _resolve_method(opts: LastLoginMethodOptions, ctx: EndpointContext) -> str | None:
+    if opts.custom_resolve_method is not None:
+        result = opts.custom_resolve_method(ctx)
+        if result is not None:
+            return result
+    return _default_resolve_method(ctx)
+
+
+def _emitted_session_token(ctx: EndpointContext, secret: str) -> str | None:
+    for name, value, _attrs in ctx.set_cookies:
+        if name == SESSION_TOKEN_COOKIE and value:
+            return _verify_cookie(value, secret=secret)
+    return None
+
+
 def _make_on_response(opts: LastLoginMethodOptions):
     async def on_response(ctx: EndpointContext, result: object) -> None:
-        method = _resolve_method(ctx.request.path)
+        method = _resolve_method(opts, ctx)
         if not method:
             return
-        # Only set the cookie if the request established a session (i.e. emitted
-        # the session_token cookie in ctx.set_cookies). This filters out failed
-        # sign-in attempts that never made it to a Set-Cookie line.
-        emitted_session = any(
-            name == SESSION_TOKEN_COOKIE and value
-            for name, value, _ in ctx.set_cookies
-        )
-        if not emitted_session:
+        # Only act if the request established a session (emitted the session cookie).
+        session_token = _emitted_session_token(ctx, ctx.auth.secret)
+        if session_token is None:
             return
+
         attrs = CookieAttributes(
             path="/",
             max_age=opts.max_age,
@@ -71,7 +91,26 @@ def _make_on_response(opts: LastLoginMethodOptions):
         )
         ctx.set_cookies.append((opts.cookie_name, method, attrs))
 
+        if opts.store_in_database:
+            session_row = await ctx.auth.adapter.find_one(
+                model="session", where=(Where(field="token", value=session_token),)
+            )
+            if session_row and session_row.get("userId"):
+                try:
+                    await ctx.auth.adapter.update(
+                        model="user",
+                        where=(Where(field="id", value=session_row["userId"]),),
+                        update={"lastLoginMethod": method},
+                    )
+                except Exception:  # pragma: no cover - mirror upstream's logged-and-ignore
+                    pass
+
     return on_response
+
+
+_LAST_LOGIN_USER_FIELDS: tuple[FieldDef, ...] = (
+    FieldDef("lastLoginMethod", "string", required=False, input=False),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +132,21 @@ def last_login_method(
     *,
     cookie_name: str = DEFAULT_COOKIE_NAME,
     max_age: int = DEFAULT_MAX_AGE,
+    custom_resolve_method: CustomResolveMethod | None = None,
+    store_in_database: bool = False,
 ) -> BetterAuthPlugin:
-    opts = LastLoginMethodOptions(cookie_name=cookie_name, max_age=max_age)
-    return _LastLoginMethodPlugin(on_response=_make_on_response(opts))  # type: ignore[return-value]
+    opts = LastLoginMethodOptions(
+        cookie_name=cookie_name,
+        max_age=max_age,
+        custom_resolve_method=custom_resolve_method,
+        store_in_database=store_in_database,
+    )
+    schema = (
+        PluginSchema(extend={"user": _LAST_LOGIN_USER_FIELDS})
+        if store_in_database
+        else None
+    )
+    return _LastLoginMethodPlugin(
+        on_response=_make_on_response(opts),
+        schema=schema,
+    )  # type: ignore[return-value]

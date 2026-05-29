@@ -21,7 +21,6 @@ from collections.abc import Sequence
 from better_auth.types.adapter import FieldDef, ModelDef
 from better_auth.types.plugin import PluginSchema
 
-
 ORGANIZATION_MODEL = ModelDef(
     name="organization",
     fields=(

@@ -22,7 +22,6 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins.email_password import email_and_password
 from better_auth.plugins.organization import organization
@@ -36,7 +35,6 @@ from better_auth.plugins.organization.schema import (
 from better_auth.types.adapter import FieldDef, ModelDef, Where
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_test_utils import ASGIDriver, MockSMTP, SentEmail
-
 
 # ---------------------------------------------------------------------------
 # Adapter factories that include the organization plugin's schema.
@@ -1015,7 +1013,7 @@ async def test_check_slug(org_adapter_factory: Callable[[], Awaitable[Any]]) -> 
     adapter = await org_adapter_factory()
     driver = await _make_driver(adapter)
     await _sign_up(driver, email="slug@example.com")
-    org = await _create_org(driver, name="Slug Co", slug="slug-co")
+    await _create_org(driver, name="Slug Co", slug="slug-co")
     # Free slug → status True
     r = await driver.request(
         "POST", "/organization/check-slug", json_body={"slug": "totally-free"}

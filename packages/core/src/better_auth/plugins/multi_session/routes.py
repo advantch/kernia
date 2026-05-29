@@ -13,12 +13,10 @@ from __future__ import annotations
 import base64
 import json
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from better_auth.api.endpoint import create_auth_endpoint
-from better_auth.context import revoke_session
 from better_auth.cookies import sign, verify
 from better_auth.error import APIError
 from better_auth.types.adapter import Where
@@ -28,7 +26,6 @@ from better_auth.types.cookie import (
     CookieAttributes,
 )
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
-
 
 SESSION_LIST_COOKIE = "better-auth.session_list"
 

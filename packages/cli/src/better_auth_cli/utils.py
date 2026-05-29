@@ -10,7 +10,6 @@ from types import ModuleType
 from typing import Any
 
 import click
-
 from better_auth.auth import BetterAuth
 from better_auth.db.migrations.codegen import resolve_full_schema
 from better_auth.db.schema import CORE_MODELS

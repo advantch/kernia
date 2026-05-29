@@ -24,16 +24,12 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlsplit
 
-import httpx
-import pytest
-
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_memory_adapter import memory_adapter
 from better_auth_sso import sso
 from better_auth_test_utils import ASGIDriver, MockIdP, MockSAMLIdP
-
 
 # ---------------------------------------------------------------------------
 # OIDC end-to-end
@@ -93,7 +89,7 @@ async def test_oidc_sign_in_end_to_end() -> None:
     assert parsed.netloc == "test-idp"
     qs = parse_qs(parsed.query)
     state = qs["state"][0]
-    redirect_uri = qs["redirect_uri"][0]
+    assert qs["redirect_uri"][0]
     assert qs["client_id"] == ["client-1"]
 
     # Skip the actual IdP login UI; jump straight to the token-exchange code.

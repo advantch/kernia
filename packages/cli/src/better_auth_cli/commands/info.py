@@ -11,12 +11,10 @@ import platform
 import sys
 from pathlib import Path
 
+import better_auth
 import click
 
-import better_auth
-
 from better_auth_cli.utils import find_auth_handle, load_config_module
-
 
 _REDACT_PATTERNS = ("password", "secret", "token", "key")
 

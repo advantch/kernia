@@ -19,7 +19,7 @@ from __future__ import annotations
 import secrets
 import time
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.context import create_session
@@ -28,7 +28,6 @@ from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
-
 
 _OPTIONS_KEY = "phone-number"
 _DEFAULT_LENGTH = 6
@@ -45,6 +44,10 @@ def _otp_length(ctx: EndpointContext) -> int:
 
 def _expires_in(ctx: EndpointContext) -> int:
     return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))  # type: ignore[arg-type]
+
+
+def _allowed_attempts(ctx: EndpointContext) -> int:
+    return int(_opts(ctx).get("allowed_attempts", 3))  # type: ignore[arg-type]
 
 
 def generate_otp(length: int = _DEFAULT_LENGTH) -> str:
@@ -105,7 +108,7 @@ async def _consume_otp(
         where=(Where(field="identifier", value=identifier),),
     )
     if not record:
-        raise APIError(400, "INVALID_OTP", message="OTP is invalid")
+        raise APIError(400, "OTP_NOT_FOUND", message="OTP not found")
     if int(record.get("expiresAt", 0)) < _now():
         await ctx.auth.adapter.delete_many(
             model="verification",
@@ -114,7 +117,7 @@ async def _consume_otp(
         raise APIError(400, "OTP_EXPIRED", message="OTP has expired")
     stored, _, attempts_str = str(record["value"]).rpartition(":")
     attempts = int(attempts_str or "0")
-    if attempts >= 3:
+    if attempts >= _allowed_attempts(ctx):
         await ctx.auth.adapter.delete_many(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
@@ -139,6 +142,7 @@ async def _consume_otp(
 class SignInPhoneNumberBody(BaseModel):
     phone_number: str
     password: str
+    remember_me: bool = True
 
 
 class PhoneNumberBody(BaseModel):
@@ -147,7 +151,9 @@ class PhoneNumberBody(BaseModel):
 
 class VerifyPhoneNumberBody(BaseModel):
     phone_number: str
-    otp: str
+    # Accept both the Python-native `otp` and the upstream `code` field name.
+    otp: str = Field(validation_alias=AliasChoices("otp", "code"))
+    disable_session: bool = False
 
 
 class ResetPasswordBody(BaseModel):
@@ -166,6 +172,18 @@ async def _sign_in_phone(ctx: EndpointContext) -> dict[str, object]:
     )
     if not user:
         raise APIError(401, "INVALID_PHONE_NUMBER_OR_PASSWORD")
+
+    opts = _opts(ctx)
+    if bool(opts.get("require_verification", False)) and not user.get(
+        "phoneNumberVerified"
+    ):
+        # Mirror upstream: mint + dispatch a fresh OTP, then refuse the sign-in.
+        otp = await _create_otp(ctx, phone=body.phone_number, purpose="sign-in")
+        send_sms = opts.get("send_sms")
+        if send_sms is not None:
+            await send_sms(body.phone_number, f"Your code is {otp}")  # type: ignore[misc]
+        raise APIError(401, "PHONE_NUMBER_NOT_VERIFIED")
+
     account = await ctx.auth.adapter.find_one(
         model="account",
         where=(
@@ -182,9 +200,11 @@ async def _sign_in_phone(ctx: EndpointContext) -> dict[str, object]:
         user_id=user["id"],
         ip_address=ctx.request.headers.get("x-forwarded-for"),
         user_agent=ctx.request.headers.get("user-agent"),
+        remember_me=body.remember_me,
     )
     ctx.set_cookies.extend(cookies)
     return {
+        "token": session.token,
         "user": user,
         "session": {"id": session.id, "expiresAt": session.expires_at},
     }
@@ -231,6 +251,10 @@ async def _verify_phone(ctx: EndpointContext) -> dict[str, object]:
             where=(Where(field="id", value=user["id"]),),
             update={"phoneNumberVerified": True, "updatedAt": _now()},
         )
+        user = {**user, "phoneNumberVerified": True}
+
+    if body.disable_session:
+        return {"status": True, "token": None, "user": user, "isNewUser": is_new_user}
 
     session, cookies = await create_session(
         ctx.auth,
@@ -240,6 +264,8 @@ async def _verify_phone(ctx: EndpointContext) -> dict[str, object]:
     )
     ctx.set_cookies.extend(cookies)
     return {
+        "status": True,
+        "token": session.token,
         "user": user,
         "session": {"id": session.id, "expiresAt": session.expires_at},
         "isNewUser": is_new_user,

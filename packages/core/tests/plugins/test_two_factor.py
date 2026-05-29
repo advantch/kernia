@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 import pyotp
-
 from better_auth.plugins.two_factor import TWO_FACTOR_ERROR_CODES, two_factor
 
 

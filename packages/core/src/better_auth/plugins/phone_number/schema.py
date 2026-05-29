@@ -9,7 +9,6 @@ from __future__ import annotations
 from better_auth.types.adapter import FieldDef
 from better_auth.types.plugin import PluginSchema
 
-
 PHONE_NUMBER_USER_FIELDS: tuple[FieldDef, ...] = (
     FieldDef("phoneNumber", "string", required=False, unique=True),
     FieldDef("phoneNumberVerified", "boolean", required=False, default=False),

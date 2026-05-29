@@ -16,13 +16,13 @@ Two responsibilities:
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.hooks import AfterHook, BeforeHook, PluginHooks
-
 
 # Routes that don't gate on org-membership at the before-hook layer.
 # These either accept membership implicitly (create), list across all of the

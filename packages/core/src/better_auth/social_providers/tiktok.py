@@ -10,7 +10,6 @@ import httpx
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
 from better_auth.social_providers._helpers import make_provider
 
-
 _USER_INFO_URL = "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name,username"
 
 

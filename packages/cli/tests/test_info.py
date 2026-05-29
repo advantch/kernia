@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from click.testing import CliRunner
-
 from better_auth_cli.commands.info import info
+from click.testing import CliRunner
 
 
 def test_info_dry_run_works_without_config() -> None:

@@ -23,14 +23,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cbor2
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import (
-    decode_dss_signature,
-    encode_dss_signature,
-)
-from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
-
+from webauthn.helpers import bytes_to_base64url
 
 # WebAuthn authenticator-data flags
 _FLAG_UP = 0x01   # user present

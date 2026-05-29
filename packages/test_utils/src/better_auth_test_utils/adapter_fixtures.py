@@ -30,11 +30,11 @@ async def _memory_factory() -> Any:
 
 
 async def _sqlite_factory() -> Any:
-    from better_auth_sqlalchemy import sqlalchemy_adapter
-
     # Each call gets its own in-memory database — they're isolated even when
     # several tests run concurrently because the URL contains a fresh secret.
     import secrets
+
+    from better_auth_sqlalchemy import sqlalchemy_adapter
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     return await sqlalchemy_adapter(url=url)
@@ -121,7 +121,7 @@ async def adapter_cleanup() -> Any:
     It currently just yields — adapter teardown is the factory's
     responsibility — but it's the seam where future global cleanup will live.
     """
-    yield
+    return
 
 
 __all__ = ["AdapterFactory", "adapter_cleanup", "all_adapters_param"]

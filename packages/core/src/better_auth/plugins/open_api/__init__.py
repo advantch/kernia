@@ -29,7 +29,6 @@ from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.api.request import HTMLResponse
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 
-
 # --------------------------------------------------------------------------- helpers
 
 _DEFAULT_INFO_DESCRIPTION = (
@@ -109,7 +108,7 @@ def build_openapi_document(
     components_schemas: dict[str, Any] = {}
     paths: dict[str, dict[str, Any]] = {}
 
-    endpoints: dict[tuple[str, str], AuthEndpoint] = router._endpoints  # noqa: SLF001
+    endpoints: dict[tuple[str, str], AuthEndpoint] = router._endpoints
 
     for (method, path), ep in endpoints.items():
         op: dict[str, Any] = {}

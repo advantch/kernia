@@ -18,7 +18,6 @@ Lookups are O(1) on `(method, path)`. The dispatch lifecycle is:
 
 from __future__ import annotations
 
-import json
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
@@ -235,7 +234,7 @@ async def _handle_http(
             if hook is not None:
                 await hook(ctx, result)
 
-        if isinstance(result, (HTMLResponse, RedirectResponse)):
+        if isinstance(result, HTMLResponse | RedirectResponse):
             response = result
         else:
             response = JSONResponse(body=result, status=200)

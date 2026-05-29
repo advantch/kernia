@@ -19,14 +19,19 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import AfterHook, BeforeHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
 ANONYMOUS_ERROR_CODES: Mapping[str, str] = {
+    "INVALID_EMAIL_FORMAT": "Email was not generated in a valid format",
+    "FAILED_TO_CREATE_USER": "Failed to create user",
+    "COULD_NOT_CREATE_SESSION": "Could not create session",
     "ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY": (
         "Anonymous users cannot sign in again anonymously"
     ),
-    "FAILED_TO_CREATE_USER": "Failed to create user",
-    "FAILED_TO_CREATE_ANONYMOUS_USER": "Failed to create anonymous user",
+    "FAILED_TO_DELETE_ANONYMOUS_USER": "Failed to delete anonymous user",
+    "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS": (
+        "Failed to delete anonymous user sessions"
+    ),
     "USER_IS_NOT_ANONYMOUS": "User is not anonymous",
+    "DELETE_ANONYMOUS_USER_DISABLED": "Deleting anonymous users is disabled",
 }
 
 
@@ -67,7 +72,7 @@ def _make_before_hook(on_link: OnLinkCallback | None) -> BeforeHook:
             where=(Where(field="id", value=ctx.session.user_id),),
         )
         if user and user.get("isAnonymous"):
-            ctx.auth.plugin_state.setdefault("anonymous", {})[
+            ctx.auth.plugin_state.setdefault("_anonymous_pending", {})[
                 _request_key(ctx)
             ] = {"user": user, "on_link": on_link}
 
@@ -76,7 +81,7 @@ def _make_before_hook(on_link: OnLinkCallback | None) -> BeforeHook:
 
 def _make_after_hook() -> AfterHook:
     async def after(ctx: EndpointContext, result: object) -> object | None:
-        state = ctx.auth.plugin_state.get("anonymous", {})
+        state = ctx.auth.plugin_state.get("_anonymous_pending", {})
         entry = state.pop(_request_key(ctx), None)
         if not entry:
             return None
@@ -91,6 +96,16 @@ def _make_after_hook() -> AfterHook:
             return None
         if on_link is not None:
             await on_link(anon_user, new_user, ctx)
+
+        opts = ctx.auth.plugin_state.get("anonymous", {}) or {}
+        # Mirror upstream guard: skip cleanup when deletion is disabled, the new
+        # session is the same user, or the new user is itself anonymous.
+        if (
+            bool(opts.get("disable_delete_anonymous_user", False))
+            or new_user.get("id") == anon_user["id"]
+            or bool(new_user.get("isAnonymous"))
+        ):
+            return None
         await ctx.auth.adapter.delete_many(
             model="session",
             where=(Where(field="userId", value=anon_user["id"]),),
@@ -106,6 +121,7 @@ def _make_after_hook() -> AfterHook:
 
 @dataclass(frozen=True, slots=True)
 class _AnonymousPlugin:
+    options: Mapping[str, Any] = field(default_factory=dict)
     id: str = "anonymous"
     version: str | None = None
     schema: PluginSchema | None = field(
@@ -122,10 +138,19 @@ class _AnonymousPlugin:
     error_codes: Mapping[str, str] = field(
         default_factory=lambda: dict(ANONYMOUS_ERROR_CODES)
     )
-    init: None = None
+
+    async def init(self, ctx: Any) -> None:
+        ctx.plugin_state["anonymous"] = dict(self.options)
 
 
-def anonymous(on_link: OnLinkCallback | None = None) -> BetterAuthPlugin:
+def anonymous(
+    on_link: OnLinkCallback | None = None,
+    *,
+    email_domain_name: str | None = None,
+    generate_random_email: Callable[[], Any] | None = None,
+    generate_name: Callable[[EndpointContext], Any] | None = None,
+    disable_delete_anonymous_user: bool = False,
+) -> BetterAuthPlugin:
     """Construct the anonymous plugin.
 
     Pass `on_link` to migrate domain data from the anonymous user into the new
@@ -135,7 +160,16 @@ def anonymous(on_link: OnLinkCallback | None = None) -> BetterAuthPlugin:
         before=(_make_before_hook(on_link),),
         after=(_make_after_hook(),),
     )
-    return _AnonymousPlugin(hooks=hooks)  # type: ignore[return-value, call-arg]
+    options: dict[str, Any] = {
+        "disable_delete_anonymous_user": disable_delete_anonymous_user,
+    }
+    if email_domain_name is not None:
+        options["email_domain_name"] = email_domain_name
+    if generate_random_email is not None:
+        options["generate_random_email"] = generate_random_email
+    if generate_name is not None:
+        options["generate_name"] = generate_name
+    return _AnonymousPlugin(options=options, hooks=hooks)  # type: ignore[return-value, call-arg]
 
 
 __all__ = ["ANONYMOUS_ERROR_CODES", "anonymous"]

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-
 from better_auth.i18n import i18n, parse_accept_language
 
 

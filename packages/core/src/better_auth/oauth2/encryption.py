@@ -17,7 +17,6 @@ import secrets
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-
 _PREFIX = "enc.v1."
 
 

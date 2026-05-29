@@ -23,7 +23,6 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
 MAGIC_LINK_ERROR_CODES: Mapping[str, str] = {
     "MAGIC_LINK_INVALID": "Magic link is invalid or has already been used.",
     "MAGIC_LINK_EXPIRED": "Magic link has expired.",

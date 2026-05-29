@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from better_auth.types.context import AuthContext
@@ -46,7 +46,7 @@ class HookData:
 
 # A before-hook returns False (abort), a patch (HookData / {"data": ...}),
 # or None / anything else (no-op). May be sync or async.
-BeforeHookResult = Union[bool, HookData, Mapping[str, Any], None]
+BeforeHookResult = bool | HookData | Mapping[str, Any] | None
 BeforeHookFn = Callable[
     ["Record", "AuthContext | None"], Awaitable[BeforeHookResult] | BeforeHookResult
 ]

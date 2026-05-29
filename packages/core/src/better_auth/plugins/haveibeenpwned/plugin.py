@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import httpx
 
@@ -21,7 +21,6 @@ from better_auth.error import APIError
 from better_auth.types.context import EndpointContext
 from better_auth.types.hooks import BeforeHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin
-
 
 HIBP_ERROR_CODES: Mapping[str, str] = {
     "PASSWORD_COMPROMISED": (
@@ -100,7 +99,7 @@ def _build_hook(cfg: _HIBPConfig) -> BeforeHook:
         password = getattr(ctx.body, "password", None)
         if not password:
             return
-        sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()  # noqa: S324
+        sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
         prefix, suffix = sha1[:5], sha1[5:]
         body_text = await _fetch_range(
             prefix,

@@ -11,13 +11,12 @@ Locks the contract from `better_auth.db.transaction.transaction`:
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.db.transaction import transaction
+from better_auth.db.with_hooks import get_with_hooks
 from better_auth.types.adapter import Where
 from better_auth.types.db_hooks import DatabaseHooksEntry, HookOp, ModelHooks
 from better_auth.types.init_options import BetterAuthOptions
-from better_auth.db.with_hooks import get_with_hooks
 from better_auth_memory_adapter import memory_adapter
 
 

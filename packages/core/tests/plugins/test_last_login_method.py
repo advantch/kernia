@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from better_auth.plugins.last_login_method.plugin import (
     DEFAULT_COOKIE_NAME,
     DEFAULT_MAX_AGE,
     LastLoginMethodOptions,
-    _resolve_method,
+    _default_resolve_method,
     last_login_method,
 )
+
+
+def _ctx(path: str, **path_params: str) -> SimpleNamespace:
+    """Build the minimal context the resolver reads (request.path + path_params)."""
+    return SimpleNamespace(
+        request=SimpleNamespace(path=path),
+        path_params=dict(path_params),
+    )
 
 
 def test_defaults() -> None:
@@ -18,17 +28,20 @@ def test_defaults() -> None:
 
 
 def test_resolver_known_paths() -> None:
-    assert _resolve_method("/sign-in/email") == "email"
-    assert _resolve_method("/sign-up/email") == "email"
-    assert _resolve_method("/callback/google") == "google"
-    assert _resolve_method("/oauth2/callback/github") == "github"
-    assert _resolve_method("/siwe/verify") == "siwe"
-    assert _resolve_method("/magic-link/verify") == "magic-link"
+    assert _default_resolve_method(_ctx("/sign-in/email")) == "email"
+    assert _default_resolve_method(_ctx("/sign-up/email")) == "email"
+    assert _default_resolve_method(_ctx("/callback/google", id="google")) == "google"
+    assert (
+        _default_resolve_method(_ctx("/oauth2/callback/github", providerId="github"))
+        == "github"
+    )
+    assert _default_resolve_method(_ctx("/siwe/verify")) == "siwe"
+    assert _default_resolve_method(_ctx("/magic-link/verify")) == "magic-link"
 
 
 def test_resolver_unknown_paths() -> None:
-    assert _resolve_method("/random") is None
-    assert _resolve_method("") is None
+    assert _default_resolve_method(_ctx("/random")) is None
+    assert _default_resolve_method(_ctx("")) is None
 
 
 def test_plugin_constructor_uses_overrides() -> None:

@@ -15,15 +15,14 @@ ASGI workers on the user.
 from __future__ import annotations
 
 from http.cookies import SimpleCookie
-from typing import Any
+from typing import Any, ClassVar
 
 from asgiref.sync import async_to_sync
+from better_auth.auth import BetterAuth
+from better_auth.integrations.session import strip_base_path
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from django.views import View
-
-from better_auth.auth import BetterAuth
-from better_auth.integrations.session import strip_base_path
 
 
 def django_request_to_scope(
@@ -119,7 +118,7 @@ class BetterAuthView(View):
     auth: BetterAuth | None = None
     base_path: str = "/api/auth"
 
-    http_method_names = [
+    http_method_names: ClassVar[list[str]] = [
         "get",
         "post",
         "put",

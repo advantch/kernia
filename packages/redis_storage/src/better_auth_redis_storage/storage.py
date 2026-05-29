@@ -15,7 +15,6 @@ from typing import Any
 
 from better_auth.types.secondary_storage import SecondaryStorage
 
-
 # Server-side atomic GETDEL fallback (Redis 6.2+ has GETDEL natively; we keep
 # Lua for broader compatibility and to make the contract explicit).
 _GET_AND_DELETE_LUA = (

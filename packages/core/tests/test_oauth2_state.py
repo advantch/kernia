@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
-
 from better_auth.oauth2.state import generate_state, parse_state
 
 

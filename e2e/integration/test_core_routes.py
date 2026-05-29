@@ -7,7 +7,6 @@ Exercises the routes via the ASGI driver end-to-end against a memory adapter.
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
 from better_auth.types.init_options import BetterAuthOptions

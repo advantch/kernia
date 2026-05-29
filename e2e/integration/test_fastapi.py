@@ -7,13 +7,10 @@ import pytest
 
 @pytest.fixture
 def app_and_client():
-    fastapi = pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi")
     httpx = pytest.importorskip("httpx")
-    from fastapi import Depends, FastAPI
-
     from better_auth.auth import init
     from better_auth.plugins import email_and_password
-    from better_auth.types.context import Session
     from better_auth.types.init_options import BetterAuthOptions
     from better_auth_fastapi import (
         get_session,
@@ -21,6 +18,7 @@ def app_and_client():
         require_session,
     )
     from better_auth_memory_adapter import memory_adapter
+    from fastapi import Depends, FastAPI
 
     auth = init(
         BetterAuthOptions(

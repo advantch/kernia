@@ -13,7 +13,6 @@ import hashlib
 
 import httpx
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins import email_and_password, have_i_been_pwned
 from better_auth.types.init_options import (
@@ -26,7 +25,7 @@ from better_auth_test_utils import ASGIDriver
 
 
 def _pwned_suffix(password: str) -> tuple[str, str]:
-    sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()  # noqa: S324
+    sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
     return sha1[:5], sha1[5:]
 
 

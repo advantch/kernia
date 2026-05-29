@@ -7,13 +7,8 @@ import pytest
 
 @pytest.fixture
 def app_and_client():
-    starlette = pytest.importorskip("starlette")
+    pytest.importorskip("starlette")
     httpx = pytest.importorskip("httpx")
-    from starlette.applications import Starlette
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
     from better_auth.auth import init
     from better_auth.plugins.email_password import email_and_password
     from better_auth.types.init_options import BetterAuthOptions
@@ -23,6 +18,10 @@ def app_and_client():
         mount_better_auth,
         require_session,
     )
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
 
     auth = init(
         BetterAuthOptions(

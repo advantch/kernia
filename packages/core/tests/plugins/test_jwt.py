@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 from better_auth.auth import init
 from better_auth.plugins.jwt import jwt as jwt_plugin
 from better_auth.plugins.jwt.plugin import (

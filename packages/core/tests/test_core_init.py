@@ -7,7 +7,6 @@ ownership stamping, the error registry, and cookie signing.
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.cookies import new_token, render_set_cookie, sign, verify
 from better_auth.plugins import email_and_password

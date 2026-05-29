@@ -7,7 +7,7 @@ Mirrors `reference/packages/better-auth/src/plugins/device-authorization/`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 
 from better_auth.plugins.device_authorization import routes
@@ -16,17 +16,25 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
+# Mirrors `reference/.../device-authorization/error-codes.ts`.
 DEVICE_AUTHORIZATION_ERROR_CODES: Mapping[str, str] = {
-    "INVALID_DEVICE_CODE": "The device code is invalid.",
-    "EXPIRED_DEVICE_CODE": "The device code has expired.",
-    "AUTHORIZATION_PENDING": "User has not yet approved this device.",
-    "ACCESS_DENIED": "The user denied this device authorization.",
-    "POLLING_TOO_FREQUENTLY": "Polling too quickly; respect the `interval` value.",
-    "INVALID_USER_CODE": "The user code is invalid.",
-    "EXPIRED_USER_CODE": "The user code has expired.",
-    "DEVICE_CODE_ALREADY_PROCESSED": "This device code has already been processed.",
-    "AUTHENTICATION_REQUIRED": "Sign-in is required to approve a device.",
+    "INVALID_DEVICE_CODE": "Invalid device code",
+    "EXPIRED_DEVICE_CODE": "Device code has expired",
+    "EXPIRED_USER_CODE": "User code has expired",
+    "AUTHORIZATION_PENDING": "Authorization pending",
+    "ACCESS_DENIED": "Access denied",
+    "INVALID_USER_CODE": "Invalid user code",
+    "DEVICE_CODE_ALREADY_PROCESSED": "Device code already processed",
+    "DEVICE_CODE_NOT_CLAIMED": (
+        "Device code has not been claimed by a verifying session; call "
+        "`GET /device` with the `user_code` while signed in before approving "
+        "or denying"
+    ),
+    "POLLING_TOO_FREQUENTLY": "Polling too frequently",
+    "USER_NOT_FOUND": "User not found",
+    "FAILED_TO_CREATE_SESSION": "Failed to create session",
+    "INVALID_DEVICE_CODE_STATUS": "Invalid device code status",
+    "AUTHENTICATION_REQUIRED": "Authentication required",
 }
 
 
@@ -70,12 +78,28 @@ class _DeviceAuthorizationPlugin:
 
 def device_authorization(
     *,
-    expires_in: int = 600,
-    interval: int = 5,
+    expires_in: str | int = "30m",
+    interval: str | int = "5s",
     user_code_length: int = 8,
     device_code_length: int = 40,
     verification_uri: str | None = None,
+    generate_device_code: Callable[[], str | Awaitable[str]] | None = None,
+    generate_user_code: Callable[[], str | Awaitable[str]] | None = None,
+    validate_client: Callable[[str], bool | Awaitable[bool]] | None = None,
+    on_device_auth_request: (
+        Callable[[str, str | None], None | Awaitable[None]] | None
+    ) = None,
 ) -> BetterAuthPlugin:
+    """Construct the device-authorization plugin (RFC 8628).
+
+    Upstream-parity options:
+      * ``expires_in`` / ``interval`` — time strings ('30m', '5s', '1h') or ms ints.
+      * ``user_code_length`` / ``device_code_length`` — default code lengths.
+      * ``verification_uri`` — absolute URL or relative path (default ``/device``).
+      * ``generate_device_code`` / ``generate_user_code`` — custom code generators.
+      * ``validate_client`` — ``(client_id) -> bool`` gate on /device/code + /token.
+      * ``on_device_auth_request`` — ``(client_id, scope) -> None`` side effect.
+    """
     routes.configure(
         routes.DeviceAuthorizationOptions(
             expires_in=expires_in,
@@ -83,6 +107,10 @@ def device_authorization(
             user_code_length=user_code_length,
             device_code_length=device_code_length,
             verification_uri=verification_uri,
+            generate_device_code=generate_device_code,
+            generate_user_code=generate_user_code,
+            validate_client=validate_client,
+            on_device_auth_request=on_device_auth_request,
         )
     )
     return _DeviceAuthorizationPlugin()  # type: ignore[return-value]

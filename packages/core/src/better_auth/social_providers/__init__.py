@@ -43,7 +43,6 @@ from better_auth.social_providers.vk import vk
 from better_auth.social_providers.wechat import wechat
 from better_auth.social_providers.zoom import zoom
 
-
 __all__ = [
     "OAuthProvider",
     "OAuthUserProfile",

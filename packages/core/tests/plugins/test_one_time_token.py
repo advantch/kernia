@@ -12,21 +12,22 @@ from better_auth.plugins.one_time_token.routes import (
 def test_plugin_id_and_paths() -> None:
     p = one_time_token()
     assert p.id == "one-time-token"
+    # Upstream parity: endpoints are namespaced under /one-time-token/.
     paths = {ep.path for ep in p.endpoints}  # type: ignore[union-attr]
-    assert paths == {"/generate-one-time-token", "/verify-one-time-token"}
+    assert paths == {"/one-time-token/generate", "/one-time-token/verify"}
 
 
 def test_generate_requires_session() -> None:
     p = one_time_token()
     by_path = {ep.path: ep for ep in p.endpoints}  # type: ignore[union-attr]
-    assert by_path["/generate-one-time-token"].options.requires_session is True
-    assert by_path["/verify-one-time-token"].options.requires_session is False
+    assert by_path["/one-time-token/generate"].options.requires_session is True
+    assert by_path["/one-time-token/verify"].options.requires_session is False
 
 
 def test_body_defaults() -> None:
+    # Upstream parity: generate takes no body; verify only needs `token`.
     g = GenerateOneTimeTokenBody.model_validate({})
-    assert g.purpose == "default"
-    assert g.expires_in is None
+    assert isinstance(g, GenerateOneTimeTokenBody)
     v = VerifyOneTimeTokenBody.model_validate({"token": "abc"})
     assert v.token == "abc"
 

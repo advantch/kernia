@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.crypto.secret_rotation import (
     normalize_secrets,
     sign_with,

@@ -25,12 +25,22 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
 PHONE_NUMBER_ERROR_CODES: Mapping[str, str] = {
-    "INVALID_PHONE_NUMBER_OR_PASSWORD": "Phone number or password is incorrect.",
+    "INVALID_PHONE_NUMBER": "Invalid phone number",
+    "PHONE_NUMBER_EXIST": "Phone number already exists",
+    "PHONE_NUMBER_NOT_EXIST": "phone number isn't registered",
+    "INVALID_PHONE_NUMBER_OR_PASSWORD": "Invalid phone number or password",
+    "UNEXPECTED_ERROR": "Unexpected error",
+    "OTP_NOT_FOUND": "OTP not found",
+    "OTP_EXPIRED": "OTP expired",
+    "INVALID_OTP": "Invalid OTP",
+    "PHONE_NUMBER_NOT_VERIFIED": "Phone number not verified",
+    "PHONE_NUMBER_CANNOT_BE_UPDATED": "Phone number cannot be updated",
+    "SEND_OTP_NOT_IMPLEMENTED": "sendOTP not implemented",
+    "TOO_MANY_ATTEMPTS": "Too many attempts",
+    # Python-port-specific (configuration/UX) codes retained for our endpoints.
     "PHONE_NUMBER_NOT_CONFIGURED": "Phone-number plugin is missing send_sms.",
     "PHONE_NUMBER_SIGN_UP_DISABLED": "Sign-up via phone number is disabled.",
-    "PHONE_NUMBER_NOT_VERIFIED": "Phone number has not been verified.",
 }
 
 

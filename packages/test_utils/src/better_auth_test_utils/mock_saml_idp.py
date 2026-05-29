@@ -20,7 +20,7 @@ import secrets
 import uuid
 import xml.sax.saxutils as saxutils
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from cryptography import x509
@@ -30,7 +30,7 @@ from cryptography.x509.oid import NameOID
 
 
 def _now_utc() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _iso(dt: datetime) -> str:
@@ -172,7 +172,7 @@ class MockSAMLIdP:
     # ----- internals -----
 
     def _attribute_xml(self, name: str, value: Any) -> str:
-        values = value if isinstance(value, (list, tuple)) else [value]
+        values = value if isinstance(value, list | tuple) else [value]
         inner = "".join(
             f"<saml:AttributeValue>{_xml_escape(str(v))}</saml:AttributeValue>" for v in values
         )

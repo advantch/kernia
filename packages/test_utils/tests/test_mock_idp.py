@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import httpx
-
 from better_auth.oauth2 import verify_id_token
 from better_auth_test_utils import MockIdP
 

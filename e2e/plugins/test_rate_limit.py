@@ -12,7 +12,6 @@ exercised in `packages/redis_storage/tests/` when docker is up.
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth import init
 from better_auth.auth.rate_limit import InMemoryRateLimitStore
 from better_auth.plugins import email_and_password

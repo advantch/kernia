@@ -18,7 +18,6 @@ from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 
-
 # ----- request body shapes -----
 
 

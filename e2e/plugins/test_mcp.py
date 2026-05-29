@@ -7,8 +7,6 @@ an access token, then verifies the token via the plugin's `introspect_mcp_token`
 from __future__ import annotations
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
 from better_auth.auth import init
 from better_auth.plugins.email_password import email_and_password
 from better_auth.plugins.jwt import jwt

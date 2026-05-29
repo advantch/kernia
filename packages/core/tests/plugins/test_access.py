@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.plugins.access import (
     Role,
     create_access_control,

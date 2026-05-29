@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
-
 from better_auth.db.migrations.codegen import emit_migration
 
 from better_auth_cli.utils import (

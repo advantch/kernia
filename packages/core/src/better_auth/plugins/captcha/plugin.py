@@ -12,7 +12,7 @@ that want to verify a token out of band.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from pydantic import BaseModel
 
@@ -23,7 +23,6 @@ from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 from better_auth.types.hooks import BeforeHook, PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin
-
 
 CAPTCHA_ERROR_CODES: Mapping[str, str] = {
     "CAPTCHA_FAILED": "Captcha verification failed.",

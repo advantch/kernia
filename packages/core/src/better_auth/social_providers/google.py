@@ -11,11 +11,10 @@ The crypto-sensitive parts (id_token signature verification, PKCE) are kept insi
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from better_auth.social_providers._base import OAuthProvider, OAuthUserProfile
-
 
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"

@@ -5,6 +5,10 @@ cookie: `<session.token>.<hmac-sha256>`. On every request we look for an
 `Authorization` header; if present and there is no session cookie, we verify the
 HMAC against the configured secret and attach the session to the request.
 
+On the way out, the plugin mirrors the freshly-set session cookie back to the
+client as a `set-auth-token` response header (and advertises it via
+`Access-Control-Expose-Headers`) so non-cookie clients can capture the token.
+
 Mirrors `reference/packages/better-auth/src/plugins/bearer/index.ts`.
 """
 
@@ -13,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import unquote
 
 from better_auth.cookies import verify
 from better_auth.types.adapter import Where
@@ -22,13 +27,21 @@ from better_auth.types.endpoint import AuthEndpoint
 from better_auth.types.hooks import PluginHooks
 from better_auth.types.plugin import BetterAuthPlugin, PluginSchema, RateLimitRule
 
-
+# RFC 7235: auth-scheme is case-insensitive.
 _BEARER_SCHEME = "bearer "
+
+
+def _try_decode(value: str) -> str:
+    try:
+        return unquote(value)
+    except Exception:  # pragma: no cover - unquote is very permissive
+        return value
 
 
 @dataclass(frozen=True, slots=True)
 class BearerOptions:
-    require_signature: bool = True
+    # Upstream default is `false`: raw (unsigned) tokens are accepted too.
+    require_signature: bool = False
 
 
 def _make_on_request(opts: BearerOptions):
@@ -51,8 +64,10 @@ def _make_on_request(opts: BearerOptions):
             return
 
         if "." in bearer_token:
-            # Signed cookie shape: <value>.<sig>. Verify the HMAC.
-            session_token = verify(bearer_token, secret=ctx.auth.secret)
+            # Signed cookie shape: <value>.<sig>. The token may arrive raw or
+            # URL-encoded depending on the transport; verify accepts either.
+            decoded = _try_decode(bearer_token) if "%" in bearer_token else bearer_token
+            session_token = verify(decoded, secret=ctx.auth.secret)
             if not session_token:
                 return
         else:
@@ -79,6 +94,28 @@ def _make_on_request(opts: BearerOptions):
     return on_request
 
 
+async def _on_response(ctx: EndpointContext, result: object) -> None:
+    """Expose the freshly-set session cookie value as a `set-auth-token` header."""
+    session_cookie = None
+    for name, value, attrs in ctx.set_cookies:
+        if name != SESSION_TOKEN_COOKIE:
+            continue
+        # Skip cookie-clearing (logout) — max-age 0 means revocation.
+        if not value or getattr(attrs, "max_age", None) == 0:
+            return
+        session_cookie = value
+        break
+    if session_cookie is None:
+        return
+
+    exposed = ctx.response_headers.get("Access-Control-Expose-Headers", "")
+    names = [h.strip() for h in exposed.split(",") if h.strip()]
+    if "set-auth-token" not in names:
+        names.append("set-auth-token")
+    ctx.response_headers["set-auth-token"] = session_cookie
+    ctx.response_headers["Access-Control-Expose-Headers"] = ", ".join(names)
+
+
 @dataclass(frozen=True, slots=True)
 class _BearerPlugin:
     id: str = "bearer"
@@ -88,12 +125,15 @@ class _BearerPlugin:
     middlewares: None = None
     hooks: PluginHooks | None = None
     on_request: Any = None
-    on_response: None = None
+    on_response: Any = None
     rate_limit: tuple[RateLimitRule, ...] = ()
     error_codes: Mapping[str, str] = field(default_factory=dict)
     init: None = None
 
 
-def bearer(*, require_signature: bool = True) -> BetterAuthPlugin:
+def bearer(*, require_signature: bool = False) -> BetterAuthPlugin:
     opts = BearerOptions(require_signature=require_signature)
-    return _BearerPlugin(on_request=_make_on_request(opts))  # type: ignore[return-value]
+    return _BearerPlugin(
+        on_request=_make_on_request(opts),
+        on_response=_on_response,
+    )  # type: ignore[return-value]

@@ -21,8 +21,9 @@ combinator semantics.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 # A statement set: maps resource name → tuple of allowed action names.
 Statement = Mapping[str, tuple[str, ...]]
@@ -63,7 +64,7 @@ class Role:
             if isinstance(requested, dict):
                 actions = tuple(requested.get("actions") or ())
                 inner_connector = requested.get("connector", "AND")
-            elif isinstance(requested, (list, tuple)):
+            elif isinstance(requested, list | tuple):
                 actions = tuple(requested)
             else:
                 raise ValueError(f"Invalid access control request for {resource!r}")

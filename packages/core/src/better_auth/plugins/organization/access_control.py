@@ -23,7 +23,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-
 Statement = dict[str, tuple[str, ...]]
 
 
@@ -70,7 +69,7 @@ def define_role(name: str, statement: Statement) -> Role:
 
 
 # camelCase alias kept to ease porting from the reference implementation.
-defineRole = define_role  # noqa: N816  -- TS-style alias is intentional
+defineRole = define_role  # -- TS-style alias is intentional
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +87,7 @@ class AccessControl:
         return define_role(name, statement)
 
     # camelCase alias for parity.
-    newRole = new_role  # noqa: N815
+    newRole = new_role
 
 
 def create_access_control(
@@ -100,7 +99,7 @@ def create_access_control(
 
 
 # camelCase alias.
-createAccessControl = create_access_control  # noqa: N816
+createAccessControl = create_access_control
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +205,7 @@ def merge_dynamic_roles(
         if not isinstance(name, str) or not isinstance(perms, Mapping):
             continue
         statement: Statement = {
-            str(k): tuple(v) for k, v in perms.items() if isinstance(v, (list, tuple))
+            str(k): tuple(v) for k, v in perms.items() if isinstance(v, list | tuple)
         }
         out[name] = define_role(name, statement)
     return out

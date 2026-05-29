@@ -14,14 +14,13 @@ from __future__ import annotations
 from typing import Any
 
 from asgiref.sync import async_to_sync
-from django.http import HttpRequest
-from django.utils.deprecation import MiddlewareMixin
-
 from better_auth.auth import BetterAuth
 from better_auth.integrations.session import (
     SESSION_COOKIE_NAME,
     resolve_session,
 )
+from django.http import HttpRequest
+from django.utils.deprecation import MiddlewareMixin
 
 
 class BetterAuthMiddleware(MiddlewareMixin):

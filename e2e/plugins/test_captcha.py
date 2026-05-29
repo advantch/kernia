@@ -8,12 +8,10 @@ Validates the before-hook against all built-in providers using
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import httpx
 import pytest
-
 from better_auth.auth import init
 from better_auth.plugins import captcha, email_and_password
 from better_auth.plugins.captcha import (
@@ -33,13 +31,7 @@ from better_auth_test_utils import ASGIDriver
 
 def _mock_transport(success: bool, *, score: float = 0.9) -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
-        # Parse form or json body — providers vary
-        if request.headers.get("content-type", "").startswith("application/json"):
-            body = json.loads(request.content.decode("utf-8") or "{}")
-        else:
-            from urllib.parse import parse_qsl
-
-            body = dict(parse_qsl((request.content or b"").decode("utf-8")))
+        # The mock provider ignores the request body and returns a canned verdict.
         payload: dict[str, Any] = {"success": success}
         if "recaptcha" in str(request.url) and score is not None:
             payload["score"] = score

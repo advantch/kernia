@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Request
-
 from better_auth.auth import BetterAuth
 from better_auth.cookies import verify
 from better_auth.types.adapter import Where
 from better_auth.types.context import Session
+from fastapi import FastAPI, HTTPException, Request
 
 
 def mount_better_auth(app: FastAPI, auth: BetterAuth) -> None:

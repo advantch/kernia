@@ -13,7 +13,6 @@ Mirrors the matrices in
 from __future__ import annotations
 
 import pytest
-
 from better_auth.plugins.organization.access_control import (
     DEFAULT_ROLES,
     DEFAULT_STATEMENTS,
@@ -26,7 +25,6 @@ from better_auth.plugins.organization.access_control import (
     merge_dynamic_roles,
     owner_role,
 )
-
 
 # ---------------------------------------------------------------------------
 # Built-in roles

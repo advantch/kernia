@@ -41,7 +41,7 @@ def _constructor_name(plugin_dir: Path) -> str:
         if isinstance(node, ast.Assign):
             for tgt in node.targets:
                 if isinstance(tgt, ast.Name) and tgt.id == "__all__":
-                    if isinstance(node.value, (ast.List, ast.Tuple)):
+                    if isinstance(node.value, ast.List | ast.Tuple):
                         for elt in node.value.elts:
                             if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                 return elt.value

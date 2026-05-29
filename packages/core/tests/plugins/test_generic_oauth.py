@@ -5,11 +5,8 @@ Covers: config validation, discovery URL merging, authorize URL construction.
 
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
-
 import httpx
 import pytest
-
 from better_auth.plugins.generic_oauth import (
     GenericOAuthConfig,
     auth0,

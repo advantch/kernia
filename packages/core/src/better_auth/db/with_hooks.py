@@ -27,8 +27,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from better_auth.db.hook_queue import queue_after_transaction_hook
 from better_auth.db.adapter.transform_adapter import _maybe_await
+from better_auth.db.hook_queue import queue_after_transaction_hook
 from better_auth.types.adapter import Record, Where
 from better_auth.types.db_hooks import (
     DatabaseHooksEntry,
@@ -146,7 +146,7 @@ class WithHooks:
         try:
             rows = await self._adapter.find_many(model=model, where=where, limit=1)
             entity = rows[0] if rows else None
-        except Exception:  # noqa: BLE001 — best-effort pre-read, proceed regardless
+        except Exception:  # — best-effort pre-read, proceed regardless
             entity = None
         if entity is not None:
             for entry in self._entries:
@@ -167,7 +167,7 @@ class WithHooks:
         entities: list[Record] = []
         try:
             entities = await self._adapter.find_many(model=model, where=where)
-        except Exception:  # noqa: BLE001 — best-effort pre-read
+        except Exception:  # — best-effort pre-read
             entities = []
         for entity in entities:
             for entry in self._entries:
@@ -202,12 +202,13 @@ class WithHooks:
                         model=model, where=where, limit=1
                     )
                     snapshot = rows[0] if rows else None
-                except Exception:  # noqa: BLE001
+                except Exception:
                     snapshot = None
             if snapshot is not None:
                 for entry in before_hooks:
                     op = _op(entry.hooks.get(model), "delete")
-                    assert op is not None and op.before is not None
+                    assert op is not None
+                    assert op.before is not None
                     if await _maybe_await(op.before(snapshot, self._ctx)) is False:
                         return None
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.auth.trusted_origins import is_state_changing, is_trusted, normalize_origin
 
 

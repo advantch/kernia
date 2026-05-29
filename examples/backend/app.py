@@ -20,19 +20,17 @@ from __future__ import annotations
 import os
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 from better_auth.auth import init
 from better_auth.plugins import email_and_password
-from better_auth.plugins.organization import organization
 from better_auth.plugins.open_api import open_api
+from better_auth.plugins.organization import organization
 from better_auth.social_providers import google
 from better_auth.types.context import Session
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_fastapi import get_session, mount_better_auth, require_session
 from better_auth_memory_adapter import memory_adapter
-
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from better_auth.crypto import hash_password, needs_rehash, verify_password
 
 

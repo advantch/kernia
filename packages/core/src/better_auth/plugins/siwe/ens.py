@@ -64,7 +64,7 @@ def web3_ens_resolver(
 
         try:
             return await asyncio.wait_for(asyncio.to_thread(_sync_lookup), timeout=timeout)
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             return None
 
     return _resolve

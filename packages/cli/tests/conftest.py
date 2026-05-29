@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 FIXTURE_CONFIG = '''"""Fixture better-auth config for CLI tests."""
 
 from better_auth import BetterAuthOptions, BetterAuthPlugin, PluginSchema

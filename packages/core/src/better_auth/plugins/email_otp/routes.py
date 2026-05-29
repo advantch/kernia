@@ -15,8 +15,13 @@ All OTPs are numeric of length `otp_length` (default 6).
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import inspect
 import secrets
 import time
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -28,10 +33,10 @@ from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
 
-
 _OPTIONS_KEY = "email-otp"
 _DEFAULT_LENGTH = 6
 _DEFAULT_EXPIRES_IN = 5 * 60  # 5 minutes
+_DEFAULT_ALLOWED_ATTEMPTS = 3
 
 
 def _opts(ctx: EndpointContext) -> dict[str, object]:
@@ -46,12 +51,104 @@ def _expires_in(ctx: EndpointContext) -> int:
     return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))  # type: ignore[arg-type]
 
 
+def _allowed_attempts(ctx: EndpointContext) -> int:
+    return int(
+        _opts(ctx).get("allowed_attempts", _DEFAULT_ALLOWED_ATTEMPTS)  # type: ignore[arg-type]
+    )
+
+
+def default_key_hasher(otp: str) -> str:
+    """SHA-256 + unpadded base64url. Mirrors `email-otp/utils.ts`."""
+    digest = hashlib.sha256(otp.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 def generate_otp(length: int = _DEFAULT_LENGTH) -> str:
     """Generate a numeric OTP. Module-level so unit tests can hit it directly."""
     if length <= 0:
         raise ValueError("OTP length must be positive")
     upper = 10**length
     return f"{secrets.randbelow(upper):0{length}d}"
+
+
+async def _generate_otp(
+    ctx: EndpointContext, *, email: str, purpose: str
+) -> str:
+    """Mirror upstream `opts.generateOTP(...) || defaultOTPGenerator(opts)`."""
+    gen = _opts(ctx).get("generate_otp")
+    if gen is not None:
+        custom = await _maybe_await(gen({"email": email, "type": purpose}, ctx))  # type: ignore[operator]
+        if custom:
+            return str(custom)
+    return generate_otp(_otp_length(ctx))
+
+
+async def _store_otp(ctx: EndpointContext, otp: str) -> str:
+    """Transform an OTP for at-rest storage. Mirrors `storeOTP`."""
+    mode = _opts(ctx).get("store_otp")
+    if mode == "hashed":
+        return default_key_hasher(otp)
+    if isinstance(mode, dict) and "hash" in mode:
+        return str(await _maybe_await(mode["hash"](otp)))
+    if isinstance(mode, dict) and "encrypt" in mode:
+        return str(await _maybe_await(mode["encrypt"](otp)))
+    return otp
+
+
+async def _verify_stored_otp(ctx: EndpointContext, stored: str, otp: str) -> bool:
+    """Constant-time compare against a stored OTP. Mirrors `verifyStoredOTP`."""
+    mode = _opts(ctx).get("store_otp")
+    if mode == "hashed":
+        return hmac.compare_digest(default_key_hasher(otp), stored)
+    if isinstance(mode, dict) and "hash" in mode:
+        hashed = str(await _maybe_await(mode["hash"](otp)))
+        return hmac.compare_digest(hashed, stored)
+    if isinstance(mode, dict) and "decrypt" in mode:
+        decrypted = str(await _maybe_await(mode["decrypt"](stored)))
+        return hmac.compare_digest(decrypted, otp)
+    return hmac.compare_digest(otp, stored)
+
+
+async def _retrieve_otp(ctx: EndpointContext, stored: str) -> str | None:
+    """Recover the plain-text OTP if possible. Mirrors `retrieveOTP`."""
+    mode = _opts(ctx).get("store_otp")
+    if mode in (None, "plain"):
+        return stored
+    if isinstance(mode, dict) and "decrypt" in mode:
+        return str(await _maybe_await(mode["decrypt"](stored)))
+    # hashed or custom hash -> cannot recover
+    return None
+
+
+async def _try_reuse_otp(
+    ctx: EndpointContext, *, email: str, purpose: str
+) -> str | None:
+    """Reuse an unexpired OTP and extend its expiry. Mirrors `tryReuseOTP`."""
+    identifier = _identifier(purpose, email)
+    record = await ctx.auth.adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value=identifier),),
+    )
+    if not record or int(record.get("expiresAt", 0)) < _now():
+        return None
+    stored, _, attempts_str = str(record["value"]).rpartition(":")
+    if attempts_str and int(attempts_str) >= _allowed_attempts(ctx):
+        return None
+    plain = await _retrieve_otp(ctx, stored)
+    if not plain:
+        return None
+    await ctx.auth.adapter.update(
+        model="verification",
+        where=(Where(field="identifier", value=identifier),),
+        update={"expiresAt": _now() + _expires_in(ctx), "updatedAt": _now()},
+    )
+    return plain
 
 
 def _identifier(purpose: str, email: str) -> str:
@@ -76,7 +173,14 @@ async def _send_otp(ctx: EndpointContext, email: str, otp: str, purpose: str) ->
 async def _create_otp(
     ctx: EndpointContext, *, email: str, purpose: str
 ) -> str:
-    otp = generate_otp(_otp_length(ctx))
+    # resend_strategy "reuse": resend the same OTP and extend expiry when the
+    # OTP is recoverable (plain/encrypted/custom decrypt). Falls back to rotate.
+    if _opts(ctx).get("resend_strategy") == "reuse":
+        reused = await _try_reuse_otp(ctx, email=email, purpose=purpose)
+        if reused is not None:
+            return reused
+    otp = await _generate_otp(ctx, email=email, purpose=purpose)
+    stored = await _store_otp(ctx, otp)
     identifier = _identifier(purpose, email)
     # Replace any prior pending OTP for the same (purpose, email).
     await ctx.auth.adapter.delete_many(
@@ -88,7 +192,7 @@ async def _create_otp(
         model="verification",
         data={
             "identifier": identifier,
-            "value": f"{otp}:0",
+            "value": f"{stored}:0",
             "expiresAt": now + _expires_in(ctx),
             "createdAt": now,
             "updatedAt": now,
@@ -119,13 +223,13 @@ async def _consume_otp(
         raise APIError(400, "OTP_EXPIRED", message="OTP has expired")
     stored, _, attempts_str = str(record["value"]).rpartition(":")
     attempts = int(attempts_str or "0")
-    if attempts >= 3:
+    if attempts >= _allowed_attempts(ctx):
         await ctx.auth.adapter.delete_many(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
         )
         raise APIError(403, "TOO_MANY_ATTEMPTS", message="Too many invalid attempts")
-    if stored != otp:
+    if not await _verify_stored_otp(ctx, stored, otp):
         await ctx.auth.adapter.update(
             model="verification",
             where=(Where(field="identifier", value=identifier),),
