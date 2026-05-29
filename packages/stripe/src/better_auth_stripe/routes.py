@@ -239,21 +239,61 @@ def _plan_lookup_key(plan: StripePlan, *, annual: bool) -> str | None:
     return plan.lookup_key
 
 
+async def _seat_member_count(
+    ctx: EndpointContext,
+    plan: StripePlan,
+    *,
+    customer_type: str,
+    reference_id: str,
+) -> int:
+    """Member count for an org plan with auto-managed seats (else 0)."""
+    if not (plan.seat_price_id and customer_type == "organization"):
+        return 0
+    return await ctx.auth.adapter.count(
+        model="member",
+        where=(Where(field="organizationId", value=reference_id),),
+    )
+
+
 async def _build_line_items(
-    opts: StripeOptions, plan: StripePlan, *, annual: bool, seats: int | None
+    opts: StripeOptions,
+    plan: StripePlan,
+    *,
+    annual: bool,
+    seats: int | None,
+    customer_type: str = "user",
+    member_count: int = 0,
 ) -> list[dict[str, Any]]:
-    """Build Stripe checkout/subscription line items for a plan."""
+    """Build Stripe checkout/subscription line items for a plan.
+
+    Mirrors upstream's seat-aware line-item assembly:
+      * base price (skipped when the plan is seat-only, i.e. ``priceId ==
+        seatPriceId``); quantity is 1 under auto-managed seats, else ``seats``,
+        and omitted entirely for metered prices,
+      * a per-seat line item priced at ``seatPriceId`` with ``quantity ==
+        memberCount`` for org plans with auto-managed seats,
+      * any plan-declared additional ``line_items`` (add-ons / metered) appended
+        verbatim.
+    """
     price_id = _plan_price_id(plan, annual=annual)
     lookup_key = _plan_lookup_key(plan, annual=annual)
     resolved = await _resolve_price(opts, price_id=price_id, lookup_key=lookup_key)
     effective_price_id = (resolved or {}).get("id") or price_id
+    metered = plan.metered or is_metered_price(resolved)
 
-    base: dict[str, Any] = {"price": effective_price_id}
-    if plan.metered or is_metered_price(resolved):
-        pass  # Metered: no quantity.
-    else:
-        base["quantity"] = seats or 1
-    items: list[dict[str, Any]] = [base]
+    is_auto_managed_seats = bool(
+        plan.seat_price_id and customer_type == "organization"
+    )
+    is_seat_only = is_auto_managed_seats and plan.seat_price_id == plan.price_id
+
+    items: list[dict[str, Any]] = []
+    if not is_seat_only:
+        base: dict[str, Any] = {"price": effective_price_id}
+        if not metered:
+            base["quantity"] = 1 if is_auto_managed_seats else (seats or 1)
+        items.append(base)
+    if is_auto_managed_seats:
+        items.append({"price": plan.seat_price_id, "quantity": member_count})
     items.extend(dict(extra) for extra in plan.line_items)
     return items
 
@@ -362,8 +402,16 @@ def _build_checkout_endpoint(opts: StripeOptions) -> AuthEndpoint:
         customer_id = await _ensure_user_customer(ctx, opts, metadata=body.metadata)
 
         annual = bool(body.annual)
+        member_count = await _seat_member_count(
+            ctx, plan, customer_type=customer_type, reference_id=reference_id
+        )
         line_items = await _build_line_items(
-            opts, plan, annual=annual, seats=body.seats
+            opts,
+            plan,
+            annual=annual,
+            seats=body.seats,
+            customer_type=customer_type,
+            member_count=member_count,
         )
         params: dict[str, Any] = {
             "mode": "subscription",
@@ -684,8 +732,16 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
         customer_id = await _ensure_user_customer(ctx, opts, metadata=body.metadata)
 
+        member_count = await _seat_member_count(
+            ctx, plan, customer_type=customer_type, reference_id=reference_id
+        )
         line_items = await _build_line_items(
-            opts, plan, annual=annual, seats=body.seats
+            opts,
+            plan,
+            annual=annual,
+            seats=body.seats,
+            customer_type=customer_type,
+            member_count=member_count,
         )
         price_id = line_items[0].get("price")
         billing_interval = "year" if annual else "month"
