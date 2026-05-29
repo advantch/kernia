@@ -279,11 +279,39 @@ def _construct_body(body_type: type, raw: Any) -> Any:
     filtered = raw
     if _dc.is_dataclass(body_type):
         known = {f.name for f in _dc.fields(body_type)}
-        filtered = {k: v for k, v in raw.items() if k in known}
+        # Wire-compatibility: better-auth's JS client (and upstream tests) send
+        # camelCase request fields, while our dataclass fields are snake_case.
+        # Accept both — map each camelCase key onto its snake_case field, but let
+        # an explicit snake_case key win if both are present.
+        filtered = {}
+        for k, v in raw.items():
+            if k in known:
+                filtered.setdefault(k, v)
+                continue
+            snake = _camel_to_snake(k)
+            if snake in known and snake not in raw:
+                filtered.setdefault(snake, v)
     try:
         return body_type(**filtered)
     except TypeError as e:
         raise APIError(400, "INVALID_REQUEST", message=str(e)) from None
+
+
+def _camel_to_snake(name: str) -> str:
+    """Convert a camelCase/PascalCase identifier to snake_case.
+
+    ``userId`` → ``user_id``, ``searchValue`` → ``search_value``. Leaves names
+    that are already snake_case untouched.
+    """
+    out: list[str] = []
+    for i, ch in enumerate(name):
+        if ch.isupper():
+            if i > 0 and (name[i - 1].islower() or name[i - 1].isdigit()):
+                out.append("_")
+            out.append(ch.lower())
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def _hook_matches(matcher: Any, ctx: EndpointContext) -> bool:
