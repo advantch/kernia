@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pip install mkdocs-material && python docs/scripts/build_plugin_pages.py && mkdocs build",
+  "outputDirectory": "site",
+  "framework": null,
+  "installCommand": "echo skip"
+}
