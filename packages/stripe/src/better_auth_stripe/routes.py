@@ -735,6 +735,114 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             )
 
         existing_sub = await opts.stripe_client.get_subscription(target_stripe_sub_id)
+
+        # The DB row backing this Stripe subscription (for schedule bookkeeping).
+        db_row = await ctx.auth.adapter.find_one(
+            model="subscription",
+            where=(Where(field="stripeSubscriptionId", value=target_stripe_sub_id),),
+        )
+
+        # Release any existing *plugin-created* subscription schedule attached to
+        # this subscription before applying any plan change. Schedules created
+        # outside the plugin (no `source: @better-auth/stripe` metadata) are left
+        # untouched. Only probe when a schedule is actually attached.
+        if existing_sub.get("schedule"):
+            listed_scheds = await opts.stripe_client.list_subscription_schedules(
+                customer=customer_id
+            )
+            for s in (listed_scheds or {}).get("data") or []:
+                sub_ref = s.get("subscription")
+                sub_ref_id = (
+                    sub_ref.get("id") if isinstance(sub_ref, dict) else sub_ref
+                )
+                if (
+                    sub_ref_id == target_stripe_sub_id
+                    and s.get("status") == "active"
+                    and (s.get("metadata") or {}).get("source")
+                    == "@better-auth/stripe"
+                ):
+                    await opts.stripe_client.release_subscription_schedule(s["id"])
+                    if db_row:
+                        await ctx.auth.adapter.update(
+                            model="subscription",
+                            where=(Where(field="id", value=db_row["id"]),),
+                            update={
+                                "stripeScheduleId": None,
+                                "updatedAt": int(time.time()),
+                            },
+                        )
+                    break
+
+        if body.scheduleAtPeriodEnd:
+            # Deferred change: schedule the plan swap at the current billing
+            # period end via Subscription Schedules. The active subscription is
+            # left on its current plan; the webhook applies the change later.
+            schedule = await opts.stripe_client.create_subscription_schedule(
+                from_subscription=target_stripe_sub_id
+            )
+            phases = schedule.get("phases") or []
+            if not phases:
+                raise APIError(400, "Subscription schedule has no phases")
+            current_phase = phases[0]
+
+            sub_items0 = (existing_sub.get("items") or {}).get("data") or []
+            old_price = None
+            if sub_items0:
+                p0 = sub_items0[0].get("price")
+                old_price = p0.get("id") if isinstance(p0, dict) else p0
+
+            def _price_of(item: dict[str, Any]) -> str | None:
+                ip = item.get("price")
+                return ip.get("id") if isinstance(ip, dict) else ip
+
+            current_items = current_phase.get("items") or []
+            new_phase_items: list[dict[str, Any]] = []
+            for item in current_items:
+                ip = _price_of(item)
+                if ip == old_price:
+                    new_phase_items.append(
+                        {"price": price_id, "quantity": item.get("quantity", 1)}
+                    )
+                else:
+                    new_phase_items.append(
+                        {"price": ip, "quantity": item.get("quantity", 1)}
+                    )
+
+            await opts.stripe_client.update_subscription_schedule(
+                schedule["id"],
+                metadata={"source": "@better-auth/stripe"},
+                end_behavior="release",
+                phases=[
+                    {
+                        "items": [
+                            {
+                                "price": _price_of(item),
+                                "quantity": item.get("quantity", 1),
+                            }
+                            for item in current_items
+                        ],
+                        "start_date": current_phase.get("start_date"),
+                        "end_date": current_phase.get("end_date"),
+                    },
+                    {
+                        "items": new_phase_items,
+                        "start_date": current_phase.get("end_date"),
+                        "proration_behavior": "none",
+                    },
+                ],
+            )
+
+            if db_row:
+                await ctx.auth.adapter.update(
+                    model="subscription",
+                    where=(Where(field="id", value=db_row["id"]),),
+                    update={
+                        "stripeScheduleId": schedule["id"],
+                        "updatedAt": int(time.time()),
+                    },
+                )
+            return {"url": body.returnUrl or "/", "redirect": True}
+
         sub_items = (existing_sub.get("items") or {}).get("data") or []
         update_items: list[dict[str, Any]] = []
         for idx, li in enumerate(line_items):

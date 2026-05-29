@@ -71,6 +71,71 @@ class MockStripe:
             self.prices[lookup_key] = obj
         return obj
 
+    def add_subscription(
+        self,
+        sub_id: str,
+        *,
+        customer: str,
+        items: list[dict[str, Any]],
+        status: str = "active",
+        schedule: str | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Seed an active Stripe subscription so list/get/schedule paths see it.
+
+        ``items`` is a list of ``{"price": <id>, "quantity": <int>, ...}`` dicts.
+        Pass ``schedule="sub_sched_x"`` to mark the subscription as having a
+        schedule attached (exercises the release-before-change paths).
+        """
+        now = int(time.time())
+        data = [
+            {
+                "id": it.get("id", _new_id("si")),
+                "price": {"id": it["price"]},
+                "quantity": it.get("quantity", 1),
+                "current_period_start": it.get("current_period_start", now),
+                "current_period_end": it.get(
+                    "current_period_end", now + 30 * 86400
+                ),
+            }
+            for it in items
+        ]
+        obj: dict[str, Any] = {
+            "id": sub_id,
+            "object": "subscription",
+            "customer": customer,
+            "status": status,
+            "items": {"data": data},
+            "metadata": {},
+        }
+        if schedule is not None:
+            obj["schedule"] = schedule
+        obj.update(extra)
+        self.subscriptions[sub_id] = obj
+        return obj
+
+    def add_schedule(
+        self,
+        schedule_id: str,
+        *,
+        subscription: str,
+        customer: str | None = None,
+        status: str = "active",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Seed an existing subscription schedule (release-before-change paths)."""
+        obj = {
+            "id": schedule_id,
+            "object": "subscription_schedule",
+            "status": status,
+            "customer": customer,
+            "subscription": subscription,
+            "phases": [],
+            "metadata": metadata or {},
+        }
+        self.schedules[schedule_id] = obj
+        return obj
+
     # ----- transport -----
 
     def mock_transport(self) -> httpx.MockTransport:
@@ -263,18 +328,48 @@ class MockStripe:
                 200, json={"object": "list", "data": data, "has_more": False}
             )
         if path == "/v1/subscription_schedules" and method == "POST":
+            from_sub = body.get("from_subscription")
+            source = self.subscriptions.get(from_sub) if from_sub else None
+            # Real Stripe seeds phase[0] from the source subscription's items
+            # and current billing period when created `from_subscription`.
+            phases: list[dict[str, Any]] = []
+            customer = body.get("customer")
+            if source is not None:
+                items = (source.get("items") or {}).get("data") or []
+                start = items[0].get("current_period_start") if items else None
+                end = items[0].get("current_period_end") if items else None
+                phases = [
+                    {
+                        "items": [
+                            {
+                                "price": (it.get("price") or {}).get("id")
+                                if isinstance(it.get("price"), dict)
+                                else it.get("price"),
+                                "quantity": it.get("quantity", 1),
+                            }
+                            for it in items
+                        ],
+                        "start_date": start,
+                        "end_date": end,
+                    }
+                ]
+                customer = customer or source.get("customer")
             obj = {
                 "id": _new_id("sub_sched"),
                 "object": "subscription_schedule",
                 "status": "active",
-                "customer": body.get("customer"),
-                "subscription": body.get("from_subscription"),
-                "phases": [],
+                "customer": customer,
+                "subscription": from_sub,
+                "phases": phases,
                 "metadata": self._collect_metadata(body),
             }
             self.schedules[obj["id"]] = obj
             self.capture_events.append(
-                {"type": "subscription_schedule.create", "object": obj}
+                {
+                    "type": "subscription_schedule.create",
+                    "object": obj,
+                    "params": dict(body),
+                }
             )
             return httpx.Response(200, json=obj)
         if path.startswith("/v1/subscription_schedules/") and method == "POST":
@@ -297,7 +392,11 @@ class MockStripe:
                     continue
                 obj[k] = v
             self.capture_events.append(
-                {"type": "subscription_schedule.update", "object": obj}
+                {
+                    "type": "subscription_schedule.update",
+                    "object": obj,
+                    "params": dict(body),
+                }
             )
             return httpx.Response(200, json=obj)
         if path.startswith("/v1/subscription_schedules/") and method == "GET":
