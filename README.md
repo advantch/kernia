@@ -4,51 +4,51 @@ A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, 
 
 ## Status — honest parity ledger
 
-> **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and has been removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
+> **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and was removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
 >
-> By that gate we are **partial**: ~**687** ported/passing Python tests against ~**3,507** upstream test cases (≈ **20 %** by test-case count). We will only flip the headline to "full parity" when the ledger below reads 100 %, and we will not publish to PyPI before then.
+> By that gate we are **substantially advanced but not yet complete**: **1,318** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **38 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
 
-Test counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area. A high ratio means the behavior is well-exercised; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
+Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area, both measured directly (`uv run pytest --co` vs `grep` over `reference/**/*.test.ts`). A ratio ≥ 1.0 means we exercise the behavior at least as thoroughly as upstream; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
 
 | Area | Python tests | Upstream cases | Notes |
 |---|---:|---:|---|
-| **At / near parity** | | | |
-| one_tap | 4 | 4 | ✅ |
+| **At or above upstream coverage** | | | |
+| one_tap | 9 | 4 | ✅ |
 | haveibeenpwned | 5 | 4 | ✅ |
 | open_api | 11 | 10 | ✅ |
 | access (AC DSL) | 11 | 9 | ✅ |
 | multi_session | 12 | 9 | ✅ |
-| magic_link | 21 | 18 | ✅ |
-| one_time_token | 20 | 13 | ✅ |
-| bearer | 10 | 7 | ✅ |
-| captcha | 13 | 17 | strong |
-| phone_number | 21 | 32 | strong |
-| **Partial — surface built, coverage behind** | | | |
-| device_authorization | 11 | 36 | |
-| last_login_method | 12 | 21 | |
-| siwe | 11 | 18 | |
-| custom_session | 5 | 11 | |
-| anonymous | 9 | 13 | |
-| jwt | 11 | 38 | /jwks, /sign, /verify present |
-| username | 9 | 37 | |
-| email_otp | 26 | 73 | |
-| organization | 142 | 200 | 35 endpoints, teams, dynamic AC |
-| db / adapters | 57 | 67 | with_hooks, transactions, conformance |
-| **Large gaps — do not assume parity** | | | |
-| two_factor | 9 | 55 | |
-| generic_oauth | 8 | 60 | |
-| oauth_proxy | 3 | 18 | |
-| mcp (FastMCP) | 12 | 45 | OAuth-protected, RFC 9728 |
-| admin | 3 | 72 | RBAC/ban/impersonation thin |
-| stripe | 15 | 158 | metered + upgrade landed; lifecycle hooks thin |
-| passkey | 6 | 20 | |
-| scim | 10 | 78 | |
-| oauth_provider | 11 | 279 | issuer works; many RFC paths unported |
-| api_key | 6 | 178 | |
-| sso (SAML+OIDC) | 21 | 359 | |
+| magic_link | 28 | 18 | ✅ |
+| one_time_token | 21 | 13 | ✅ |
+| bearer | 21 | 7 | ✅ |
+| anonymous | 15 | 13 | ✅ |
+| last_login_method | 22 | 21 | ✅ |
+| siwe | 28 | 18 | ✅ |
+| device_authorization | 45 | 36 | ✅ |
+| passkey | 21 | 20 | ✅ |
+| scim | 89 | 78 | ✅ |
+| db / adapters | 97 | 67 | ✅ with_hooks, transactions, conformance |
+| admin | 71 | 72 | ✅ ban-expiry, impersonation, RBAC |
+| **Strong — most of upstream ported** | | | |
+| phone_number | 26 | 32 | 81 % |
+| captcha | 13 | 17 | 76 % |
+| oauth_proxy | 14 | 18 | 78 % |
+| generic_oauth | 44 | 60 | 73 % |
+| organization | 142 | 200 | 71 % — 35 endpoints, teams, dynamic AC |
+| two_factor | 35 | 55 | 64 % |
+| username | 21 | 37 | 57 % |
+| sso (SAML+OIDC) | 202 | 359 | 56 % |
+| **Behind — surface built, coverage lagging** | | | |
+| custom_session | 5 | 11 | 45 % |
+| email_otp | 32 | 73 | 44 % |
+| api_key | 69 | 178 | 39 % |
+| mcp (FastMCP) | 15 | 44 | 34 % — OAuth-protected, RFC 9728 |
+| jwt | 11 | 38 | 29 % — /jwks, /sign, /verify present |
+| stripe | 26 | 157 | 17 % — metered + upgrade landed; lifecycle hooks thin |
+| oauth_provider | 33 | 278 | 12 % — issuer works; many RFC paths unported |
 | oidc_provider | shim | 47 | deprecated shim → oauth_provider |
 
-**Bottom line:** the architecture and the Phase-0 core foundations (field model, schema resolution, `with_hooks`, transactions, plugin lifecycle) are in place and the highest-traffic plugins are well covered, but the standalone packages (sso, api_key, oauth_provider, scim, stripe) and a few core plugins (admin, two_factor, generic_oauth) need substantially more ported tests before any "full parity" claim is truthful.
+**Bottom line:** the Phase-0 core foundations (field model, schema resolution, `with_hooks`, transactions, plugin lifecycle) are in place, and the majority of plugins now meet or closely approach upstream test coverage — 16 areas are at or above upstream, 8 more are 56–81 %. The remaining real gaps are the largest standalone packages — **oauth_provider (12 %)** and **stripe (17 %)** above all, then **mcp, jwt, api_key, email_otp** — which need many more ported upstream tests before any blanket "full parity" claim is truthful.
 
 ### Plugins (28 built-in + 7 in standalone packages = 35)
 
