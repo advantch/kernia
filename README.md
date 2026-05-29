@@ -36,11 +36,11 @@ Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`te
 | oauth_proxy | 14 | 18 | 78 % |
 | generic_oauth | 44 | 60 | 73 % |
 | organization | 142 | 200 | 71 % — 35 endpoints, teams, dynamic AC |
+| sso (SAML+OIDC) | 236 | 359 | 66 % — provider ownership, sanitized read endpoints |
 | two_factor | 35 | 55 | 64 % |
 | email_otp | 46 | 73 | 63 % — attempts, resend, change-email |
 | mcp (FastMCP) | 25 | 44 | 57 % — RFC 9728 resource server; issuer cases in oauth_provider |
 | username | 21 | 37 | 57 % |
-| sso (SAML+OIDC) | 202 | 359 | 56 % |
 | api_key | 96 | 178 | 54 % — multi-config, scopes, org-owned |
 | **Behind — surface built, coverage lagging** | | | |
 | custom_session | 5 | 11 | 45 % |
