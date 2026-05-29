@@ -165,6 +165,12 @@ class OAuthProviderOptions:
         "client_credentials",
         "refresh_token",
     )
+    # Per-endpoint rate-limit overrides (mirror upstream `rateLimit`). Keys are
+    # endpoint names (``token``, ``authorize``, ``introspect``, ``revoke``,
+    # ``register``, ``userinfo``); each value is either ``{"window": int,
+    # "max": int}`` to override the default, or ``False`` to disable the rule
+    # for that endpoint entirely. Unspecified endpoints keep their defaults.
+    rate_limit: Mapping[str, Mapping[str, int] | bool] | None = None
 
     def __post_init__(self) -> None:
         # Mirror upstream `BetterAuthError("pairwiseSecret must be at least 32
@@ -1233,19 +1239,48 @@ class _OAuthProviderPlugin:
     hooks: None = None
     on_request: None = None
     on_response: None = None
-    rate_limit: tuple[RateLimitRule, ...] = field(
-        default_factory=lambda: (
-            RateLimitRule(path="/oauth2/token", window=60, max=120),
-            RateLimitRule(path="/oauth2/register", window=300, max=10),
-        )
-    )
+    rate_limit: tuple[RateLimitRule, ...] = ()
     error_codes: Mapping[str, str] = field(default_factory=lambda: {})
     init: None = None
 
 
+# Default per-endpoint rate limits, mirroring upstream `defaultRateLimits`.
+# Order is significant for parity with upstream's `rateLimit` array.
+_DEFAULT_RATE_LIMITS: tuple[tuple[str, str, int, int], ...] = (
+    ("token", "/oauth2/token", 60, 20),
+    ("authorize", "/oauth2/authorize", 60, 30),
+    ("introspect", "/oauth2/introspect", 60, 100),
+    ("revoke", "/oauth2/revoke", 60, 30),
+    ("register", "/oauth2/register", 60, 5),
+    ("userinfo", "/oauth2/userinfo", 60, 60),
+)
+
+
+def _build_rate_limits(opts: OAuthProviderOptions) -> tuple[RateLimitRule, ...]:
+    """Resolve the plugin's rate-limit rules from defaults + user overrides.
+
+    Mirrors upstream: each endpoint has a default `{window, max}`; an override
+    of `{window, max}` replaces it, and an override of `False` removes the rule
+    from the advertised array entirely.
+    """
+    overrides = opts.rate_limit or {}
+    rules: list[RateLimitRule] = []
+    for name, path, window, max_ in _DEFAULT_RATE_LIMITS:
+        override = overrides.get(name)
+        if override is False:
+            continue
+        if isinstance(override, Mapping):
+            window = int(override.get("window", window))
+            max_ = int(override.get("max", max_))
+        rules.append(RateLimitRule(path=path, window=window, max=max_))
+    return tuple(rules)
+
+
 def oauth_provider(options: OAuthProviderOptions) -> BetterAuthPlugin:
     """Construct the OIDC/OAuth2 provider plugin."""
-    return _OAuthProviderPlugin(opts=options)  # type: ignore[return-value]
+    return _OAuthProviderPlugin(  # type: ignore[return-value]
+        opts=options, rate_limit=_build_rate_limits(options)
+    )
 
 
 def _validate_subject_type(
