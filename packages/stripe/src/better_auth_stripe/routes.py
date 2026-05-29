@@ -11,16 +11,15 @@ import json
 import time
 from typing import Any
 
-from pydantic import BaseModel
-
 from better_auth.api.endpoint import create_auth_endpoint
 from better_auth.error import APIError
 from better_auth.types.adapter import Where
 from better_auth.types.context import EndpointContext
 from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
+from pydantic import BaseModel
+
 from better_auth_stripe.schema import StripeOptions, StripePlan
 from better_auth_stripe.webhook import verify_signature
-
 
 # ----- request bodies -------------------------------------------------------
 
@@ -47,6 +46,17 @@ class ResumeSubscriptionBody(BaseModel):
     subscriptionId: str
 
 
+class UpgradeSubscriptionBody(BaseModel):
+    plan: str
+    annual: bool | None = None
+    referenceId: str | None = None
+    subscriptionId: str
+    seats: int | None = None
+    successUrl: str | None = None
+    cancelUrl: str | None = None
+    returnUrl: str | None = None
+
+
 # ----- helpers --------------------------------------------------------------
 
 
@@ -55,6 +65,86 @@ def _plan(opts: StripeOptions, name: str) -> StripePlan:
     if plan is None:
         raise APIError(400, "PLAN_NOT_FOUND", message=f"Unknown plan: {name}")
     return plan
+
+
+def is_metered_price(price: dict[str, Any] | None) -> bool:
+    """Return True when a Stripe price uses metered (usage-based) billing.
+
+    Mirrors `isMeteredPrice` in ``reference/packages/stripe/src/routes.ts``:
+    ``price?.recurring?.usage_type === "metered"``.
+    """
+    if not price:
+        return False
+    recurring = price.get("recurring") or {}
+    return recurring.get("usage_type") == "metered"
+
+
+async def _resolve_price(
+    opts: StripeOptions,
+    *,
+    price_id: str | None,
+    lookup_key: str | None,
+) -> dict[str, Any] | None:
+    """Resolve a Stripe price object by lookup key (preferred) or id.
+
+    Mirrors `resolveStripePrice`: a lookup-key list call wins, otherwise a
+    retrieve-by-id. On any error we return ``None`` so callers fall back to
+    licensed behavior (i.e. include ``quantity``).
+    """
+    client = opts.stripe_client
+    try:
+        if lookup_key:
+            listed = await client.list_prices(lookup_keys=[lookup_key], active=True, limit=1)
+            data = (listed or {}).get("data") or []
+            if data:
+                return data[0]
+        if price_id:
+            return await client.get_price(price_id)
+    except Exception:
+        return None
+    return None
+
+
+def _plan_price_id(plan: StripePlan, *, annual: bool) -> str:
+    """Pick the active price id for a plan honoring the annual toggle."""
+    if annual:
+        return plan.annual_discount_price_id or plan.annual_price_id or plan.price_id
+    return plan.price_id
+
+
+def _plan_lookup_key(plan: StripePlan, *, annual: bool) -> str | None:
+    if annual:
+        return plan.annual_discount_lookup_key or plan.lookup_key
+    return plan.lookup_key
+
+
+async def _build_line_items(
+    opts: StripeOptions,
+    plan: StripePlan,
+    *,
+    annual: bool,
+    seats: int | None,
+) -> list[dict[str, Any]]:
+    """Build Stripe checkout/subscription line items for a plan.
+
+    A metered base price MUST omit ``quantity`` (Stripe rejects a quantity on
+    metered line items). Licensed prices carry the seat quantity. Any extra
+    ``plan.line_items`` (add-ons / usage prices) are appended verbatim.
+    """
+    price_id = _plan_price_id(plan, annual=annual)
+    lookup_key = _plan_lookup_key(plan, annual=annual)
+    resolved = await _resolve_price(opts, price_id=price_id, lookup_key=lookup_key)
+    effective_price_id = (resolved or {}).get("id") or price_id
+
+    base: dict[str, Any] = {"price": effective_price_id}
+    if plan.metered or is_metered_price(resolved):
+        # Metered: no quantity.
+        pass
+    else:
+        base["quantity"] = seats or 1
+    items: list[dict[str, Any]] = [base]
+    items.extend(dict(extra) for extra in plan.line_items)
+    return items
 
 
 def _reference_id(ctx: EndpointContext, opts: StripeOptions, body_ref: str | None) -> str:
@@ -105,18 +195,21 @@ def _build_checkout_endpoint(opts: StripeOptions) -> AuthEndpoint:
         reference_id = _reference_id(ctx, opts, body.referenceId)
         customer_id = await _ensure_customer(ctx, opts)
 
-        line_items: list[dict[str, Any]] = [
-            {"price": plan.price_id, "quantity": body.seats or 1},
-        ]
-        session = await opts.stripe_client.create_checkout_session(
-            mode="subscription",
-            customer=customer_id,
-            success_url=body.successUrl,
-            cancel_url=body.cancelUrl,
-            line_items=line_items,
-            client_reference_id=reference_id,
-            metadata={"referenceId": reference_id, "plan": plan.name},
+        line_items = await _build_line_items(
+            opts, plan, annual=False, seats=body.seats
         )
+        params: dict[str, Any] = {
+            "mode": "subscription",
+            "customer": customer_id,
+            "success_url": body.successUrl,
+            "cancel_url": body.cancelUrl,
+            "line_items": line_items,
+            "client_reference_id": reference_id,
+            "metadata": {"referenceId": reference_id, "plan": plan.name},
+        }
+        if plan.free_trial_days:
+            params["subscription_data"] = {"trial_period_days": plan.free_trial_days}
+        session = await opts.stripe_client.create_checkout_session(**params)
         return {"url": session["url"], "id": session["id"]}
 
     return create_auth_endpoint(
@@ -187,6 +280,66 @@ def _build_resume_endpoint(opts: StripeOptions) -> AuthEndpoint:
     return create_auth_endpoint(
         "/stripe/resume-subscription",
         EndpointOptions(method="POST", body=ResumeSubscriptionBody, requires_session=True),
+        handler,
+    )
+
+
+def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
+    async def handler(ctx: EndpointContext) -> dict[str, Any]:
+        body: UpgradeSubscriptionBody = ctx.body
+        plan = _plan(opts, body.plan)
+        annual = bool(body.annual)
+        reference_id = _reference_id(ctx, opts, body.referenceId)
+        # Ensure a Stripe customer exists for the active session (parity with
+        # upstream upgrade, which resolves the customer before mutating).
+        await _ensure_customer(ctx, opts)
+
+        line_items = await _build_line_items(
+            opts, plan, annual=annual, seats=body.seats
+        )
+        price_id = line_items[0].get("price")
+        billing_interval = "year" if annual else "month"
+
+        existing_sub = await opts.stripe_client.get_subscription(body.subscriptionId)
+        sub_items = (existing_sub.get("items") or {}).get("data") or []
+        # Map existing line items onto the new prices (reuse item ids so Stripe
+        # swaps the price in place rather than appending), honoring proration.
+        update_items: list[dict[str, Any]] = []
+        for idx, li in enumerate(line_items):
+            entry: dict[str, Any] = dict(li)
+            if idx < len(sub_items) and sub_items[idx].get("id"):
+                entry["id"] = sub_items[idx]["id"]
+            update_items.append(entry)
+
+        updated = await opts.stripe_client.update_subscription(
+            body.subscriptionId,
+            items=update_items,
+            proration_behavior=plan.proration_behavior,
+            metadata={"referenceId": reference_id, "plan": plan.name},
+        )
+
+        now = int(time.time())
+        await ctx.auth.adapter.update(
+            model="subscription",
+            where=(Where(field="stripeSubscriptionId", value=body.subscriptionId),),
+            update={
+                "plan": plan.name,
+                "priceId": price_id,
+                "billingInterval": billing_interval,
+                "seats": body.seats,
+                "status": updated.get("status", "active"),
+                "updatedAt": now,
+            },
+        )
+        return {
+            "subscription": updated,
+            "plan": plan.name,
+            "redirect": False,
+        }
+
+    return create_auth_endpoint(
+        "/subscription/upgrade",
+        EndpointOptions(method="POST", body=UpgradeSubscriptionBody, requires_session=True),
         handler,
     )
 
@@ -327,6 +480,7 @@ def build_endpoints(opts: StripeOptions) -> tuple[AuthEndpoint, ...]:
         _build_billing_portal_endpoint(opts),
         _build_cancel_endpoint(opts),
         _build_resume_endpoint(opts),
+        _build_upgrade_endpoint(opts),
         _build_list_endpoint(opts),
         _build_webhook_endpoint(opts),
     )

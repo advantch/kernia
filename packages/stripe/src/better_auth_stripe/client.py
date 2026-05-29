@@ -83,6 +83,20 @@ class StripeClient:
     async def create_billing_portal_session(self, **params: Any) -> dict[str, Any]:
         return await self._post("/v1/billing_portal/sessions", params)
 
+    # ----- prices -----------------------------------------------------------
+
+    async def get_price(self, price_id: str) -> dict[str, Any]:
+        return await self._get(f"/v1/prices/{price_id}")
+
+    async def list_prices(
+        self, *, lookup_keys: list[str] | None = None, active: bool = True, limit: int = 1
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"active": str(active).lower(), "limit": limit}
+        if lookup_keys:
+            # Stripe accepts repeated `lookup_keys[]` query params.
+            params["lookup_keys[]"] = lookup_keys
+        return await self._get("/v1/prices", params)
+
     # ----- subscriptions ----------------------------------------------------
 
     async def get_subscription(self, subscription_id: str) -> dict[str, Any]:

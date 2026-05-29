@@ -23,6 +23,20 @@ class StripePlan:
 
     `seats=True` flips the plan into seat-based mode; when the plugin is
     configured for organization billing the quantity tracks org membership.
+
+    Metered / usage-based billing
+    -----------------------------
+    Set ``metered=True`` (or point ``price_id`` / ``lookup_key`` at a Stripe
+    price whose ``recurring.usage_type == "metered"``) to bill by reported
+    usage. For metered prices Stripe rejects a ``quantity`` on the line item,
+    so the plugin omits it — see :func:`routes.is_metered_price`.
+
+    ``proration_behavior`` controls how mid-cycle plan changes are billed on
+    ``/subscription/upgrade`` (``create_prorations`` (default) / ``always_invoice``
+    / ``none``). ``line_items`` are extra checkout line items (add-ons, metered
+    usage prices) appended to the base price. ``group`` lets a reference id hold
+    multiple concurrent subscriptions (one per group). ``limits`` is opaque
+    plan metadata surfaced to the app.
     """
 
     name: str
@@ -31,7 +45,14 @@ class StripePlan:
     seat_price_id: str | None = None
     free_trial_days: int | None = None
     annual_price_id: str | None = None
+    annual_discount_price_id: str | None = None
     lookup_key: str | None = None
+    annual_discount_lookup_key: str | None = None
+    metered: bool = False
+    proration_behavior: str = "create_prorations"
+    group: str | None = None
+    limits: Mapping[str, Any] | None = None
+    line_items: tuple[Mapping[str, Any], ...] = ()
 
 
 SubscriptionRow = dict[str, Any]
@@ -75,6 +96,11 @@ SUBSCRIPTION_MODEL = ModelDef(
         FieldDef(name="seats", type="number", required=False),
         FieldDef(name="trialStart", type="number", required=False),
         FieldDef(name="trialEnd", type="number", required=False),
+        # Metered / upgrade / schedule support (parity with upstream schema.ts).
+        FieldDef(name="priceId", type="string", required=False),
+        FieldDef(name="groupId", type="string", required=False),
+        FieldDef(name="billingInterval", type="string", required=False),
+        FieldDef(name="stripeScheduleId", type="string", required=False),
         FieldDef(name="createdAt", type="number", required=True),
         FieldDef(name="updatedAt", type="number", required=True),
     ),
