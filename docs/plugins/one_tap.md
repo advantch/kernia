@@ -14,7 +14,10 @@ Endpoint: POST /one-tap/verify
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/one-tap/callback` |
+| `POST` | `/one-tap/verify` |
 
 ## Schema contributions
 

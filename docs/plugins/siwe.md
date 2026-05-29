@@ -1,17 +1,20 @@
 # Siwe
 
 > Module: `better_auth.plugins.siwe`
-> Constructor: `ENSResolver`
+> Constructor: `ENSLookup`
 
 siwe plugin — Sign-In With Ethereum.
 
-Port of `reference/packages/better-auth/src/plugins/siwe/`. Verifies an
-EIP-4361 message + signature, consumes a server-issued nonce, then signs the
-user in (auto-creating the user with `walletAddress` if needed).
+Port of `reference/packages/better-auth/src/plugins/siwe/`. Issues a chain-scoped
+nonce, verifies an EIP-4361 message + signature (via the pluggable
+``verify_message`` option), consumes the nonce, then signs the user in
+(auto-creating the user + a ``walletAddress`` record if needed).
 
-Requires the optional `eth-account` dependency. For ENS reverse-lookup, pass an
-`ENSResolver` (e.g. `web3_ens_resolver(rpc_url=...)`) — without one, ENS lookup
-is disabled even if `enable_ens=True`.
+Message verification is pluggable like upstream (``get_nonce`` / ``verify_message``).
+The defaults use the optional ``eth-account`` dependency for real signature
+recovery and a 17-char alphanumeric nonce. For ENS reverse-lookup, pass either an
+``ens_lookup`` callback (upstream shape: ``{walletAddress} -> {name, avatar}``) or
+the legacy ``ens_resolver`` / ``ens_rpc_url`` with ``enable_ens=True``.
 
 ## Endpoints
 
@@ -24,7 +27,7 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.siwe import ENSResolver
+from better_auth.plugins.siwe import ENSLookup
 from better_auth import BetterAuthOptions
 from better_auth.auth import init
 
@@ -33,7 +36,7 @@ auth = init(
         database=...,
         secret=...,
         plugins=[
-            ENSResolver(),
+            ENSLookup(),
         ],
     )
 )
