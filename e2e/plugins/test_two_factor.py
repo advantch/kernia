@@ -23,6 +23,7 @@ import time
 import pyotp
 from better_auth.auth import init
 from better_auth.plugins import email_and_password, two_factor
+from better_auth.types.adapter import Where
 from better_auth.types.init_options import BetterAuthOptions
 from better_auth_memory_adapter import memory_adapter
 from better_auth_test_utils import ASGIDriver
@@ -43,17 +44,17 @@ class _OTPSink:
         self.calls += 1
 
 
-def _build(
+def _tf_opts(
     *,
-    otp_sink: _OTPSink | None = None,
-    skip_verification_on_enable: bool = False,
-    trust_device_max_age: int | None = None,
-    two_factor_cookie_max_age: int | None = None,
-    issuer: str | None = None,
-    totp_disable: bool = False,
-    allow_passwordless: bool = False,
-    store_otp: object | None = None,
-) -> ASGIDriver:
+    otp_sink: _OTPSink | None,
+    skip_verification_on_enable: bool,
+    trust_device_max_age: int | None,
+    two_factor_cookie_max_age: int | None,
+    issuer: str | None,
+    totp_disable: bool,
+    allow_passwordless: bool,
+    store_otp: object | None,
+) -> dict[str, object]:
     tf_opts: dict[str, object] = {}
     if otp_sink is not None:
         otp_opts: dict[str, object] = {"send_otp": otp_sink}
@@ -72,16 +73,69 @@ def _build(
         tf_opts["totp_options"] = {"disable": True}
     if allow_passwordless:
         tf_opts["allow_passwordless"] = True
+    return tf_opts
 
+
+def _build_with_adapter(
+    *,
+    otp_sink: _OTPSink | None = None,
+    skip_verification_on_enable: bool = False,
+    trust_device_max_age: int | None = None,
+    two_factor_cookie_max_age: int | None = None,
+    issuer: str | None = None,
+    totp_disable: bool = False,
+    allow_passwordless: bool = False,
+    store_otp: object | None = None,
+):
+    """Build the driver and return it alongside the backing adapter.
+
+    The adapter handle lets tests inspect the ``twoFactor`` table directly (e.g.
+    the ``verified`` column) for the issue-#8627 OTP-only-adding-TOTP cases.
+    """
+    tf_opts = _tf_opts(
+        otp_sink=otp_sink,
+        skip_verification_on_enable=skip_verification_on_enable,
+        trust_device_max_age=trust_device_max_age,
+        two_factor_cookie_max_age=two_factor_cookie_max_age,
+        issuer=issuer,
+        totp_disable=totp_disable,
+        allow_passwordless=allow_passwordless,
+        store_otp=store_otp,
+    )
+    adapter = memory_adapter()
     auth = init(
         BetterAuthOptions(
-            database=memory_adapter(),
+            database=adapter,
             secret="test-secret-key",
             plugins=[email_and_password(), two_factor()],
             advanced={"two-factor": tf_opts},
         )
     )
-    return ASGIDriver(app=auth.router.mount())
+    return ASGIDriver(app=auth.router.mount()), adapter
+
+
+def _build(
+    *,
+    otp_sink: _OTPSink | None = None,
+    skip_verification_on_enable: bool = False,
+    trust_device_max_age: int | None = None,
+    two_factor_cookie_max_age: int | None = None,
+    issuer: str | None = None,
+    totp_disable: bool = False,
+    allow_passwordless: bool = False,
+    store_otp: object | None = None,
+) -> ASGIDriver:
+    driver, _ = _build_with_adapter(
+        otp_sink=otp_sink,
+        skip_verification_on_enable=skip_verification_on_enable,
+        trust_device_max_age=trust_device_max_age,
+        two_factor_cookie_max_age=two_factor_cookie_max_age,
+        issuer=issuer,
+        totp_disable=totp_disable,
+        allow_passwordless=allow_passwordless,
+        store_otp=store_otp,
+    )
+    return driver
 
 
 async def _signup(driver: ASGIDriver, email: str = TEST_EMAIL) -> None:
@@ -550,6 +604,48 @@ async def test_trust_device_skips_2fa_on_next_sign_in() -> None:
     assert r.json()["user"]
 
 
+async def test_trust_device_forced_when_server_record_expired() -> None:
+    """Upstream: 'should force 2FA when server-side trust record is expired'.
+
+    The trust cookie alone is not sufficient: if the backing verification row is
+    gone (expired/revoked server-side), the next sign-in must re-challenge.
+    """
+    sink = _OTPSink()
+    driver, adapter = _build_with_adapter(otp_sink=sink)
+    await _signup(driver)
+    await _enable_and_verify(driver)
+    r = await driver.request("GET", "/get-session")
+    user_id = r.json()["user"]["id"]
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+
+    await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    await driver.request("POST", "/two-factor/send-otp")
+    r = await driver.request(
+        "POST",
+        "/two-factor/verify-otp",
+        json_body={"code": sink.otp, "trustDevice": True},
+    )
+    assert driver.cookies.get("better-auth.trust_device")
+
+    # Drop the server-side trust record (simulating expiry) — the cookie stays.
+    await adapter.delete_many(
+        model="verification", where=(Where(field="value", value=user_id),)
+    )
+
+    await driver.request("POST", "/sign-out")
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert r.json()["twoFactorRedirect"] is True
+
+
 async def test_trust_device_revoked_on_disable() -> None:
     sink = _OTPSink()
     driver = _build(otp_sink=sink)
@@ -778,3 +874,348 @@ async def test_old_totp_code_rejected() -> None:
     )
     assert r.status == 401
     assert r.json()["code"] == "INVALID_CODE"
+
+
+# ---------------------------------------------------------------------------
+# default cookie max-ages (upstream: trustDeviceMaxAge / twoFactorCookieMaxAge)
+# ---------------------------------------------------------------------------
+
+
+async def test_default_trust_device_max_age_is_30_days() -> None:
+    """Upstream: 'should use default 30 days when trustDeviceMaxAge not specified'."""
+    sink = _OTPSink()
+    driver = _build(otp_sink=sink)  # no trust_device_max_age override
+    await _signup(driver)
+    await _enable_and_verify(driver)
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+
+    await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    await driver.request("POST", "/two-factor/send-otp")
+    r = await driver.request(
+        "POST",
+        "/two-factor/verify-otp",
+        json_body={"code": sink.otp, "trustDevice": True},
+    )
+    max_age = _cookie_attr(r, "better-auth.trust_device", "max-age")
+    assert int(max_age) == 30 * 24 * 60 * 60
+
+
+async def test_default_two_factor_cookie_max_age_is_10_minutes() -> None:
+    """Upstream: 'should use default 10 minutes when twoFactorCookieMaxAge not specified'."""
+    driver = _build(skip_verification_on_enable=True)  # no override
+    await _signup(driver)
+    await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    max_age = _cookie_attr(r, "better-auth.two_factor", "max-age")
+    assert int(max_age) == 10 * 60
+
+
+# ---------------------------------------------------------------------------
+# password gating on enable (upstream: password required for credential users)
+# ---------------------------------------------------------------------------
+
+
+async def test_enable_rejects_missing_password_for_credential_user() -> None:
+    """Upstream: 'rejects enabling without password for credential users'.
+
+    Omitting the password entirely (not just a wrong one) must still surface
+    INVALID_PASSWORD — credential presence is never leaked via a distinct code.
+    """
+    driver = _build()
+    await _signup(driver)
+    r = await driver.request("POST", "/two-factor/enable", json_body={})
+    assert r.status == 400
+    assert r.json()["code"] == "INVALID_PASSWORD"
+
+
+# ---------------------------------------------------------------------------
+# 2FA enforcement scope (upstream: only credential sign-in is challenged)
+# ---------------------------------------------------------------------------
+
+
+async def test_no_challenge_on_authenticated_non_sign_in_endpoint() -> None:
+    """Upstream: 'should not challenge 2FA on authenticated non-sign-in endpoints'.
+
+    With 2FA enabled and an active session, a non-sign-in request (/update-user)
+    returns its normal payload — the sign-in gate never fires.
+    """
+    driver = _build()
+    await _signup(driver)
+    await _enable_and_verify(driver)
+    r = await driver.request(
+        "POST", "/update-user", json_body={"name": "Renamed"}
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert "twoFactorRedirect" not in body
+    assert body["user"]["name"] == "Renamed"
+
+
+# ---------------------------------------------------------------------------
+# OTP-only account adding TOTP (upstream issue #8627)
+# ---------------------------------------------------------------------------
+
+
+async def _otp_enroll_authenticated(driver: ASGIDriver, sink: _OTPSink) -> str:
+    """Drive an OTP-based enrollment while authenticated.
+
+    Returns the user id. Enables 2FA (creates an *unverified* twoFactor/TOTP row),
+    then sends + verifies an OTP under the active session so twoFactorEnabled
+    flips true while the TOTP row stays verified=false — the #8627 state.
+    """
+    r = await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    assert r.status == 200, r.json()
+    await driver.request("POST", "/two-factor/send-otp")
+    r = await driver.request(
+        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
+    )
+    assert r.status == 200, r.json()
+    r = await driver.request("GET", "/get-session")
+    return r.json()["user"]["id"]
+
+
+async def test_enable_creates_unverified_totp_row() -> None:
+    """Upstream: 'should create twoFactor row with verified=false on enableTwoFactor'."""
+    driver, adapter = _build_with_adapter()
+    await _signup(driver)
+    r = await driver.request("GET", "/get-session")
+    user_id = r.json()["user"]["id"]
+
+    await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    row = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user_id),)
+    )
+    assert row is not None
+    assert row["verified"] is False
+
+
+async def test_verify_totp_marks_row_verified() -> None:
+    """Upstream: 'should mark TOTP as verified after verifyTOTP during enrollment'."""
+    driver, adapter = _build_with_adapter()
+    await _signup(driver)
+    r = await driver.request("GET", "/get-session")
+    user_id = r.json()["user"]["id"]
+
+    await _enable_and_verify(driver)
+    row = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user_id),)
+    )
+    assert row is not None
+    assert row["verified"] is True
+
+
+async def test_preserve_verified_state_during_re_enrollment() -> None:
+    """Upstream: 'should preserve verified state during re-enrollment'.
+
+    Re-running enable on an already-verified account keeps the new row verified
+    (so the user isn't silently downgraded to an unverified TOTP secret).
+    """
+    driver, adapter = _build_with_adapter()
+    await _signup(driver)
+    r = await driver.request("GET", "/get-session")
+    user_id = r.json()["user"]["id"]
+
+    await _enable_and_verify(driver)
+    # Re-enable (fresh secret) — verified must remain true.
+    await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    row = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user_id),)
+    )
+    assert row is not None
+    assert row["verified"] is True
+
+
+async def test_reject_unverified_totp_during_sign_in_allow_otp_fallback() -> None:
+    """Upstream: 'should reject unverified TOTP during sign-in and allow OTP fallback'.
+
+    For an OTP-only account that has merely *enabled* (but not verified) TOTP, a
+    sign-in TOTP attempt is rejected while OTP still completes the second factor.
+    """
+    sink = _OTPSink()
+    driver, adapter = _build_with_adapter(otp_sink=sink)
+    await _signup(driver)
+    user_id = await _otp_enroll_authenticated(driver, sink)
+
+    # The TOTP row is enabled-but-unverified, yet 2FA is on.
+    row = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user_id),)
+    )
+    secret = str(row["secret"])
+    assert row["verified"] is False
+
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert r.json()["twoFactorRedirect"] is True
+    # totp is excluded from the advertised methods while unverified.
+    assert r.json()["twoFactorMethods"] == ["otp"]
+
+    # A valid TOTP code is still rejected — the secret is not verified.
+    r = await driver.request(
+        "POST", "/two-factor/verify-totp", json_body={"code": pyotp.TOTP(secret).now()}
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "TOTP_NOT_ENABLED"
+
+    # OTP fallback completes the sign-in.
+    await driver.request("POST", "/two-factor/send-otp")
+    r = await driver.request(
+        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
+    )
+    assert r.status == 200, r.json()
+    assert driver.cookies.get("better-auth.session_token")
+
+
+# ---------------------------------------------------------------------------
+# custom hash function OTP storage (upstream: OTP storage modes)
+# ---------------------------------------------------------------------------
+
+
+async def test_otp_storage_custom_hash_function() -> None:
+    """Upstream: 'should verify OTP with custom hash function'."""
+    import hashlib
+
+    def _custom_hash(code: str) -> str:
+        return hashlib.sha512(f"pepper:{code}".encode()).hexdigest()
+
+    sink = _OTPSink()
+    driver = _build(
+        otp_sink=sink,
+        store_otp={"hash": _custom_hash},
+        skip_verification_on_enable=True,
+    )
+    await _signup(driver)
+    await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    await driver.request("POST", "/two-factor/send-otp")
+    r = await driver.request(
+        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
+    )
+    assert r.status == 200, r.json()
+
+
+# ---------------------------------------------------------------------------
+# passwordless: users without a credential account skip the password gate
+# (upstream: 'two factor passwordless')
+# ---------------------------------------------------------------------------
+
+
+def _build_passwordless(*, skip_verification_on_enable: bool = False):
+    """Build a driver + auth handle with passwordless 2FA enabled."""
+    tf_opts = _tf_opts(
+        otp_sink=None,
+        skip_verification_on_enable=skip_verification_on_enable,
+        trust_device_max_age=None,
+        two_factor_cookie_max_age=None,
+        issuer=None,
+        totp_disable=False,
+        allow_passwordless=True,
+        store_otp=None,
+    )
+    auth = init(
+        BetterAuthOptions(
+            database=memory_adapter(),
+            secret="test-secret-key",
+            plugins=[email_and_password(), two_factor()],
+            advanced={"two-factor": tf_opts},
+        )
+    )
+    return ASGIDriver(app=auth.router.mount()), auth
+
+
+async def _credentialless_session(auth, driver: ASGIDriver) -> str:
+    """Create a user with no credential account and an authenticated session.
+
+    Mirrors upstream's social/passwordless user: there is no credential row, so
+    the password gate must be skipped when ``allowPasswordless`` is set.
+    """
+    from better_auth.context import create_session
+
+    now = int(time.time())
+    user = await auth.context.adapter.create(
+        model="user",
+        data={
+            "email": "pwless@example.com",
+            "name": "Pwless",
+            "emailVerified": True,
+            "createdAt": now,
+            "updatedAt": now,
+        },
+    )
+    _session, cookies = await create_session(auth.context, user_id=user["id"])
+    for name, value, _attrs in cookies:
+        driver.cookies[name] = value
+    return str(user["id"])
+
+
+async def test_passwordless_enable_without_password() -> None:
+    """Upstream: 'allows enabling without password for users without credentials'."""
+    driver, auth = _build_passwordless()
+    await _credentialless_session(auth, driver)
+    r = await driver.request("POST", "/two-factor/enable", json_body={})
+    assert r.status == 200, r.json()
+    assert len(r.json()["backupCodes"]) == 10
+    assert r.json()["totpURI"].startswith("otpauth://totp/")
+
+
+async def test_passwordless_get_totp_uri_without_password() -> None:
+    """Upstream: 'allows getting totp uri without password'."""
+    driver, auth = _build_passwordless(skip_verification_on_enable=True)
+    await _credentialless_session(auth, driver)
+    await driver.request("POST", "/two-factor/enable", json_body={})
+    r = await driver.request("POST", "/two-factor/get-totp-uri", json_body={})
+    assert r.status == 200, r.json()
+    assert r.json()["totpURI"].startswith("otpauth://totp/")
+
+
+async def test_passwordless_generate_backup_codes_without_password() -> None:
+    """Upstream: 'allows generating backup codes without password'."""
+    driver, auth = _build_passwordless(skip_verification_on_enable=True)
+    await _credentialless_session(auth, driver)
+    await driver.request("POST", "/two-factor/enable", json_body={})
+    r = await driver.request(
+        "POST", "/two-factor/generate-backup-codes", json_body={}
+    )
+    assert r.status == 200, r.json()
+    assert len(r.json()["backupCodes"]) == 10
+
+
+async def test_passwordless_disable_without_password() -> None:
+    """Upstream: 'allows disabling without password'."""
+    driver, auth = _build_passwordless(skip_verification_on_enable=True)
+    await _credentialless_session(auth, driver)
+    await driver.request("POST", "/two-factor/enable", json_body={})
+    r = await driver.request("POST", "/two-factor/disable", json_body={})
+    assert r.status == 200, r.json()
+    assert r.json()["status"] is True
