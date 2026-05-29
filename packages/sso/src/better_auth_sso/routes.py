@@ -43,6 +43,7 @@ from better_auth_sso import saml as saml_helpers
 from better_auth_sso.domain import (
     make_verification_token,
 )
+from better_auth_sso.linking import assign_organization_from_provider
 
 _OPTS_KEY = "sso"
 
@@ -53,6 +54,27 @@ def _now() -> int:
 
 def _opts(ctx: EndpointContext) -> dict[str, Any]:
     return dict(ctx.auth.options.advanced.get(_OPTS_KEY) or {})
+
+
+async def _provision_org(
+    ctx: EndpointContext,
+    user: dict[str, Any],
+    provider: dict[str, Any],
+    *,
+    token: Any = None,
+    user_info: dict[str, Any] | None = None,
+) -> None:
+    """Provision the SSO user into the provider's linked org (if configured)."""
+    opts = _opts(ctx)
+    provisioning = opts.get("organization_provisioning", opts.get("organizationProvisioning"))
+    await assign_organization_from_provider(
+        ctx.auth,
+        user=user,
+        provider=provider,
+        token=token,
+        user_info=user_info,
+        provisioning_options=provisioning,
+    )
 
 
 async def _require_admin(ctx: EndpointContext) -> None:
@@ -104,6 +126,7 @@ class RegisterProviderBody(BaseModel):
     oidc_config: dict[str, Any] | None = Field(default=None, alias="oidcConfig")
     saml_config: dict[str, Any] | None = Field(default=None, alias="samlConfig")
     mapping: dict[str, str] | None = None
+    organization_id: str | None = Field(default=None, alias="organizationId")
 
     model_config = {"populate_by_name": True}
 
@@ -115,6 +138,7 @@ class UpdateProviderBody(BaseModel):
     oidc_config: dict[str, Any] | None = Field(default=None, alias="oidcConfig")
     saml_config: dict[str, Any] | None = Field(default=None, alias="samlConfig")
     mapping: dict[str, str] | None = None
+    organization_id: str | None = Field(default=None, alias="organizationId")
 
     model_config = {"populate_by_name": True}
 
@@ -164,6 +188,7 @@ async def _register_provider(ctx: EndpointContext) -> dict[str, Any]:
             "oidcConfig": json.dumps(body.oidc_config) if body.oidc_config else None,
             "samlConfig": json.dumps(body.saml_config) if body.saml_config else None,
             "userInfoMapping": json.dumps(body.mapping or {}),
+            "organizationId": body.organization_id,
             "createdAt": now,
             "updatedAt": now,
         },
@@ -185,6 +210,8 @@ async def _update_provider(ctx: EndpointContext) -> dict[str, Any]:
         update["samlConfig"] = json.dumps(body.saml_config)
     if body.mapping is not None:
         update["userInfoMapping"] = json.dumps(body.mapping)
+    if body.organization_id is not None:
+        update["organizationId"] = body.organization_id
     row = await ctx.auth.adapter.update(
         model="ssoProvider",
         where=(Where(field="id", value=body.id),),
@@ -226,6 +253,7 @@ def _serialize_provider(row: dict[str, Any]) -> dict[str, Any]:
         "oidcConfig": json.loads(row["oidcConfig"]) if row.get("oidcConfig") else None,
         "samlConfig": json.loads(row["samlConfig"]) if row.get("samlConfig") else None,
         "mapping": json.loads(row.get("userInfoMapping") or "{}"),
+        "organizationId": row.get("organizationId"),
         "createdAt": row.get("createdAt"),
         "updatedAt": row.get("updatedAt"),
     }
@@ -440,6 +468,7 @@ async def _oidc_callback(ctx: EndpointContext) -> dict[str, Any]:
 
     user_fields = oidc_helpers.apply_mapping(claims, mapping)
     user = await _upsert_user_and_sign_in(ctx, user_fields)
+    await _provision_org(ctx, user, provider, user_info=claims)
     redirect = data.get("callback") or "/"
     return {
         "redirect": redirect,
@@ -595,6 +624,7 @@ async def _saml_acs(ctx: EndpointContext) -> dict[str, Any]:
     if relay_state and isinstance(relay_state, str):
         callback = relay_state
     user = await _upsert_user_and_sign_in(ctx, user_fields)
+    await _provision_org(ctx, user, provider, user_info=assertion.attributes)
     return {
         "redirect": callback,
         "user": user,

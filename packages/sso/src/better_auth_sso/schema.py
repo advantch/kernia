@@ -28,6 +28,10 @@ SSO_PROVIDER_MODEL = ModelDef(
         FieldDef("oidcConfig", "text", required=False),    # JSON dict
         FieldDef("samlConfig", "text", required=False),    # JSON dict
         FieldDef("userInfoMapping", "text", required=False),  # JSON dict
+        # Link a provider to an organization. When set (and the organization
+        # plugin is installed) SSO sign-ins through this provider auto-provision
+        # the user as a member. Mirrors upstream `ssoProvider.organizationId`.
+        FieldDef("organizationId", "string", required=False),
         FieldDef("createdAt", "date"),
         FieldDef("updatedAt", "date"),
     ),

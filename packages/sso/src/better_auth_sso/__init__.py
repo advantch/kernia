@@ -9,6 +9,10 @@ See `plugin.sso()` for the entry point.
 
 from better_auth_sso import domain, oidc, saml
 from better_auth_sso.errors import SSO_ERROR_CODES
+from better_auth_sso.linking import (
+    assign_organization_by_domain,
+    assign_organization_from_provider,
+)
 from better_auth_sso.plugin import sso
 from better_auth_sso.schema import SSO_DOMAIN_MODEL, SSO_MODELS, SSO_PROVIDER_MODEL
 
@@ -17,6 +21,8 @@ __all__ = [
     "SSO_ERROR_CODES",
     "SSO_MODELS",
     "SSO_PROVIDER_MODEL",
+    "assign_organization_by_domain",
+    "assign_organization_from_provider",
     "domain",
     "oidc",
     "saml",
