@@ -290,18 +290,41 @@ class MockStripe:
                 return self._err(404, f"No such subscription: {sid}")
             line_items = self._collect_line_items(body, prefix="items")
             if line_items:
-                # Reflect the swapped prices back into items.data so callers can
-                # inspect whether a metered item omitted `quantity`.
-                obj["items"] = {
-                    "data": [
-                        {
-                            "id": li.get("id", _new_id("si")),
+                # Merge by item id, matching real Stripe semantics: an item with
+                # `id` updates that item in place; `deleted:true` removes it; an
+                # item without `id` is appended; items not referenced in the
+                # payload are left untouched. (Real Stripe does NOT replace the
+                # whole item set — only the referenced items change.)
+                existing = list((obj.get("items") or {}).get("data") or [])
+                by_id = {it.get("id"): it for it in existing if it.get("id")}
+                for li in line_items:
+                    li_id = li.get("id")
+                    if str(li.get("deleted", "")).lower() == "true":
+                        target = by_id.pop(li_id, None) if li_id else None
+                        if target is not None:
+                            existing = [it for it in existing if it is not target]
+                        continue
+                    if li_id and li_id in by_id:
+                        # A referenced item is fully respecified from the payload:
+                        # its price is updated and its quantity is set (or dropped
+                        # when omitted, e.g. swapping to a metered price). Items not
+                        # referenced in the payload are left untouched above.
+                        target = by_id[li_id]
+                        if "price" in li:
+                            target["price"] = {"id": li.get("price")}
+                        if "quantity" in li:
+                            target["quantity"] = int(li["quantity"])
+                        elif "quantity" in target:
+                            del target["quantity"]
+                    else:
+                        new_it: dict[str, Any] = {
+                            "id": li_id or _new_id("si"),
                             "price": {"id": li.get("price")},
                             **({"quantity": int(li["quantity"])} if "quantity" in li else {}),
                         }
-                        for li in line_items
-                    ]
-                }
+                        existing.append(new_it)
+                        by_id[new_it["id"]] = new_it
+                obj["items"] = {"data": existing}
             for k, v in body.items():
                 if k.startswith("items[") or k.startswith("metadata["):
                     continue

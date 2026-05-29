@@ -39,6 +39,7 @@ from better_auth_stripe.utils import (
     get_plans,
     is_active_or_trialing,
     is_pending_cancel,
+    resolve_plan_item,
 )
 from better_auth_stripe.webhook import verify_signature
 
@@ -970,6 +971,62 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                         )
                     break
 
+        # --- Multiset line-item diff (mirrors routes.ts 718-938) ------------
+        # Resolve the active subscription's current base price, the new plan's
+        # price + metered flag, and build a price-replacement map plus a
+        # multiset delta of plan line items. These drive both the immediate
+        # `subscriptions.update` and the scheduled-phase update so seat-price
+        # swaps, add-ons, and removals are applied without duplicating items.
+        sub_items_data = (existing_sub.get("items") or {}).get("data") or []
+        resolved_plan_item = resolve_plan_item(opts, sub_items_data)
+        planitem = resolved_plan_item.get("item") if resolved_plan_item else None
+        stripe_subscription_price_id: str | None = None
+        if planitem:
+            _pp = planitem.get("price")
+            stripe_subscription_price_id = (
+                _pp.get("id") if isinstance(_pp, dict) else _pp
+            )
+        price_id_to_use = price_id  # new plan base price (line_items[0])
+
+        resolved_new_price = await _resolve_price(
+            opts,
+            price_id=_plan_price_id(plan, annual=annual),
+            lookup_key=_plan_lookup_key(plan, annual=annual),
+        )
+        is_metered = bool(plan.metered) or is_metered_price(resolved_new_price)
+        is_auto_managed_seats = bool(
+            plan.seat_price_id and customer_type == "organization"
+        )
+        old_plan = get_plan_by_name(opts, db_row["plan"]) if db_row else None
+
+        # priceMap: oldPriceId -> {newPrice, quantity?} (seat-price changes).
+        price_map: dict[str, dict[str, Any]] = {}
+        if (
+            is_auto_managed_seats
+            and plan.seat_price_id
+            and old_plan
+            and old_plan.seat_price_id
+            and old_plan.seat_price_id != plan.seat_price_id
+        ):
+            price_map[old_plan.seat_price_id] = {
+                "newPrice": plan.seat_price_id,
+                "quantity": member_count,
+            }
+
+        # lineItemDelta: old plan line items -1, new +1; drop zeros.
+        line_item_delta: dict[str, int] = {}
+        for li in old_plan.line_items if old_plan else []:
+            lp = li.get("price")
+            if isinstance(lp, str):
+                line_item_delta[lp] = line_item_delta.get(lp, 0) - 1
+        for li in plan.line_items:
+            lp = li.get("price")
+            if isinstance(lp, str):
+                line_item_delta[lp] = line_item_delta.get(lp, 0) + 1
+        for lp in list(line_item_delta):
+            if line_item_delta[lp] == 0:
+                del line_item_delta[lp]
+
         if body.scheduleAtPeriodEnd:
             # Deferred change: schedule the plan swap at the current billing
             # period end via Subscription Schedules. The active subscription is
@@ -982,28 +1039,55 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                 raise APIError(400, "Subscription schedule has no phases")
             current_phase = phases[0]
 
-            sub_items0 = (existing_sub.get("items") or {}).get("data") or []
-            old_price = None
-            if sub_items0:
-                p0 = sub_items0[0].get("price")
-                old_price = p0.get("id") if isinstance(p0, dict) else p0
-
             def _price_of(item: dict[str, Any]) -> str | None:
                 ip = item.get("price")
                 return ip.get("id") if isinstance(ip, dict) else ip
 
+            sched_remove_quota: dict[str, int] = {
+                p: -d for p, d in line_item_delta.items() if d < 0
+            }
+            sched_delta = dict(line_item_delta)
             current_items = current_phase.get("items") or []
             new_phase_items: list[dict[str, Any]] = []
             for item in current_items:
                 ip = _price_of(item)
-                if ip == old_price:
+                quota = sched_remove_quota.get(ip, 0)
+                if quota > 0:
+                    sched_remove_quota[ip] = quota - 1
+                    continue
+                replacement = price_map.get(ip)
+                if replacement:
                     new_phase_items.append(
-                        {"price": price_id, "quantity": item.get("quantity", 1)}
+                        {
+                            "price": replacement["newPrice"],
+                            "quantity": replacement.get(
+                                "quantity", item.get("quantity", 1)
+                            ),
+                        }
                     )
-                else:
-                    new_phase_items.append(
-                        {"price": ip, "quantity": item.get("quantity", 1)}
-                    )
+                    continue
+                if ip == stripe_subscription_price_id:
+                    entry: dict[str, Any] = {"price": price_id_to_use}
+                    if not is_metered:
+                        entry["quantity"] = (
+                            1 if is_auto_managed_seats else (body.seats or 1)
+                        )
+                    new_phase_items.append(entry)
+                    continue
+                # Keep as-is; consume one positive delta to avoid re-adding it.
+                new_phase_items.append(
+                    {"price": ip, "quantity": item.get("quantity", 1)}
+                )
+                d = sched_delta.get(ip)
+                if d is not None and d > 0:
+                    if d == 1:
+                        del sched_delta[ip]
+                    else:
+                        sched_delta[ip] = d - 1
+            # Add line items the new plan introduces.
+            for p, d in sched_delta.items():
+                for _ in range(max(d, 0)):
+                    new_phase_items.append({"price": p})
 
             await opts.stripe_client.update_subscription_schedule(
                 schedule["id"],
@@ -1040,13 +1124,53 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                 )
             return {"url": body.returnUrl or "/", "redirect": True}
 
-        sub_items = (existing_sub.get("items") or {}).get("data") or []
+        # Immediate change: build per-item updates via subscriptions.update.
+        # Items the new plan removes are flagged `deleted`; seat/base/line-item
+        # price changes are applied in place (preserving item ids); add-ons the
+        # new plan introduces are appended; unchanged items are left untouched.
+        immediate_remove_quota: dict[str, int] = {
+            p: -d for p, d in line_item_delta.items() if d < 0
+        }
+        immediate_delta = dict(line_item_delta)
         update_items: list[dict[str, Any]] = []
-        for idx, li in enumerate(line_items):
-            entry: dict[str, Any] = dict(li)
-            if idx < len(sub_items) and sub_items[idx].get("id"):
-                entry["id"] = sub_items[idx]["id"]
-            update_items.append(entry)
+        for si in sub_items_data:
+            sp = si.get("price")
+            si_price_id = sp.get("id") if isinstance(sp, dict) else sp
+            si_id = si.get("id")
+            quota = immediate_remove_quota.get(si_price_id, 0)
+            if quota > 0:
+                immediate_remove_quota[si_price_id] = quota - 1
+                update_items.append({"id": si_id, "deleted": True})
+                continue
+            replacement = price_map.get(si_price_id)
+            if replacement:
+                update_items.append(
+                    {
+                        "id": si_id,
+                        "price": replacement["newPrice"],
+                        "quantity": replacement.get("quantity"),
+                    }
+                )
+                continue
+            if si_price_id == stripe_subscription_price_id:
+                entry: dict[str, Any] = {"id": si_id, "price": price_id_to_use}
+                if not is_metered:
+                    entry["quantity"] = (
+                        1 if is_auto_managed_seats else (body.seats or 1)
+                    )
+                update_items.append(entry)
+                continue
+            # Keep as-is; consume one positive delta to avoid re-adding it.
+            d = immediate_delta.get(si_price_id)
+            if d is not None and d > 0:
+                if d == 1:
+                    del immediate_delta[si_price_id]
+                else:
+                    immediate_delta[si_price_id] = d - 1
+        # Add line items the new plan introduces.
+        for p, d in immediate_delta.items():
+            for _ in range(max(d, 0)):
+                update_items.append({"price": p})
 
         updated = await opts.stripe_client.update_subscription(
             target_stripe_sub_id,
@@ -1063,7 +1187,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                 "plan": plan.name,
                 "priceId": price_id,
                 "billingInterval": billing_interval,
-                "seats": body.seats,
+                "seats": member_count if is_auto_managed_seats else body.seats,
                 "status": updated.get("status", "active"),
                 "updatedAt": now,
             },
