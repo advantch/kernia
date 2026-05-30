@@ -787,6 +787,138 @@ async def test_methods_otp_only_when_totp_disabled() -> None:
     assert r.json()["twoFactorMethods"] == ["otp"]
 
 
+async def test_methods_otp_only_when_2fa_enabled_but_no_totp_row() -> None:
+    """Ported from "should return twoFactorMethods: ['otp'] when user has 2fa
+    enabled but no totp row" (totp enabled in config, otp enabled)."""
+    sink = _OTPSink()
+    driver, adapter = _build_with_adapter(otp_sink=sink)
+    await _signup(driver)
+    # Force-enable 2FA without ever creating a totp row.
+    await adapter.update(
+        model="user",
+        where=(Where(field="email", value=TEST_EMAIL),),
+        update={"twoFactorEnabled": True},
+    )
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert r.json()["twoFactorRedirect"] is True
+    assert r.json()["twoFactorMethods"] == ["otp"]
+
+
+async def test_methods_exclude_unverified_totp() -> None:
+    """Ported from "should exclude unverified totp from twoFactorMethods".
+
+    An abandoned (verified=false) TOTP enrollment on an OTP-enabled account is
+    excluded; only ['otp'] is offered.
+    """
+    sink = _OTPSink()
+    driver, adapter = _build_with_adapter(otp_sink=sink)
+    await _signup(driver)
+    # enable creates a verified=false totp row but leaves twoFactorEnabled false.
+    await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    # Simulate an OTP-enrolled user who began (but never finished) adding TOTP.
+    await adapter.update(
+        model="user",
+        where=(Where(field="email", value=TEST_EMAIL),),
+        update={"twoFactorEnabled": True},
+    )
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert r.json()["twoFactorRedirect"] is True
+    assert r.json()["twoFactorMethods"] == ["otp"]
+
+
+async def test_methods_totp_and_otp_when_verified() -> None:
+    """Ported from "should return twoFactorMethods: ['totp', 'otp'] when user
+    has verified totp" (totp enabled in config, otp enabled)."""
+    sink = _OTPSink()
+    driver = _build(otp_sink=sink)
+    await _signup(driver)
+    await _enable_and_verify(driver)
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    r = await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert r.json()["twoFactorRedirect"] is True
+    assert r.json()["twoFactorMethods"] == ["totp", "otp"]
+
+
+async def test_no_2fa_challenge_on_magic_link_sign_in() -> None:
+    """Ported from "should not challenge 2FA on magic-link sign-in" (PR #9205).
+
+    2FA enforcement is scoped to credential sign-in paths; a magic-link sign-in
+    for a 2FA-enabled user completes without a twoFactorRedirect challenge.
+    """
+    from urllib.parse import parse_qs, urlencode, urlparse
+
+    from better_auth.plugins import magic_link
+
+    captured: dict[str, str] = {}
+
+    async def send_magic_link(email: str, url: str, token: str) -> None:
+        captured["url"] = url
+
+    sink = _OTPSink()
+    auth = init(
+        BetterAuthOptions(
+            database=memory_adapter(),
+            secret="test-secret-key",
+            plugins=[
+                email_and_password(),
+                two_factor(),
+                magic_link(),
+            ],
+            advanced={
+                "two-factor": {
+                    "otp_options": {"send_otp": sink},
+                    "skip_verification_on_enable": True,
+                },
+                "magic-link": {"send_magic_link": send_magic_link},
+            },
+        )
+    )
+    driver = ASGIDriver(app=auth.router.mount())
+
+    await _signup(driver)
+    # Enable 2FA (skip_verification → twoFactorEnabled immediately true).
+    r = await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    assert r.status == 200, r.json()
+    driver.cookies.clear()
+
+    # Magic-link sign-in for the same (2FA-enabled) user.
+    r = await driver.request(
+        "POST", "/sign-in/magic-link", json_body={"email": TEST_EMAIL}
+    )
+    assert r.status == 200, r.json()
+    token = parse_qs(urlparse(captured["url"]).query)["token"][0]
+
+    r = await driver.request(
+        "GET", "/magic-link/verify", query=urlencode({"token": token})
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body.get("twoFactorRedirect") is None
+    assert body["user"]["email"] == TEST_EMAIL
+    assert body["session"]["id"]
+
+
 # ---------------------------------------------------------------------------
 # OTP storage modes
 # ---------------------------------------------------------------------------
