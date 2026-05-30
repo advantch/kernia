@@ -149,6 +149,49 @@ async def test_short_username_returns_422() -> None:
     assert r.json()["code"] == "USERNAME_TOO_SHORT"
 
 
+async def test_empty_username_returns_422() -> None:
+    """Upstream: 'should fail on empty username'.
+
+    An empty string is shorter than the minimum length, so it trips
+    USERNAME_TOO_SHORT rather than being accepted.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    r = await driver.request(
+        "POST",
+        "/sign-up/username",
+        json_body={"username": "", "password": "abcdefgh"},
+    )
+    assert r.status == 422
+    assert r.json()["code"] == "USERNAME_TOO_SHORT"
+
+
+async def test_default_does_not_normalize_display_username() -> None:
+    """Upstream: 'should not normalize displayUsername'.
+
+    With the default config (no displayUsername normalizer) an explicit
+    mixed-case displayUsername is preserved verbatim while the stored
+    `username` is lower-cased.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    driver = _build(memory_adapter())
+    r = await driver.request(
+        "POST",
+        "/sign-up/username",
+        json_body={
+            "username": "Test_Username",
+            "password": "new-password",
+            "displayUsername": "Test_Username",
+        },
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body["user"]["username"] == "test_username"
+    assert body["user"]["displayUsername"] == "Test_Username"
+
+
 # ----- ported from reference username.test.ts (owned-endpoint subset) -----
 
 
