@@ -37,6 +37,7 @@ async def _signed_in_driver(
     options: ApiKeyOptions | None = None,
     *,
     email: str = "user@example.com",
+    advanced: dict | None = None,
 ) -> tuple[ASGIDriver, object]:
     db = memory_adapter()
     auth = init(
@@ -44,6 +45,7 @@ async def _signed_in_driver(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key(options)],
+            advanced=advanced or {},
         )
     )
     driver = ASGIDriver(app=auth.router.mount())
@@ -1097,3 +1099,128 @@ def test_multi_missing_config_id_raises() -> None:
                 ApiKeyConfigurationOptions(),  # missing configId
             ]
         )
+
+
+# --------------------------------------------------------------------------- deferUpdates
+#
+# Ported from the "deferUpdates option" describe block in
+# reference/packages/api-key/src/api-key.test.ts (lines 3398-3556). When
+# `deferUpdates` is on AND `advanced.background_tasks.handler` is configured,
+# the post-validation write is handed to the handler (un-awaited) instead of
+# running inline; the verify response still reflects the projected row. Without
+# a handler the update runs synchronously.
+
+
+async def _defer_driver(
+    options: ApiKeyOptions,
+) -> tuple[ASGIDriver, object, list]:
+    """Build a signed-in driver whose background-task handler collects the
+    deferred adapter coroutines into the returned list."""
+    deferred: list = []
+    driver, auth = await _signed_in_driver(
+        options,
+        advanced={"background_tasks": {"handler": lambda coro: deferred.append(coro)}},
+    )
+    return driver, auth, deferred
+
+
+async def _drain(deferred: list) -> None:
+    import asyncio
+
+    pending = list(deferred)
+    deferred.clear()
+    if pending:
+        await asyncio.gather(*pending)
+
+
+async def test_defer_updates_with_global_background_tasks() -> None:
+    driver, auth, deferred = await _defer_driver(ApiKeyOptions(defer_updates=True))
+    key = await _create(driver, name="x")
+
+    r = await driver.request("POST", "/api-key/verify", json_body={"key": key["key"]})
+    assert r.json()["valid"] is True
+    # The post-validation write was deferred, not run inline.
+    assert len(deferred) > 0
+
+    await _drain(deferred)
+
+    r = await driver.request("GET", "/api-key/get", query=f"id={key['id']}")
+    assert r.status == 200, r.json()
+    assert r.json()["lastRequest"] is not None
+
+
+async def test_defer_updates_still_validates_rate_limits() -> None:
+    driver, auth, deferred = await _defer_driver(
+        ApiKeyOptions(
+            defer_updates=True,
+            rate_limit=RateLimitOptions(enabled=True, max_requests=2, time_window=60_000),
+        )
+    )
+    key = await _create(driver, name="x")
+    raw = key["key"]
+
+    r1 = await driver.request("POST", "/api-key/verify", json_body={"key": raw})
+    assert r1.json()["valid"] is True
+    await _drain(deferred)
+
+    r2 = await driver.request("POST", "/api-key/verify", json_body={"key": raw})
+    assert r2.json()["valid"] is True
+    await _drain(deferred)
+
+    # Third request inside the window exceeds maxRequests=2 -> rate limited even
+    # though the counter increments were deferred (and then drained) above.
+    r3 = await driver.request("POST", "/api-key/verify", json_body={"key": raw})
+    assert r3.json()["valid"] is False
+    assert r3.json()["error"]["code"] == "RATE_LIMITED"
+
+
+async def test_defer_remaining_count_updates() -> None:
+    deferred: list = []
+    db = memory_adapter()
+    auth = init(
+        BetterAuthOptions(
+            database=db,
+            secret="test-secret-key",
+            plugins=[email_and_password(), api_key(ApiKeyOptions(defer_updates=True))],
+            advanced={"background_tasks": {"handler": lambda coro: deferred.append(coro)}},
+        )
+    )
+    driver = ASGIDriver(app=auth.router.mount())
+    r = await driver.request(
+        "POST", "/sign-up/email", json_body={"email": "d@example.com", "password": "secret123"}
+    )
+    uid = r.json()["user"]["id"]
+    session_cookies = dict(driver.cookies)
+    driver.cookies.clear()
+    # Server-path create to set the server-only `remaining` prop.
+    r = await driver.request(
+        "POST", "/api-key/create", json_body={"name": "x", "userId": uid, "remaining": 10}
+    )
+    key = r.json()
+
+    r = await driver.request("POST", "/api-key/verify", json_body={"key": key["key"]})
+    assert r.json()["valid"] is True
+    # Projected row already shows the decremented count.
+    assert r.json()["key"]["remaining"] == 9
+    assert len(deferred) > 0
+
+    await _drain(deferred)
+
+    # Read back as the owning user.
+    driver.cookies.update(session_cookies)
+    r = await driver.request("GET", "/api-key/get", query=f"id={key['id']}")
+    assert r.json()["remaining"] == 9
+
+
+async def test_no_defer_when_handler_not_configured() -> None:
+    # deferUpdates enabled but no advanced.background_tasks handler -> the update
+    # runs synchronously, so the DB reflects it immediately (no draining needed).
+    driver, auth = await _signed_in_driver(ApiKeyOptions(defer_updates=True))
+    key = await _create(driver, name="x")
+
+    r = await driver.request("POST", "/api-key/verify", json_body={"key": key["key"]})
+    assert r.json()["valid"] is True
+
+    r = await driver.request("GET", "/api-key/get", query=f"id={key['id']}")
+    assert r.status == 200, r.json()
+    assert r.json()["lastRequest"] is not None

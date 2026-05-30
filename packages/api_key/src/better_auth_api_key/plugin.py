@@ -436,6 +436,28 @@ def _is_client_request(ctx: EndpointContext) -> bool:
     return True
 
 
+def _background_handler(ctx: EndpointContext) -> Any:
+    """Return the configured background-task handler callable, or ``None``.
+
+    Mirrors upstream's ``options.advanced.backgroundTasks.handler``. The handler
+    receives the (un-awaited) adapter coroutine so callers can fire-and-forget
+    the post-validation write. We accept both the Pythonic snake_case key and
+    the JS camelCase key for ergonomics."""
+    advanced = getattr(ctx.auth.options, "advanced", None) or {}
+    if not isinstance(advanced, Mapping):
+        return None
+    bg = advanced.get("background_tasks")
+    if bg is None:
+        bg = advanced.get("backgroundTasks")
+    if bg is None:
+        return None
+    if isinstance(bg, Mapping):
+        handler = bg.get("handler")
+    else:
+        handler = getattr(bg, "handler", None)
+    return handler if callable(handler) else None
+
+
 def _parse_json(value: Any) -> Any:
     if value is None:
         return None
@@ -635,11 +657,18 @@ async def validate_api_key(
     update["lastRefillAt"] = last_refill_at
     update["updatedAt"] = _now_ms()
 
-    updated = await ctx.auth.adapter.update(
-        model="apikey",
-        where=(Where(field="id", value=row["id"]),),
-        update=update,
-    )
+    where = (Where(field="id", value=row["id"]),)
+
+    # `deferUpdates`: when a background-task handler is configured we hand the
+    # post-validation write off to it instead of awaiting inline, and return the
+    # projected row so the caller still sees the decremented `remaining` /
+    # refreshed `lastRequest`. Without a handler the update runs synchronously.
+    handler = _background_handler(ctx) if getattr(opts, "defer_updates", False) else None
+    if handler is not None:
+        handler(ctx.auth.adapter.update(model="apikey", where=where, update=update))
+        return {**row, **update}
+
+    updated = await ctx.auth.adapter.update(model="apikey", where=where, update=update)
     if not updated:
         raise APIError(500, "FAILED_TO_UPDATE_API_KEY")
     return updated
