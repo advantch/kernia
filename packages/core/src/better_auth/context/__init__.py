@@ -25,6 +25,48 @@ def _cookie_secure(auth: AuthContext) -> bool:
     return auth.base_url.startswith("https")
 
 
+def _apply_default_cookie_attributes(
+    auth: AuthContext, attrs: CookieAttributes
+) -> CookieAttributes:
+    """Merge `advanced.defaultCookieAttributes` over a base set of attributes.
+
+    Mirrors upstream's `...options.advanced?.defaultCookieAttributes` spread,
+    which sits *before* per-cookie overrides — so it can set `partitioned`,
+    `sameSite`, `secure`, `httpOnly`, `domain` but never the cookie's `maxAge`.
+    Accepts both snake_case and camelCase keys."""
+    import dataclasses
+
+    advanced = getattr(auth.options, "advanced", None) or {}
+    defaults = advanced.get("default_cookie_attributes")
+    if defaults is None:
+        defaults = advanced.get("defaultCookieAttributes")
+    if not isinstance(defaults, dict) or not defaults:
+        return attrs
+
+    def pick(*keys: str) -> Any:
+        for key in keys:
+            if key in defaults:
+                return defaults[key]
+        return _UNSET
+
+    changes: dict[str, Any] = {}
+    for field_name, keys in (
+        ("partitioned", ("partitioned",)),
+        ("same_site", ("same_site", "sameSite")),
+        ("secure", ("secure",)),
+        ("http_only", ("http_only", "httpOnly")),
+        ("domain", ("domain",)),
+        ("path", ("path",)),
+    ):
+        value = pick(*keys)
+        if value is not _UNSET:
+            changes[field_name] = value
+    return dataclasses.replace(attrs, **changes) if changes else attrs
+
+
+_UNSET = object()
+
+
 def session_token_cookie(
     auth: AuthContext, signed_token: str, *, remember_me: bool = True
 ) -> tuple[str, str, CookieAttributes]:
@@ -37,7 +79,7 @@ def session_token_cookie(
         secure=_cookie_secure(auth),
         same_site="lax",
     )
-    return (SESSION_TOKEN_COOKIE, signed_token, attrs)
+    return (SESSION_TOKEN_COOKIE, signed_token, _apply_default_cookie_attributes(auth, attrs))
 
 
 def session_data_cookie(
@@ -72,7 +114,7 @@ def session_data_cookie(
         secure=_cookie_secure(auth),
         same_site="lax",
     )
-    return (SESSION_DATA_COOKIE, value, attrs)
+    return (SESSION_DATA_COOKIE, value, _apply_default_cookie_attributes(auth, attrs))
 
 
 async def create_session(

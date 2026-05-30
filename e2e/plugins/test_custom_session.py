@@ -10,8 +10,9 @@ The upstream cookie-cache (``session_data``) Set-Cookie cases are now covered:
 the core get-session handler re-issues the ``session_token`` and short-lived
 ``session_data`` cookies (each a separate Set-Cookie entry, distinct Max-Age)
 when ``session.cookieCache`` is enabled and the session is due for refresh. The
-``partitioned``-attribute case still depends on ``advanced.defaultCookieAttributes``
-plumbing and remains unported.
+``partitioned``-attribute case is now covered too: ``advanced.defaultCookieAttributes``
+is merged over the base cookie attributes (before per-cookie ``maxAge`` overrides),
+so refreshed cookies preserve ``Partitioned`` / ``SameSite=None`` etc.
 """
 
 from __future__ import annotations
@@ -358,3 +359,45 @@ async def test_get_session_does_not_comma_join_set_cookies() -> None:
         better_auth_names = [n for n in names if n.startswith("better-auth.")]
         # Exactly one better-auth.* cookie per Set-Cookie header (no comma-join).
         assert len(better_auth_names) == 1
+
+
+async def test_get_session_preserves_partitioned_cookie_attributes() -> None:
+    """Upstream: 'should preserve partitioned cookie attributes during refresh'.
+
+    @see https://github.com/better-auth/better-auth/issues/9231
+    """
+    auth = init(
+        BetterAuthOptions(
+            database=memory_adapter(),
+            secret="test-secret-key-partitioned!!!",
+            session=SessionOptions(update_age=0),
+            advanced={
+                "default_cookie_attributes": {
+                    "partitioned": True,
+                    "same_site": "none",
+                    "secure": True,
+                    "http_only": True,
+                },
+            },
+            plugins=[email_and_password(), custom_session(_transform)],
+        )
+    )
+    driver = ASGIDriver(app=auth.router.mount())
+    r = await driver.request(
+        "POST",
+        "/sign-up/email",
+        json_body={
+            "email": "partitioned@test.com",
+            "password": "password1",
+            "name": "Part It",
+        },
+    )
+    assert r.status == 200, r.json()
+
+    r = await driver.request("GET", "/get-session")
+    set_cookies = _set_cookie_headers(r)
+    better_auth_cookies = [c for c in set_cookies if "better-auth." in c]
+    assert len(better_auth_cookies) > 0
+    for cookie_str in better_auth_cookies:
+        assert "Partitioned" in cookie_str
+        assert "SameSite=None" in cookie_str
