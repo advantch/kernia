@@ -52,6 +52,13 @@ OAUTH_CLIENT_MODEL = ModelDef(
         # endpoint (token/introspect/revoke) with `invalid_client`, mirroring
         # upstream's `disabled` flag on `oauthApplication`.
         FieldDef("disabled", "boolean", default=False, required=False),
+        # RP-initiated logout (OIDC `end_session_endpoint`). `enableEndSession`
+        # is a privileged flag — only settable when a client is created by an
+        # admin, never through dynamic registration — that opts a client into
+        # the `sid` id_token claim and the end-session endpoint.
+        # `postLogoutRedirectUris` (CSV) whitelists `post_logout_redirect_uri`.
+        FieldDef("enableEndSession", "boolean", default=False, required=False),
+        FieldDef("postLogoutRedirectUris", "text", required=False),
         FieldDef("createdAt", "date"),
         FieldDef("updatedAt", "date"),
     ),
@@ -70,6 +77,9 @@ OAUTH_AUTHORIZATION_CODE_MODEL = ModelDef(
         FieldDef("codeChallenge", "string", required=False),
         FieldDef("codeChallengeMethod", "string", required=False),
         FieldDef("nonce", "string", required=False),
+        # The authenticating user's session id, captured at authorize time so
+        # the issued id_token can carry an `sid` claim (RP-initiated logout).
+        FieldDef("sessionId", "string", required=False),
         FieldDef("expiresAt", "date"),
     ),
 )
@@ -296,9 +306,12 @@ class OAuthClient:
     token_endpoint_auth_method: str
     subject_type: str | None = None
     disabled: bool = False
+    enable_end_session: bool = False
+    post_logout_redirect_uris: tuple[str, ...] = ()
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> OAuthClient:
+        post_logout = row.get("postLogoutRedirectUris")
         return cls(
             client_id=row["clientId"],
             client_secret=row.get("clientSecret") or None,
@@ -313,6 +326,10 @@ class OAuthClient:
             or "client_secret_basic",
             subject_type=row.get("subjectType") or None,
             disabled=bool(row.get("disabled")),
+            enable_end_session=bool(row.get("enableEndSession")),
+            post_logout_redirect_uris=tuple(
+                u for u in (post_logout or "").split(",") if u
+            ),
         )
 
 
@@ -328,6 +345,7 @@ class RegisterBody(BaseModel):
     subject_type: str | None = None
     response_types: list[str] | None = None
     type: str | None = None
+    post_logout_redirect_uris: list[str] | None = None
 
 
 class TokenBody(BaseModel):
@@ -476,6 +494,7 @@ async def _authorize(ctx: EndpointContext) -> dict[str, object]:
             "codeChallenge": code_challenge,
             "codeChallengeMethod": code_challenge_method or ("S256" if code_challenge else None),
             "nonce": nonce,
+            "sessionId": ctx.session.id,
             "expiresAt": now + opts.code_ttl,
         },
     )
@@ -603,6 +622,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             user_id=user_id,
             scope=scope,
             nonce=record.get("nonce"),
+            session_id=record.get("sessionId"),
         )
 
     if grant == "refresh_token":
@@ -708,6 +728,7 @@ async def _issue_tokens(
     scope: str,
     nonce: str | None = None,
     include_id_token: bool = True,
+    session_id: str | None = None,
 ) -> dict[str, object]:
     now = int(time.time())
     client_id = client.client_id
@@ -781,6 +802,11 @@ async def _issue_tokens(
         }
         if nonce:
             payload["nonce"] = nonce
+        # OIDC RP-initiated logout: only clients explicitly opted in (admin-set
+        # `enable_end_session`) receive the `sid` (session id) claim, which the
+        # end-session endpoint later uses to terminate the right session.
+        if client.enable_end_session and session_id:
+            payload["sid"] = session_id
         if user:
             payload.update(_user_normal_claims(user, scopes))
         id_token, _kid = await issue_jwt(ctx.auth, payload=payload, ttl=opts.access_token_ttl)
@@ -1167,6 +1193,9 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
             "requirePKCE": body.require_pkce,
             "tokenEndpointAuthMethod": body.token_endpoint_auth_method,
             "subjectType": body.subject_type,
+            # Dynamic registration may declare post-logout redirect URIs, but it
+            # may NOT grant itself `enableEndSession` (privileged, admin-only).
+            "postLogoutRedirectUris": ",".join(body.post_logout_redirect_uris or []),
             "createdAt": now,
             "updatedAt": now,
         },
@@ -1181,7 +1210,71 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
     }
     if body.subject_type:
         out["subject_type"] = body.subject_type
+    if body.post_logout_redirect_uris is not None:
+        out["post_logout_redirect_uris"] = body.post_logout_redirect_uris
     return out
+
+
+async def _end_session(ctx: EndpointContext) -> dict[str, object] | None:
+    """OIDC RP-initiated logout (`end_session_endpoint`).
+
+    Validates the `id_token_hint`, confirms the issuing client is allowed to end
+    sessions, terminates the session named by the token's `sid` claim, and —
+    when a registered `post_logout_redirect_uri` is supplied — returns a redirect
+    (with optional `state`). Mirrors upstream's end-session handler.
+
+    @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
+    """
+    opts = _options(ctx.auth)
+    qs = ctx.request.query
+    id_token_hint = _q(qs, "id_token_hint")
+    post_logout_redirect_uri = _q(qs, "post_logout_redirect_uri")
+    state = _q(qs, "state")
+
+    if not id_token_hint:
+        raise _oauth_error(401, "invalid_request", "id_token_hint is required")
+    try:
+        claims: Mapping[str, Any] = await verify_local_jwt(
+            ctx.auth, id_token_hint, issuer=opts.issuer
+        )
+    except ValueError as exc:
+        raise _oauth_error(401, "invalid_request", "invalid id_token_hint") from exc
+
+    aud = claims.get("aud")
+    client_id = aud[0] if isinstance(aud, list) and aud else aud
+    if not isinstance(client_id, str) or not client_id:
+        raise _oauth_error(401, "invalid_request", "id_token_hint missing audience")
+    try:
+        client = await _load_client(ctx.auth, client_id)
+    except APIError as exc:
+        raise _oauth_error(401, "invalid_request", "unknown client") from exc
+    # Only clients granted RP-initiated logout may terminate sessions; absence of
+    # an `sid` claim (the issuance-time signal a client was *not* opted in) is
+    # treated the same way.
+    if not client.enable_end_session:
+        raise _oauth_error(
+            401, "invalid_request", "client is not allowed to end sessions"
+        )
+    sid = claims.get("sid")
+    if not isinstance(sid, str) or not sid:
+        raise _oauth_error(401, "invalid_request", "id_token_hint missing sid")
+
+    await ctx.auth.adapter.delete(
+        model="session", where=(Where(field="id", value=sid),)
+    )
+
+    if post_logout_redirect_uri:
+        if post_logout_redirect_uri not in client.post_logout_redirect_uris:
+            raise _oauth_error(
+                400, "invalid_request", "post_logout_redirect_uri not registered"
+            )
+        redirect = post_logout_redirect_uri
+        if state:
+            sep = "&" if "?" in redirect else "?"
+            redirect = f"{redirect}{sep}{urlencode({'state': state})}"
+        ctx.response_headers["Location"] = redirect
+        return {"redirect": redirect}
+    return None
 
 
 # ----- endpoints -----
@@ -1227,6 +1320,11 @@ REGISTER = create_auth_endpoint(
     EndpointOptions(method="POST", body=RegisterBody),
     _register,
 )
+END_SESSION = create_auth_endpoint(
+    "/oauth2/end-session",
+    EndpointOptions(method="GET"),
+    _end_session,
+)
 
 
 _ENDPOINTS: tuple[AuthEndpoint, ...] = (
@@ -1238,6 +1336,7 @@ _ENDPOINTS: tuple[AuthEndpoint, ...] = (
     DISCOVERY,
     AS_METADATA,
     REGISTER,
+    END_SESSION,
 )
 
 
@@ -1343,8 +1442,15 @@ async def create_client(
     require_pkce: bool = True,
     token_endpoint_auth_method: str = "client_secret_basic",
     subject_type: str | None = None,
+    enable_end_session: bool = False,
+    post_logout_redirect_uris: Sequence[str] = (),
 ) -> OAuthClient:
-    """Helper: register a client programmatically (no /register endpoint required)."""
+    """Register a client programmatically (the privileged / admin path).
+
+    Unlike dynamic registration (`/oauth2/register`), this path may set
+    ``enable_end_session`` — opting the client into the `sid` id_token claim and
+    the RP-initiated logout endpoint.
+    """
     opts = _options(auth)
     _validate_subject_type(subject_type, redirect_uris, opts)
     client_id = secrets.token_urlsafe(16)
@@ -1364,6 +1470,8 @@ async def create_client(
             "tokenEndpointAuthMethod": token_endpoint_auth_method,
             "subjectType": subject_type,
             "disabled": False,
+            "enableEndSession": enable_end_session,
+            "postLogoutRedirectUris": ",".join(post_logout_redirect_uris),
             "createdAt": now,
             "updatedAt": now,
         },
@@ -1377,6 +1485,8 @@ async def create_client(
         require_pkce=require_pkce,
         token_endpoint_auth_method=token_endpoint_auth_method,
         subject_type=subject_type,
+        enable_end_session=enable_end_session,
+        post_logout_redirect_uris=tuple(post_logout_redirect_uris),
     )
 
 
