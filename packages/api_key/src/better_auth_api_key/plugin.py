@@ -441,10 +441,42 @@ def _parse_json(value: Any) -> Any:
         return None
     if isinstance(value, str):
         try:
-            return json.loads(value)
+            parsed = json.loads(value)
         except (json.JSONDecodeError, ValueError):
             return None
+        # Legacy double-stringified payloads (an earlier serialization bug stored
+        # `JSON.stringify(JSON.stringify(obj))`): unwrap one extra layer when the
+        # decoded value is itself a JSON string that decodes to an object/array.
+        if isinstance(parsed, str):
+            try:
+                inner = json.loads(parsed)
+            except (json.JSONDecodeError, ValueError):
+                return parsed
+            if isinstance(inner, dict | list):
+                return inner
+        return parsed
     return value
+
+
+def _migrated_metadata(raw: Any) -> Any:
+    """Return the unwrapped object when ``raw`` is legacy double-stringified.
+
+    Returns ``None`` when no migration is needed, so callers can detect whether a
+    write-back to single-stringified form is required.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        once = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(once, str):
+        return None
+    try:
+        twice = json.loads(once)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return twice if isinstance(twice, dict | list) else None
 
 
 def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -454,6 +486,26 @@ def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
     out["metadata"] = _parse_json(out.get("metadata"))
     out["permissions"] = _parse_json(out.get("permissions"))
     return out
+
+
+async def _migrate_metadata_row(
+    ctx: EndpointContext, row: dict[str, Any]
+) -> dict[str, Any]:
+    """Repair a row whose ``metadata`` was stored double-stringified.
+
+    Rewrites the column to the correct single-stringified form so subsequent
+    reads are clean, mirroring upstream's lazy migration on get/list.
+    """
+    migrated = _migrated_metadata(row.get("metadata"))
+    if migrated is None:
+        return row
+    fixed = json.dumps(migrated)
+    await ctx.auth.adapter.update(
+        model="apikey",
+        where=(Where(field="id", value=row["id"]),),
+        update={"metadata": fixed},
+    )
+    return {**row, "metadata": fixed}
 
 
 async def _require_session(ctx: EndpointContext) -> Session:
@@ -962,6 +1014,7 @@ def api_key(
             raise APIError(404, "KEY_NOT_FOUND")
         await _authorize_row(ctx, session, row, cfg, "read")
         await _delete_all_expired(ctx)
+        row = await _migrate_metadata_row(ctx, row)
         return _serialize_row(row)
 
     # ---------------------------------------------------------------- update
@@ -1136,6 +1189,7 @@ def api_key(
             rows = rows[: int(limit)]
 
         await _delete_all_expired(ctx)
+        rows = [await _migrate_metadata_row(ctx, r) for r in rows]
         api_keys = [_serialize_row(r) for r in rows]
         return {
             "apiKeys": api_keys,

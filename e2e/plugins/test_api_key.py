@@ -307,6 +307,67 @@ async def test_should_create_with_valid_metadata_object() -> None:
     assert body["metadata"] == {"foo": "bar", "n": 7}
 
 
+# --------------------------------------------------------------- legacy metadata migration
+
+
+async def _force_double_stringified(auth, key_id: str, obj: dict) -> None:
+    """Simulate the legacy double-stringified-metadata bug in the DB."""
+    import json
+
+    await auth.context.adapter.update(
+        model="apikey",
+        where=(Where(field="id", value=key_id),),
+        update={"metadata": json.dumps(json.dumps(obj))},
+    )
+
+
+async def test_migrate_double_stringified_metadata_on_get() -> None:
+    import json
+
+    driver, auth = await _signed_in_driver(ApiKeyOptions(enable_metadata=True))
+    created = await _create(driver, name="x", metadata={"organizationId": "test-org"})
+    await _force_double_stringified(auth, created["id"], {"organizationId": "legacy-org"})
+
+    # Raw DB value is a string (double-encoded).
+    raw = await auth.context.adapter.find_one(
+        model="apikey", where=(Where(field="id", value=created["id"]),)
+    )
+    assert isinstance(raw["metadata"], str)
+
+    # Read via API returns a properly parsed object.
+    r = await driver.request("GET", "/api-key/get", query=f"id={created['id']}")
+    assert r.status == 200, r.json()
+    assert r.json()["metadata"] == {"organizationId": "legacy-org"}
+
+    # DB has been migrated to single-stringified form (decodes once to the object).
+    migrated = await auth.context.adapter.find_one(
+        model="apikey", where=(Where(field="id", value=created["id"]),)
+    )
+    assert json.loads(migrated["metadata"]) == {"organizationId": "legacy-org"}
+
+
+async def test_migrate_double_stringified_metadata_on_list() -> None:
+    import json
+
+    driver, auth = await _signed_in_driver(ApiKeyOptions(enable_metadata=True))
+    k1 = await _create(driver, name="key-1", metadata={"plan": "pro"})
+    k2 = await _create(driver, name="key-2", metadata={"plan": "enterprise"})
+    await _force_double_stringified(auth, k1["id"], {"plan": "legacy-1"})
+    await _force_double_stringified(auth, k2["id"], {"plan": "legacy-2"})
+
+    r = await driver.request("GET", "/api-key/list")
+    assert r.status == 200, r.json()
+    by_id = {k["id"]: k for k in r.json()["apiKeys"]}
+    assert by_id[k1["id"]]["metadata"] == {"plan": "legacy-1"}
+    assert by_id[k2["id"]]["metadata"] == {"plan": "legacy-2"}
+
+    for kid, expected in ((k1["id"], "legacy-1"), (k2["id"], "legacy-2")):
+        migrated = await auth.context.adapter.find_one(
+            model="apikey", where=(Where(field="id", value=kid),)
+        )
+        assert json.loads(migrated["metadata"]) == {"plan": expected}
+
+
 # --------------------------------------------------------------------------- start chars
 
 
