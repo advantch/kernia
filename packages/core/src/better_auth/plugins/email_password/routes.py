@@ -11,7 +11,12 @@ import time
 from dataclasses import dataclass
 
 from better_auth.api.endpoint import create_auth_endpoint
-from better_auth.context import create_session, revoke_session
+from better_auth.context import (
+    create_session,
+    refresh_session_cookies,
+    revoke_session,
+    should_refresh_session,
+)
 from better_auth.crypto import hash_password, verify_password
 from better_auth.error import APIError
 from better_auth.types.adapter import Where
@@ -160,6 +165,12 @@ async def _sign_out(ctx: EndpointContext) -> dict[str, object]:
     return {"success": True}
 
 
+def _is_truthy_query(value: object) -> bool:
+    if isinstance(value, list):
+        value = value[0] if value else None
+    return str(value).lower() in ("1", "true", "yes") if value is not None else False
+
+
 async def _get_session(ctx: EndpointContext) -> dict[str, object] | None:
     if ctx.session is None:
         return None
@@ -167,6 +178,17 @@ async def _get_session(ctx: EndpointContext) -> dict[str, object] | None:
         model="user",
         where=(Where(field="id", value=ctx.session.user_id),),
     )
+
+    # Cookie refresh: re-issue `session_token` (and the `session_data` cache when
+    # enabled) when the session is older than `update_age`, unless the caller
+    # opted out with `?disableRefresh=true`. Each cookie is its own Set-Cookie
+    # entry, preserving the distinct Max-Age of token vs. data cookies.
+    disable_refresh = _is_truthy_query(ctx.request.query.get("disableRefresh"))
+    if not disable_refresh and should_refresh_session(ctx.auth, ctx.session):
+        ctx.set_cookies.extend(
+            refresh_session_cookies(ctx.auth, session=ctx.session, user=user)
+        )
+
     return {
         "session": {"id": ctx.session.id, "expiresAt": ctx.session.expires_at},
         "user": user,

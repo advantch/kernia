@@ -6,16 +6,73 @@ and revocation so plugins never construct `session` rows by hand.
 
 from __future__ import annotations
 
+import json
 import time
+from typing import Any
 
-from better_auth.cookies import new_token, sign
+from better_auth.cookies import _b64url, new_token, sign
 from better_auth.types.adapter import Where
 from better_auth.types.context import AuthContext, Session
 from better_auth.types.cookie import (
     DONT_REMEMBER_COOKIE,
+    SESSION_DATA_COOKIE,
     SESSION_TOKEN_COOKIE,
     CookieAttributes,
 )
+
+
+def _cookie_secure(auth: AuthContext) -> bool:
+    return auth.base_url.startswith("https")
+
+
+def session_token_cookie(
+    auth: AuthContext, signed_token: str, *, remember_me: bool = True
+) -> tuple[str, str, CookieAttributes]:
+    """The `session_token` cookie. `Max-Age` is the session lifetime (`expires_in`)
+    unless the session is non-persistent (`remember_me=False`)."""
+    attrs = CookieAttributes(
+        path="/",
+        max_age=auth.options.session.expires_in if remember_me else None,
+        http_only=True,
+        secure=_cookie_secure(auth),
+        same_site="lax",
+    )
+    return (SESSION_TOKEN_COOKIE, signed_token, attrs)
+
+
+def session_data_cookie(
+    auth: AuthContext,
+    *,
+    session: Session,
+    user: dict[str, Any] | None = None,
+) -> tuple[str, str, CookieAttributes]:
+    """The short-lived signed `session_data` cookie-cache.
+
+    Mirrors upstream's cookie cache: a signed, base64url-encoded snapshot of the
+    session (and user, when available) with its own short `Max-Age`
+    (`cookie_cache_max_age`) — distinct from the long-lived `session_token`."""
+    payload = {
+        "session": {
+            "session": {
+                "id": session.id,
+                "userId": session.user_id,
+                "expiresAt": session.expires_at,
+                "token": session.token,
+            },
+            "user": user,
+        },
+        "expiresAt": int(time.time()) + auth.options.session.cookie_cache_max_age,
+    }
+    encoded = _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    value = sign(encoded, secret=auth.secret)
+    attrs = CookieAttributes(
+        path="/",
+        max_age=auth.options.session.cookie_cache_max_age,
+        http_only=True,
+        secure=_cookie_secure(auth),
+        same_site="lax",
+    )
+    return (SESSION_DATA_COOKIE, value, attrs)
 
 
 async def create_session(
@@ -59,21 +116,47 @@ async def create_session(
         user_agent=user_agent,
     )
     signed = sign(token, secret=auth.secret)
-    attrs = CookieAttributes(
-        path="/",
-        max_age=auth.options.session.expires_in if remember_me else None,
-        http_only=True,
-        secure=auth.base_url.startswith("https"),
-        same_site="lax",
-    )
-    cookies = [(SESSION_TOKEN_COOKIE, signed, attrs)]
+    cookies = [session_token_cookie(auth, signed, remember_me=remember_me)]
+    if auth.options.session.cookie_cache_enabled:
+        cookies.append(session_data_cookie(auth, session=session))
     if not remember_me:
         cookies.append((
             DONT_REMEMBER_COOKIE,
             "1",
-            CookieAttributes(path="/", http_only=True, secure=attrs.secure, same_site="lax"),
+            CookieAttributes(
+                path="/",
+                http_only=True,
+                secure=_cookie_secure(auth),
+                same_site="lax",
+            ),
         ))
     return session, cookies
+
+
+def should_refresh_session(auth: AuthContext, session: Session) -> bool:
+    """True when the session is older than `update_age` and its cookie should be
+    re-issued. Derived from `expires_at - expires_in + update_age` so we don't
+    need a separate `updated_at` column (matches upstream's rolling refresh)."""
+    opts = auth.options.session
+    due_at = session.expires_at - opts.expires_in + opts.update_age
+    return int(time.time()) >= due_at
+
+
+def refresh_session_cookies(
+    auth: AuthContext,
+    *,
+    session: Session,
+    user: dict[str, Any] | None = None,
+    remember_me: bool = True,
+) -> list[tuple[str, str, CookieAttributes]]:
+    """Cookies to re-emit on a get-session refresh: the `session_token` (with its
+    full `expires_in` Max-Age preserved) and, when enabled, the `session_data`
+    cache. Each is a separate Set-Cookie entry (never comma-joined)."""
+    signed = sign(session.token, secret=auth.secret)
+    cookies = [session_token_cookie(auth, signed, remember_me=remember_me)]
+    if auth.options.session.cookie_cache_enabled:
+        cookies.append(session_data_cookie(auth, session=session, user=user))
+    return cookies
 
 
 async def revoke_session(
@@ -97,4 +180,11 @@ async def revoke_session(
     ]
 
 
-__all__ = ["create_session", "revoke_session"]
+__all__ = [
+    "create_session",
+    "revoke_session",
+    "refresh_session_cookies",
+    "should_refresh_session",
+    "session_data_cookie",
+    "session_token_cookie",
+]

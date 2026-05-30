@@ -50,7 +50,10 @@ class SessionOptions:
 
     expires_in: int = 60 * 60 * 24 * 7  # 7 days, seconds
     update_age: int = 60 * 60 * 24  # 1 day — refresh cookie if older than this
-    cookie_cache_enabled: bool = True
+    # Matches upstream `session.cookieCache.enabled` (default off). When enabled,
+    # a short-lived signed `session_data` cookie caches the session payload and is
+    # (re)emitted alongside `session_token` on sign-in and get-session refresh.
+    cookie_cache_enabled: bool = False
     cookie_cache_max_age: int = 60 * 5  # 5 min — short-lived `session_data` cookie
     # Schema overrides (see ModelConfig). `store_session_in_database` keeps the
     # session table even when a secondary storage is configured.
