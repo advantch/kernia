@@ -11,9 +11,11 @@ reuse detection) is ported.
 from __future__ import annotations
 
 import pytest
+from better_auth.types.adapter import Where
 
 from .conftest import (
     authorize_code,
+    basic,
     decode_jwt_payload,
     exchange_code,
     get_tokens,
@@ -123,6 +125,140 @@ async def test_reuse_tears_down_family(confidential) -> None:
     assert (await _refresh(driver, client, tokens["refresh_token"])).status == 400
     # The legitimately-rotated token is now dead too.
     assert (await _refresh(driver, client, rotated)).status == 400
+
+
+# ----- grant: refresh_token, client authentication -----
+#
+# Ported from reference/.../mcp/mcp.test.ts
+# describe("mcp refresh_token grant client authentication"). Upstream drives the
+# mcp plugin's `/mcp/token` endpoint; in this port the OAuth *issuer* token
+# exchange lives in the oauth-provider package at `/oauth2/token`, so the
+# client-authentication behaviour is exercised there. A real refresh token is
+# minted through the offline_access flow rather than seeded directly.
+
+
+async def _seed_refresh_token(driver, client) -> str:
+    tokens = await get_tokens(driver, client, scope="openid offline_access")
+    return tokens["refresh_token"]
+
+
+async def test_reject_refresh_token_on_confidential_client_without_client_secret(
+    confidential,
+) -> None:
+    _, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": client.client_id,
+        },
+    )
+    assert r.status == 401, r.json()
+    assert r.json()["data"]["error"] == "invalid_client"
+    assert "access_token" not in r.json()
+
+
+async def test_reject_refresh_token_on_confidential_client_with_wrong_client_secret(
+    confidential,
+) -> None:
+    _, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": client.client_id,
+            "client_secret": "wrong-secret",
+        },
+    )
+    assert r.status == 401, r.json()
+    assert r.json()["data"]["error"] == "invalid_client"
+    assert "access_token" not in r.json()
+
+
+async def test_accept_refresh_token_when_client_secret_via_authorization_basic(
+    confidential,
+) -> None:
+    _, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={"grant_type": "refresh_token", "refresh_token": refresh},
+        headers={"authorization": basic(client.client_id, client.client_secret)},
+    )
+    assert r.status == 200, r.json()
+    body = r.json()
+    assert body["access_token"]
+    assert body["refresh_token"]
+
+
+async def test_accept_refresh_token_when_basic_and_matching_client_id_in_body(
+    confidential,
+) -> None:
+    _, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": client.client_id,
+        },
+        headers={"authorization": basic(client.client_id, client.client_secret)},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["access_token"]
+
+
+async def test_reject_refresh_token_when_body_client_id_mismatches_basic(
+    confidential,
+) -> None:
+    _, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": "different-client-id",
+        },
+        headers={"authorization": basic(client.client_id, client.client_secret)},
+    )
+    assert r.status == 401, r.json()
+    assert r.json()["data"]["error"] == "invalid_client"
+
+
+async def test_reject_refresh_token_when_confidential_client_is_disabled(
+    confidential,
+) -> None:
+    auth, driver, client = confidential
+    refresh = await _seed_refresh_token(driver, client)
+    await auth.context.adapter.update(
+        model="oauthClient",
+        where=(Where(field="clientId", value=client.client_id),),
+        update={"disabled": True},
+    )
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    assert r.status == 401, r.json()
+    assert r.json()["data"]["error"] == "invalid_client"
+    assert "access_token" not in r.json()
 
 
 @pytest.mark.skip(

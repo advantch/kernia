@@ -48,6 +48,10 @@ OAUTH_CLIENT_MODEL = ModelDef(
         FieldDef("requirePKCE", "boolean", default=True),
         FieldDef("tokenEndpointAuthMethod", "string", default="client_secret_basic"),
         FieldDef("subjectType", "string", required=False),
+        # Administratively disabled clients are rejected at every credentialed
+        # endpoint (token/introspect/revoke) with `invalid_client`, mirroring
+        # upstream's `disabled` flag on `oauthApplication`.
+        FieldDef("disabled", "boolean", default=False, required=False),
         FieldDef("createdAt", "date"),
         FieldDef("updatedAt", "date"),
     ),
@@ -291,6 +295,7 @@ class OAuthClient:
     require_pkce: bool
     token_endpoint_auth_method: str
     subject_type: str | None = None
+    disabled: bool = False
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> OAuthClient:
@@ -307,6 +312,7 @@ class OAuthClient:
             token_endpoint_auth_method=row.get("tokenEndpointAuthMethod")
             or "client_secret_basic",
             subject_type=row.get("subjectType") or None,
+            disabled=bool(row.get("disabled")),
         )
 
 
@@ -395,6 +401,15 @@ def _client_auth(ctx: EndpointContext) -> tuple[str | None, str | None]:
             return client_id, client_secret
         if ":" in decoded:
             cid, _, csec = decoded.partition(":")
+            # RFC 6749 §2.3.1: a client must not present two distinct
+            # identities. If the body also carries a client_id it must match the
+            # one in the Authorization header, otherwise authentication fails.
+            if cid and client_id and cid != client_id:
+                raise _oauth_error(
+                    401,
+                    "invalid_client",
+                    "client_id mismatch between Authorization header and request body",
+                )
             return cid or client_id, csec or client_secret
     return client_id, client_secret
 
@@ -498,8 +513,16 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
     body: TokenBody = ctx.body
     client_id, client_secret = _client_auth(ctx)
     if not client_id:
-        raise APIError(401, "INVALID_REQUEST", message="client_id required")
-    client = await _load_client(ctx.auth, client_id)
+        raise _oauth_error(401, "invalid_client", "client_id required")
+    try:
+        client = await _load_client(ctx.auth, client_id)
+    except APIError as exc:
+        # An unknown client is a client-authentication failure (RFC 6749 §5.2).
+        raise _oauth_error(401, "invalid_client", "unknown client") from exc
+
+    # Administratively disabled clients cannot obtain or exchange tokens.
+    if client.disabled:
+        raise _oauth_error(401, "invalid_client", "client is disabled")
 
     # Auth: confidential clients require secret; public clients can omit if PKCE present.
     is_public = client.token_endpoint_auth_method == "none"
@@ -511,7 +534,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
                 opts.store_client_secret, client_secret, client.client_secret
             )
         ):
-            raise APIError(401, "INVALID_REQUEST", message="invalid client credentials")
+            raise _oauth_error(401, "invalid_client", "invalid client credentials")
 
     grant = body.grant_type
     now = int(time.time())
@@ -1340,6 +1363,7 @@ async def create_client(
             "requirePKCE": require_pkce,
             "tokenEndpointAuthMethod": token_endpoint_auth_method,
             "subjectType": subject_type,
+            "disabled": False,
             "createdAt": now,
             "updatedAt": now,
         },
