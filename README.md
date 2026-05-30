@@ -6,7 +6,7 @@ A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, 
 
 > **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and was removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
 >
-> By that gate we are **substantially advanced but not yet complete**: **1,695** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **46 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
+> By that gate we are **substantially advanced but not yet complete**: **1,702** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **46 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
 
 Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area, both measured directly (`uv run pytest --co` vs `grep` over `reference/**/*.test.ts`). A ratio ≥ 1.0 means we exercise the behavior at least as thoroughly as upstream; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
 
@@ -32,7 +32,7 @@ Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`te
 | jwt | 45 | 38 | ✅ /jwks, /sign, /verify, EdDSA, rotation |
 | **Strong — most of upstream ported** | | | |
 | phone_number | 31 | 32 | 97 % — + expired-code, last-code-wins, reset-password (create-account / too-many-attempts / no-leak); remaining: custom `verifyOTP` + `updatePhoneNumber`/`updateUser` immutability |
-| captcha | 13 | 17 | 76 % |
+| captcha | 17 | 17 | ✅ non-protected passthrough, missing-secret + siteverify-failure → 500, v3 low-score → 403 |
 | oauth_proxy | 14 | 18 | 78 % |
 | generic_oauth | 44 | 60 | 73 % |
 | organization | 142 | 200 | 71 % — 35 endpoints, teams, dynamic AC |

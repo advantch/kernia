@@ -27,6 +27,11 @@ from better_auth.types.plugin import BetterAuthPlugin
 CAPTCHA_ERROR_CODES: Mapping[str, str] = {
     "CAPTCHA_FAILED": "Captcha verification failed.",
     "CAPTCHA_TOKEN_MISSING": "Captcha token is missing.",
+    # Raised (HTTP 500) when the siteverify service is unreachable or the
+    # provider is misconfigured (missing secret) — distinct from a clean
+    # validation failure (403). Mirrors upstream's SERVICE_UNAVAILABLE /
+    # MISSING_SECRET_KEY internal errors surfaced as UNKNOWN_ERROR (500).
+    "CAPTCHA_SERVICE_UNAVAILABLE": "Captcha service unavailable.",
 }
 
 
@@ -62,11 +67,24 @@ def _build_before_hook(
     def matcher(ctx: EndpointContext) -> bool:
         return ctx.request.path in paths
 
+    # Mirror upstream's `if (!options.secretKey) throw ... (→ 500)`: a provider
+    # built without a secret is a server misconfiguration, not a 400/403.
+    missing_secret = hasattr(provider, "secret") and not provider.secret
+
     async def handler(ctx: EndpointContext) -> None:
+        if missing_secret:
+            raise APIError(500, "CAPTCHA_SERVICE_UNAVAILABLE", message="Missing secret key")
         token = _extract_token(ctx)
         if not token:
             raise APIError(400, "CAPTCHA_TOKEN_MISSING")
         result = await provider.verify(token, _client_ip(ctx))
+        if getattr(result, "service_error", False):
+            # The siteverify call failed to reach/parse — surface as 500, not 403.
+            raise APIError(
+                500,
+                "CAPTCHA_SERVICE_UNAVAILABLE",
+                message=f"Captcha service unavailable ({result.error or 'unknown'}).",
+            )
         if not result.success:
             raise APIError(
                 403,

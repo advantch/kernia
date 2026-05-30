@@ -15,11 +15,19 @@ import httpx
 
 @dataclass(frozen=True, slots=True)
 class VerifyResult:
-    """Outcome of a captcha verification."""
+    """Outcome of a captcha verification.
+
+    ``service_error`` distinguishes a failure to *reach/parse* the siteverify
+    endpoint (network/transport/parse error) from a clean validation failure
+    (``success=False``). Mirrors upstream, which throws ``SERVICE_UNAVAILABLE``
+    for the former (→ HTTP 500) but returns ``VERIFICATION_FAILED`` (→ 403) for
+    the latter.
+    """
 
     success: bool
     raw: dict[str, Any]
     error: str | None = None
+    service_error: bool = False
 
 
 @runtime_checkable
@@ -68,7 +76,7 @@ class _RecaptchaProvider(_HttpProvider):
                 r = await c.post(self.verify_url, data=data)
                 payload = r.json()
         except Exception as e:  # network/parse failure → treat as failure
-            return VerifyResult(success=False, raw={}, error=str(e))
+            return VerifyResult(success=False, raw={}, error=str(e), service_error=True)
         success = bool(payload.get("success"))
         if success and self.is_v3:
             score = float(payload.get("score") or 0)
@@ -92,7 +100,7 @@ class _TurnstileProvider(_HttpProvider):
                 r = await c.post(self.verify_url, json=body)
                 payload = r.json()
         except Exception as e:
-            return VerifyResult(success=False, raw={}, error=str(e))
+            return VerifyResult(success=False, raw={}, error=str(e), service_error=True)
         success = bool(payload.get("success"))
         return VerifyResult(
             success=success,
@@ -114,7 +122,7 @@ class _HCaptchaProvider(_HttpProvider):
                 r = await c.post(self.verify_url, data=data)
                 payload = r.json()
         except Exception as e:
-            return VerifyResult(success=False, raw={}, error=str(e))
+            return VerifyResult(success=False, raw={}, error=str(e), service_error=True)
         success = bool(payload.get("success"))
         return VerifyResult(
             success=success,
