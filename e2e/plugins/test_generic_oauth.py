@@ -456,6 +456,43 @@ async def test_map_profile_to_user_numeric_id(patched_httpx, idp: MockIdP) -> No
     assert accounts[0]["accountId"] == str(numeric)
 
 
+async def test_await_async_map_profile_to_user(patched_httpx, idp: MockIdP) -> None:
+    """Upstream: 'should await async mapProfileToUser'.
+
+    An async mapProfileToUser is awaited (not stored as a coroutine), so its
+    returned fields land on the created user.
+    """
+
+    async def _map(profile):
+        return {
+            "id": profile["user_id"],
+            "email": profile["email"],
+            "name": "Async Mapped Name",
+            "emailVerified": profile.get("email_verified"),
+        }
+
+    adapter = memory_adapter()
+    auth, driver = _make_auth(
+        adapter, _discovery_cfg("map-profile-async", map_profile_to_user=_map)
+    )
+    idp.create_user(
+        sub="async-sub-id",
+        email="map-profile-async@test.com",
+        name="Original Name",
+        user_id=777,
+    )
+    res = await _signin(
+        driver, "map-profile-async", callbackURL="http://localhost/dashboard",
+        newUserCallbackURL="http://localhost/new_user",
+    )
+    cb = await _callback(driver, "map-profile-async", _state_from_url(res.json()["url"]))
+    assert _location(cb) == "http://localhost/new_user"
+    users = await adapter.find_many(
+        model="user", where=(Where(field="email", value="map-profile-async@test.com"),)
+    )
+    assert users and users[0]["name"] == "Async Mapped Name"
+
+
 async def test_strava_map_profile_to_user(patched_httpx, idp: MockIdP) -> None:
     strava_id = 12345678
 

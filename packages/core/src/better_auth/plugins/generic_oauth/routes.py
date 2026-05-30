@@ -10,6 +10,7 @@ Mirrors `reference/.../plugins/generic-oauth/routes.ts`:
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -396,6 +397,9 @@ def _callback_factory(options_state: dict[str, Any]):
             if config.map_profile_to_user is not None
             else {}
         )
+        # Upstream awaits mapProfileToUser, so support async mappers too.
+        if inspect.isawaitable(mapped):
+            mapped = await mapped
         if mapped:
             user_info_raw = {**user_info_raw, **mapped}
 
