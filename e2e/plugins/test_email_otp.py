@@ -746,6 +746,404 @@ async def test_on_password_reset_callback() -> None:
     assert called[0]["user"]["email"] == "cb@example.com"
 
 
+async def test_store_otp_custom_encryptor_round_trip() -> None:
+    """store_otp={"encrypt","decrypt"} is recoverable, verifies, not stored plain.
+
+    Ported from the "custom encryptor" describe (create / get / sign-in).
+    """
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    async def encrypt(otp: str) -> str:
+        return otp + "encrypted"
+
+    async def decrypt(stored: str) -> str:
+        return stored.replace("encrypted", "")
+
+    adapter = memory_adapter()
+    smtp = MockSMTP()
+    driver, _ = _build_driver(
+        adapter, smtp, store_otp={"encrypt": encrypt, "decrypt": decrypt}
+    )
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "ce@example.com", "type": "sign-in"},
+    )
+    otp = smtp.sent[-1].meta["otp"]
+
+    # create: stored is not plaintext and the attempt suffix is ":0".
+    rec = await adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value="email-otp:sign-in:ce@example.com"),),
+    )
+    assert rec is not None
+    stored = str(rec["value"])
+    assert len(stored) != 0
+    assert stored.rpartition(":")[0] != otp
+    assert stored.endswith(":0")
+
+    # get: recoverable since custom decrypt is provided.
+    r = await driver.request(
+        "POST",
+        "/email-otp/get-verification-otp",
+        json_body={"email": "ce@example.com", "type": "sign-in"},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["otp"] == otp
+    assert len(otp) == 6
+
+    # sign-in: verifies normally.
+    r = await driver.request(
+        "POST",
+        "/email-otp/verify",
+        json_body={"email": "ce@example.com", "otp": otp},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["user"]["email"] == "ce@example.com"
+
+
+async def test_store_otp_custom_hasher_round_trip() -> None:
+    """store_otp={"hash"} is one-way (get rejected) but still verifies on sign-in.
+
+    Ported from the "custom hasher" describe (create / get-rejected / sign-in).
+    """
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    async def _hash(otp: str) -> str:
+        return otp + "hashed"
+
+    adapter = memory_adapter()
+    smtp = MockSMTP()
+    driver, _ = _build_driver(adapter, smtp, store_otp={"hash": _hash})
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "ch@example.com", "type": "sign-in"},
+    )
+    otp = smtp.sent[-1].meta["otp"]
+
+    rec = await adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value="email-otp:sign-in:ch@example.com"),),
+    )
+    assert rec is not None
+    stored = str(rec["value"])
+    assert len(stored) != 0
+    assert stored.rpartition(":")[0] != otp
+    assert stored.endswith(":0")
+
+    # get: rejected — hashed OTPs are not recoverable.
+    r = await driver.request(
+        "POST",
+        "/email-otp/get-verification-otp",
+        json_body={"email": "ch@example.com", "type": "sign-in"},
+    )
+    assert r.status == 400, r.json()
+    assert r.json()["code"] == "OTP_HASHED"
+
+    # sign-in: still verifies via the custom hash.
+    r = await driver.request(
+        "POST",
+        "/email-otp/verify",
+        json_body={"email": "ch@example.com", "otp": otp},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["user"]["email"] == "ch@example.com"
+
+
+async def test_verify_email_with_last_otp() -> None:
+    """Re-issuing a verification OTP invalidates the previous one.
+
+    Ported from "should verify email with last otp" (made assertive: only the
+    most-recently-issued OTP verifies; earlier ones are INVALID_OTP).
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    smtp = MockSMTP()
+    driver, _ = _build_driver(memory_adapter(), smtp)
+
+    # Create the user + session via OTP sign-in.
+    await driver.request(
+        "POST", "/sign-in/email-otp", json_body={"email": "last@example.com"}
+    )
+    sign_in_otp = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST",
+        "/email-otp/verify",
+        json_body={"email": "last@example.com", "otp": sign_in_otp},
+    )
+
+    # Issue verification OTPs twice; only the second remains valid.
+    smtp.clear()
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "last@example.com", "type": "email-verification"},
+    )
+    first_otp = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "last@example.com", "type": "email-verification"},
+    )
+    last_otp = smtp.sent[-1].meta["otp"]
+
+    if first_otp != last_otp:
+        r = await driver.request(
+            "POST",
+            "/email-otp/verify-email",
+            json_body={"email": "last@example.com", "otp": first_otp},
+        )
+        assert r.status == 400, r.json()
+        assert r.json()["code"] == "INVALID_OTP"
+
+    r = await driver.request(
+        "POST",
+        "/email-otp/verify-email",
+        json_body={"email": "last@example.com", "otp": last_otp},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["success"] is True
+
+
+async def test_delete_otp_after_successful_sign_in() -> None:
+    """Ported from race-condition "should delete OTP after successful sign-in"."""
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    adapter = memory_adapter()
+    smtp = MockSMTP()
+    driver, _ = _build_driver(adapter, smtp)
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "race@example.com", "type": "sign-in"},
+    )
+    otp = smtp.sent[-1].meta["otp"]
+
+    r = await driver.request(
+        "POST", "/email-otp/verify", json_body={"email": "race@example.com", "otp": otp}
+    )
+    assert r.status == 200, r.json()
+
+    rec = await adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value="email-otp:sign-in:race@example.com"),),
+    )
+    assert rec is None
+
+    # Replaying the consumed OTP fails.
+    r = await driver.request(
+        "POST", "/email-otp/verify", json_body={"email": "race@example.com", "otp": otp}
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "INVALID_OTP"
+
+
+async def test_delete_otp_after_successful_email_verification() -> None:
+    """Ported from "should delete OTP after successful email verification"."""
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    adapter = memory_adapter()
+    smtp = MockSMTP()
+    driver, _ = _build_driver(adapter, smtp)
+
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rv@example.com", "type": "sign-in"},
+    )
+    sign_in_otp = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST", "/email-otp/verify", json_body={"email": "rv@example.com", "otp": sign_in_otp}
+    )
+
+    smtp.clear()
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rv@example.com", "type": "email-verification"},
+    )
+    otp = smtp.sent[-1].meta["otp"]
+    r = await driver.request(
+        "POST", "/email-otp/verify-email", json_body={"email": "rv@example.com", "otp": otp}
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["status"] is True
+
+    rec = await adapter.find_one(
+        model="verification",
+        where=(
+            Where(
+                field="identifier",
+                value="email-otp:email-verification:rv@example.com",
+            ),
+        ),
+    )
+    assert rec is None
+
+    r = await driver.request(
+        "POST", "/email-otp/verify-email", json_body={"email": "rv@example.com", "otp": otp}
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "INVALID_OTP"
+
+
+async def test_delete_otp_after_successful_password_reset() -> None:
+    """Ported from "should delete OTP after successful password reset"."""
+    from better_auth.types.adapter import Where
+    from better_auth_memory_adapter import memory_adapter
+
+    adapter = memory_adapter()
+    smtp = MockSMTP()
+    driver, _ = _build_driver(adapter, smtp)
+
+    # Establish the user via OTP sign-in.
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rr@example.com", "type": "sign-in"},
+    )
+    sign_in_otp = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST", "/email-otp/verify", json_body={"email": "rr@example.com", "otp": sign_in_otp}
+    )
+    driver.cookies.clear()
+
+    smtp.clear()
+    await driver.request(
+        "POST", "/email-otp/request-password-reset", json_body={"email": "rr@example.com"}
+    )
+    otp = next(
+        e.meta["otp"] for e in smtp.sent if e.meta.get("purpose") == "forget-password"
+    )
+    r = await driver.request(
+        "POST",
+        "/email-otp/reset-password",
+        json_body={"email": "rr@example.com", "otp": otp, "password": "newpass1"},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["success"] is True
+
+    rec = await adapter.find_one(
+        model="verification",
+        where=(
+            Where(
+                field="identifier", value="email-otp:forget-password:rr@example.com"
+            ),
+        ),
+    )
+    assert rec is None
+
+    r = await driver.request(
+        "POST",
+        "/email-otp/reset-password",
+        json_body={"email": "rr@example.com", "otp": otp, "password": "newpass2"},
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "INVALID_OTP"
+
+
+async def test_reuse_but_hashed_generates_new_otp() -> None:
+    """Ported from "should generate new OTP when resendStrategy is reuse but
+    storeOTP is hashed" — hashed OTPs cannot be retrieved so a fresh one issues."""
+    from better_auth_memory_adapter import memory_adapter
+
+    smtp = MockSMTP()
+    driver, _ = _build_driver(
+        memory_adapter(), smtp, resend_strategy="reuse", store_otp="hashed"
+    )
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rh@example.com", "type": "sign-in"},
+    )
+    first = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rh@example.com", "type": "sign-in"},
+    )
+    second = smtp.sent[-1].meta["otp"]
+    assert second != first
+
+
+async def test_reuse_but_custom_hash_generates_new_otp() -> None:
+    """Ported from "should generate new OTP when resendStrategy is reuse but
+    storeOTP is custom hash"."""
+    from better_auth_memory_adapter import memory_adapter
+
+    async def _hash(otp: str) -> str:
+        return f"hashed-{otp}"
+
+    smtp = MockSMTP()
+    driver, _ = _build_driver(
+        memory_adapter(), smtp, resend_strategy="reuse", store_otp={"hash": _hash}
+    )
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rch@example.com", "type": "sign-in"},
+    )
+    first = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rch@example.com", "type": "sign-in"},
+    )
+    second = smtp.sent[-1].meta["otp"]
+    assert second != first
+
+
+async def test_reuse_generates_fresh_otp_when_attempts_exhausted() -> None:
+    """Ported from "should generate fresh OTP when attempts are exhausted"."""
+    from better_auth_memory_adapter import memory_adapter
+
+    smtp = MockSMTP()
+    driver, _ = _build_driver(
+        memory_adapter(), smtp, resend_strategy="reuse", allowed_attempts=2
+    )
+
+    # Establish the user so email-verification OTPs are actually sent.
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rex@example.com", "type": "sign-in"},
+    )
+    sign_in_otp = smtp.sent[-1].meta["otp"]
+    await driver.request(
+        "POST", "/email-otp/verify", json_body={"email": "rex@example.com", "otp": sign_in_otp}
+    )
+
+    smtp.clear()
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rex@example.com", "type": "email-verification"},
+    )
+    first = smtp.sent[-1].meta["otp"]
+
+    # Exhaust attempts with wrong codes.
+    for _ in range(2):
+        await driver.request(
+            "POST",
+            "/email-otp/verify-email",
+            json_body={"email": "rex@example.com", "otp": "000000"},
+        )
+
+    # A reuse request now rotates because the prior OTP is locked out.
+    await driver.request(
+        "POST",
+        "/email-otp/send-verification-otp",
+        json_body={"email": "rex@example.com", "type": "email-verification"},
+    )
+    second = smtp.sent[-1].meta["otp"]
+    assert second != first
+
+
 async def test_block_reset_password_after_too_many_attempts() -> None:
     """Ported from "should block reset password after exceeding allowed
     attempts"."""
