@@ -21,6 +21,7 @@ import secrets
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -93,6 +94,9 @@ OAUTH_REFRESH_TOKEN_MODEL = ModelDef(
         FieldDef("clientId", "string"),
         FieldDef("userId", "string"),
         FieldDef("scope", "string"),
+        # The issuing session id, surfaced as the `sid` introspection claim
+        # (validated against a live session) and carried across rotation.
+        FieldDef("sessionId", "string", required=False),
         FieldDef("expiresAt", "date"),
         # RFC 9700 §4.14 reuse detection: rotated tokens are marked revoked
         # (not deleted) so a later replay of a consumed token is detectable and
@@ -132,6 +136,9 @@ OAUTH_ACCESS_TOKEN_MODEL = ModelDef(
         # introspection/userinfo agree with the id_token without re-deriving it.
         FieldDef("azp", "string", required=False),
         FieldDef("scope", "string"),
+        # The issuing session id, surfaced as the `sid` introspection claim
+        # (validated against a live session at introspection time).
+        FieldDef("sessionId", "string", required=False),
         FieldDef("expiresAt", "date"),
         FieldDef("createdAt", "date"),
     ),
@@ -676,6 +683,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             client=client,
             user_id=row["userId"],
             scope=new_scope,
+            session_id=row.get("sessionId"),
         )
 
     if grant == "client_credentials":
@@ -748,16 +756,23 @@ async def _issue_tokens(
     )
     # `azp` records the client so introspection can recompute the pairwise sub.
     if opts.jwt_access_token:
+        access_payload: dict[str, Any] = {
+            "sub": user_id,
+            "azp": client_id,
+            "aud": client_id,
+            "iss": opts.issuer,
+            "scope": scope,
+            "jti": secrets.token_urlsafe(16),
+        }
+        # The access token always carries the issuing session id (when there is
+        # an end user). Introspection surfaces it as `sid` after validating the
+        # session is still live — independent of the admin-only
+        # `enable_end_session` flag, which only governs the id_token's `sid`.
+        if session_id:
+            access_payload["sid"] = session_id
         access_token, _kid = await issue_jwt(
             ctx.auth,
-            payload={
-                "sub": user_id,
-                "azp": client_id,
-                "aud": client_id,
-                "iss": opts.issuer,
-                "scope": scope,
-                "jti": secrets.token_urlsafe(16),
-            },
+            payload=access_payload,
             ttl=opts.access_token_ttl,
         )
     else:
@@ -773,6 +788,7 @@ async def _issue_tokens(
                 "userId": user_id,
                 "azp": client_id,
                 "scope": scope,
+                "sessionId": session_id,
                 "expiresAt": now + opts.access_token_ttl,
             },
         )
@@ -792,6 +808,7 @@ async def _issue_tokens(
                 "clientId": client_id,
                 "userId": user_id,
                 "scope": scope,
+                "sessionId": session_id,
                 "expiresAt": now + opts.refresh_token_ttl,
                 "revoked": None,
             },
@@ -978,6 +995,29 @@ async def _is_access_token(
     return await _lookup_opaque_access_token(ctx, opts, token) is not None
 
 
+async def _live_session_id(ctx: EndpointContext, sid: Any) -> str | None:
+    """Return `sid` only if it names a session that still exists and is unexpired.
+
+    Mirrors upstream introspection, which drops the `sid` claim when the backing
+    session has been terminated (e.g. the user signed out) or expired.
+    """
+    if not isinstance(sid, str) or not sid:
+        return None
+    session = await ctx.auth.adapter.find_one(
+        model="session", where=(Where(field="id", value=sid),)
+    )
+    if not session:
+        return None
+    expires_at = session.get("expiresAt")
+    if isinstance(expires_at, (int | float)) and expires_at < int(time.time()):
+        return None
+    if isinstance(expires_at, datetime) and expires_at < datetime.now(
+        expires_at.tzinfo
+    ):
+        return None
+    return sid
+
+
 async def _introspect(ctx: EndpointContext) -> dict[str, object]:
     opts = _options(ctx.auth)
     body: IntrospectBody = ctx.body
@@ -1016,6 +1056,9 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
                 "scope": claims.get("scope"),
                 "token_type": "Bearer",
             }
+            sid = await _live_session_id(ctx, claims.get("sid"))
+            if sid:
+                out["sid"] = sid
             return out
         except ValueError:
             pass
@@ -1025,7 +1068,7 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
             sub = row.get("userId")
             if isinstance(sub, str) and not sub.startswith("client:"):
                 sub = _resolve_sub(sub, client, opts)
-            return {
+            opaque_out: dict[str, object] = {
                 "active": True,
                 "sub": sub,
                 "client_id": row.get("azp") or row.get("clientId"),
@@ -1035,6 +1078,10 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
                 "scope": row.get("scope"),
                 "token_type": "Bearer",
             }
+            sid = await _live_session_id(ctx, row.get("sessionId"))
+            if sid:
+                opaque_out["sid"] = sid
+            return opaque_out
     # Refresh-token lookup is skipped when the caller pinned the hint to
     # access_token (a refresh token presented as an access token is inactive),
     # or when a JWT access token was presented under a refresh_token hint.
@@ -1054,14 +1101,19 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
             and not row.get("revoked")
             and int(row.get("expiresAt", 0)) > int(time.time())
         ):
-            return {
+            refresh_out: dict[str, object] = {
                 "active": True,
                 "sub": row.get("userId"),
                 "client_id": row.get("clientId"),
+                "iss": opts.issuer,
                 "scope": row.get("scope"),
                 "exp": row.get("expiresAt"),
                 "token_type": "refresh_token",
             }
+            sid = await _live_session_id(ctx, row.get("sessionId"))
+            if sid:
+                refresh_out["sid"] = sid
+            return refresh_out
     return {"active": False}
 
 
