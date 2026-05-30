@@ -246,3 +246,57 @@ async def test_revoke_opaque_access_token(opaque) -> None:
         headers={"authorization": f"Bearer {tokens['access_token']}"},
     )
     assert r.status == 401
+
+
+async def test_revoke_with_opaque_access_token_prefix() -> None:
+    # A prefixed opaque access token revokes (and goes inactive) just like the
+    # unprefixed case — mirroring upstream "should pass with the correct
+    # opaqueAccessTokenPrefix" in revoke.test.ts.
+    _, driver, client = await _make_opaque(opaque_access_token_prefix="hello_")
+    tokens = await get_tokens(driver, client)
+    assert tokens["access_token"].startswith("hello_")
+    r = await driver.request(
+        "POST",
+        "/oauth2/revoke",
+        json_body={
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+            "token": tokens["access_token"],
+            "token_type_hint": "access_token",
+        },
+    )
+    assert r.status == 200, r.json()
+    assert not (await _introspect(driver, client, tokens["access_token"])).json()[
+        "active"
+    ]
+
+
+async def test_revoke_with_refresh_token_prefix() -> None:
+    # A prefixed refresh token revokes and can no longer be exchanged — mirroring
+    # upstream "should pass with the correct refreshTokenPrefix".
+    _, driver, client = await _make_opaque(refresh_token_prefix="hello_rt_")
+    tokens = await get_tokens(driver, client)
+    assert tokens["refresh_token"].startswith("hello_rt_")
+    r = await driver.request(
+        "POST",
+        "/oauth2/revoke",
+        json_body={
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+            "token": tokens["refresh_token"],
+            "token_type_hint": "refresh_token",
+        },
+    )
+    assert r.status == 200, r.json()
+    # The revoked refresh token can no longer be exchanged.
+    r = await driver.request(
+        "POST",
+        "/oauth2/token",
+        json_body={
+            "grant_type": "refresh_token",
+            "refresh_token": tokens["refresh_token"],
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
+    )
+    assert r.status == 400
