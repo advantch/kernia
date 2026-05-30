@@ -36,6 +36,12 @@ async def _register(driver, **body):
     return await driver.request("POST", "/oauth2/register", json_body=body)
 
 
+async def test_fail_without_body(driver) -> None:
+    # Missing the required client metadata (redirect_uris) is a 400.
+    r = await driver.request("POST", "/oauth2/register", json_body={})
+    assert r.status == 400
+
+
 async def test_register_private_client_minimum(driver) -> None:
     r = await _register(driver)
     assert r.status == 200, r.json()
@@ -98,6 +104,19 @@ async def test_overwrites_supplied_client_id_and_secret(driver) -> None:
     assert r.json()["client_secret"] != "bad-actor"
 
 
+async def test_reject_skip_consent_in_dcr(driver) -> None:
+    # RFC 7591 §2: the server controls privileged metadata. A self-registering
+    # client may not grant itself consent-skip (admin-only).
+    r = await _register(driver, skip_consent=True)
+    assert r.status == 400, r.json()
+
+
+async def test_allow_registration_without_skip_consent(driver) -> None:
+    r = await _register(driver)
+    assert r.status == 200, r.json()
+    assert r.json()["client_id"]
+
+
 async def test_register_disabled_returns_404() -> None:
     auth = make_auth(enable_dynamic_registration=False)
     d = ASGIDriver(app=auth.router.mount())
@@ -111,8 +130,10 @@ async def test_register_disabled_returns_404() -> None:
 
 @pytest.mark.skip(
     reason="Python DCR endpoint is not session-gated and has no "
-    "organization/clientReference/metadata-spread/skip_consent machinery; "
-    "those upstream cases require a data model the port does not implement."
+    "organization/clientReference/metadata-spread machinery, nor an "
+    "unauthenticated-registration mode (the upstream RFC 7591 §3.2.1 "
+    "public-client override cases from issue #8588); those upstream cases "
+    "require a data model the port does not implement."
 )
 async def test_session_and_organization_and_metadata_cases() -> None:
     ...

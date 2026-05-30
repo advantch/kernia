@@ -268,7 +268,15 @@ def _construct_body(body_type: type, raw: Any) -> Any:
     `.model_validate`. We try both so plugins can choose either.
     """
     if hasattr(body_type, "model_validate"):
-        return cast(Any, body_type).model_validate(raw)
+        try:
+            return cast(Any, body_type).model_validate(raw)
+        except APIError:
+            raise
+        except Exception as e:  # pydantic ValidationError et al.
+            # A malformed/incomplete request body is a client error (400), not an
+            # internal server error. Mirrors upstream, which rejects bad bodies
+            # with a 400 rather than surfacing a 500.
+            raise APIError(400, "INVALID_REQUEST", message=str(e)) from None
     if not isinstance(raw, dict):
         raise APIError(400, "INVALID_REQUEST", message="Body must be a JSON object")
     # Filter unknown kwargs for dataclasses (lets plugins like `additional_fields`

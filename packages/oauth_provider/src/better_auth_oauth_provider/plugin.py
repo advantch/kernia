@@ -346,6 +346,10 @@ class RegisterBody(BaseModel):
     response_types: list[str] | None = None
     type: str | None = None
     post_logout_redirect_uris: list[str] | None = None
+    # Privileged: a self-registering client may NOT grant itself consent-skip.
+    # Accepted into the model only so it can be explicitly rejected (RFC 7591
+    # §2: the server controls which metadata a client may set).
+    skip_consent: bool | None = None
 
 
 class TokenBody(BaseModel):
@@ -703,7 +707,9 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             include_id_token=False,
         )
 
-    raise APIError(400, "INVALID_REQUEST", message="unsupported_grant_type")
+    raise _oauth_error(
+        400, "unsupported_grant_type", f"unsupported grant_type {grant}"
+    )
 
 
 async def _invalidate_refresh_family(
@@ -1152,6 +1158,14 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
     if not opts.enable_dynamic_registration:
         raise APIError(404, "NOT_FOUND")
     body: RegisterBody = ctx.body
+    # A self-registering client may not grant itself consent-skip; that is a
+    # privileged flag only the admin create-client path may set.
+    if body.skip_consent:
+        raise _oauth_error(
+            400,
+            "invalid_client_metadata",
+            "skip_consent may not be set during dynamic client registration",
+        )
     _validate_subject_type(body.subject_type, body.redirect_uris, opts)
     # RFC 7591: only the authorization_code response type ("code") is supported.
     if body.response_types is not None and body.response_types != ["code"]:
