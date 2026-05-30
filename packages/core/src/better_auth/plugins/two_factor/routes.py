@@ -29,10 +29,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import inspect
 import json
 import secrets
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from better_auth import cookies as cookie_utils
 from better_auth.api.endpoint import create_auth_endpoint
@@ -176,13 +178,44 @@ def _generate_backup_codes_list() -> list[str]:
     return codes
 
 
-def _encode_backup_codes(codes: list[str]) -> str:
-    return json.dumps(codes)
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
-def _decode_backup_codes(stored: str) -> list[str]:
+def _backup_code_storage(ctx: EndpointContext) -> object | None:
+    """Resolve `backupCodeOptions.storeBackupCodes`. Mirrors upstream PR #7231:
+    "plain" (default), "encrypted", or `{encrypt, decrypt}` custom callables."""
+    opts = _opts(ctx)
+    bco = opts.get("backup_code_options", opts.get("backupCodeOptions")) or {}
+    if isinstance(bco, dict):
+        return bco.get("store_backup_codes", bco.get("storeBackupCodes"))
+    return None
+
+
+async def _encode_backup_codes(ctx: EndpointContext, codes: list[str]) -> str:
+    raw = json.dumps(codes)
+    mode = _backup_code_storage(ctx)
+    if mode == "encrypted":
+        return _symmetric_encrypt(ctx.auth.secret, raw)
+    if isinstance(mode, dict) and "encrypt" in mode:
+        return str(await _maybe_await(mode["encrypt"](raw)))
+    return raw
+
+
+async def _decode_backup_codes(ctx: EndpointContext, stored: str) -> list[str]:
+    mode = _backup_code_storage(ctx)
+    raw = stored
+    if mode == "encrypted":
+        try:
+            raw = _symmetric_decrypt(ctx.auth.secret, stored)
+        except (ValueError, UnicodeDecodeError):
+            return []
+    elif isinstance(mode, dict) and "decrypt" in mode:
+        raw = str(await _maybe_await(mode["decrypt"](stored)))
     try:
-        loaded = json.loads(stored)
+        loaded = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return []
     return [str(c) for c in loaded] if isinstance(loaded, list) else []
@@ -469,7 +502,7 @@ async def _enable(ctx: EndpointContext) -> dict[str, object]:
 
     secret = _generate_secret()
     backup_codes = _generate_backup_codes_list()
-    encoded_codes = _encode_backup_codes(backup_codes)
+    encoded_codes = await _encode_backup_codes(ctx, backup_codes)
 
     user = await _find_user(ctx, user_id)
     assert user is not None
@@ -781,7 +814,7 @@ async def _generate_backup_codes(ctx: EndpointContext) -> dict[str, object]:
     await ctx.auth.adapter.update(
         model=TWO_FACTOR_MODEL,
         where=(Where(field="id", value=two_factor["id"]),),
-        update={"backupCodes": _encode_backup_codes(codes)},
+        update={"backupCodes": await _encode_backup_codes(ctx, codes)},
     )
     return {"status": True, "backupCodes": codes}
 
@@ -792,14 +825,14 @@ async def _verify_backup_code(ctx: EndpointContext) -> dict[str, object]:
     two_factor = await _find_two_factor(ctx, str(state.user["id"]))
     if not two_factor:
         raise APIError(400, "BACKUP_CODES_NOT_ENABLED", message="Backup codes aren't enabled")
-    codes = _decode_backup_codes(str(two_factor["backupCodes"]))
+    codes = await _decode_backup_codes(ctx, str(two_factor["backupCodes"]))
     if body.code not in codes:
         raise APIError(401, "INVALID_BACKUP_CODE", message="Invalid backup code")
     remaining = [c for c in codes if c != body.code]
     await ctx.auth.adapter.update(
         model=TWO_FACTOR_MODEL,
         where=(Where(field="id", value=two_factor["id"]),),
-        update={"backupCodes": _encode_backup_codes(remaining)},
+        update={"backupCodes": await _encode_backup_codes(ctx, remaining)},
     )
     if body.disable_session:
         return {
@@ -814,7 +847,7 @@ async def _view_backup_codes(ctx: EndpointContext) -> dict[str, object]:
     two_factor = await _find_two_factor(ctx, body.user_id)
     if not two_factor:
         raise APIError(400, "BACKUP_CODES_NOT_ENABLED", message="Backup codes aren't enabled")
-    codes = _decode_backup_codes(str(two_factor["backupCodes"]))
+    codes = await _decode_backup_codes(ctx, str(two_factor["backupCodes"]))
     return {"status": True, "backupCodes": codes}
 
 

@@ -54,6 +54,7 @@ def _tf_opts(
     totp_disable: bool,
     allow_passwordless: bool,
     store_otp: object | None,
+    store_backup_codes: object | None = None,
 ) -> dict[str, object]:
     tf_opts: dict[str, object] = {}
     if otp_sink is not None:
@@ -61,6 +62,8 @@ def _tf_opts(
         if store_otp is not None:
             otp_opts["store_otp"] = store_otp
         tf_opts["otp_options"] = otp_opts
+    if store_backup_codes is not None:
+        tf_opts["backup_code_options"] = {"store_backup_codes": store_backup_codes}
     if skip_verification_on_enable:
         tf_opts["skip_verification_on_enable"] = True
     if trust_device_max_age is not None:
@@ -86,6 +89,7 @@ def _build_with_adapter(
     totp_disable: bool = False,
     allow_passwordless: bool = False,
     store_otp: object | None = None,
+    store_backup_codes: object | None = None,
 ):
     """Build the driver and return it alongside the backing adapter.
 
@@ -101,6 +105,7 @@ def _build_with_adapter(
         totp_disable=totp_disable,
         allow_passwordless=allow_passwordless,
         store_otp=store_otp,
+        store_backup_codes=store_backup_codes,
     )
     adapter = memory_adapter()
     auth = init(
@@ -1351,3 +1356,143 @@ async def test_passwordless_disable_without_password() -> None:
     r = await driver.request("POST", "/two-factor/disable", json_body={})
     assert r.status == 200, r.json()
     assert r.json()["status"] is True
+
+
+# ---------------------------------------------------------------------------
+# backup codes storage configurations (PR #7231)
+# ---------------------------------------------------------------------------
+
+
+def _decode_stored_plain(raw: str) -> list[str]:
+    import json
+
+    return json.loads(raw)
+
+
+def _decode_stored_encrypted(raw: str) -> list[str]:
+    import json
+
+    from better_auth.plugins.two_factor.routes import _symmetric_decrypt
+
+    return json.loads(_symmetric_decrypt("test-secret-key", raw))
+
+
+async def _custom_encrypt(data: str) -> str:
+    import base64
+
+    return base64.b64encode(data.encode()).decode() + ":custom"
+
+
+async def _custom_decrypt(data: str) -> str:
+    import base64
+
+    encoded = data.split(":custom")[0]
+    return base64.b64decode(encoded.encode()).decode()
+
+
+def _decode_stored_custom(raw: str) -> list[str]:
+    import base64
+    import json
+
+    encoded = raw.split(":custom")[0]
+    return json.loads(base64.b64decode(encoded.encode()).decode())
+
+
+async def _run_backup_code_storage_case(
+    *, store_backup_codes, decode_stored, verify_format
+) -> None:
+    """Shared body for the three storage modes — enroll, inspect the stored
+    format, consume a backup code, and re-inspect that the format/contents
+    survive the round-trip. Ported from PR #7231's parametrized describe."""
+    driver, adapter = _build_with_adapter(
+        skip_verification_on_enable=True, store_backup_codes=store_backup_codes
+    )
+    await _signup(driver)
+
+    r = await driver.request(
+        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
+    )
+    assert r.status == 200, r.json()
+    initial_codes = r.json()["backupCodes"]
+    assert len(initial_codes) == 10
+
+    user = await adapter.find_one(
+        model="user", where=(Where(field="email", value=TEST_EMAIL),)
+    )
+    row = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user["id"]),)
+    )
+    assert row is not None
+    verify_format(str(row["backupCodes"]))
+    assert decode_stored(str(row["backupCodes"])) == initial_codes
+
+    # Sign out, re-sign-in (2FA challenge) and consume a backup code.
+    await driver.request("POST", "/sign-out")
+    driver.cookies.clear()
+    await driver.request(
+        "POST",
+        "/sign-in/email",
+        json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    used = initial_codes[0]
+    r = await driver.request(
+        "POST", "/two-factor/verify-backup-code", json_body={"code": used}
+    )
+    assert r.status == 200, r.json()
+
+    row_after = await adapter.find_one(
+        model="twoFactor", where=(Where(field="userId", value=user["id"]),)
+    )
+    verify_format(str(row_after["backupCodes"]))
+    remaining = decode_stored(str(row_after["backupCodes"]))
+    assert len(remaining) == 9
+    assert used not in remaining
+    assert remaining == [c for c in initial_codes if c != used]
+
+
+async def test_backup_codes_plain_storage_preserved() -> None:
+    """Ported: 'should preserve plain storage format after backup code verification'."""
+
+    def verify_format(raw: str) -> None:
+        import json
+
+        json.loads(raw)  # plain mode stores a JSON array
+
+    await _run_backup_code_storage_case(
+        store_backup_codes="plain",
+        decode_stored=_decode_stored_plain,
+        verify_format=verify_format,
+    )
+
+
+async def test_backup_codes_encrypted_storage_preserved() -> None:
+    """Ported: 'should preserve encrypted storage format after backup code
+    verification' — the at-rest value is not parseable JSON."""
+    import json
+
+    def verify_format(raw: str) -> None:
+        try:
+            json.loads(raw)
+        except json.JSONDecodeError:
+            return
+        raise AssertionError("encrypted backup codes should not be valid JSON")
+
+    await _run_backup_code_storage_case(
+        store_backup_codes="encrypted",
+        decode_stored=_decode_stored_encrypted,
+        verify_format=verify_format,
+    )
+
+
+async def test_backup_codes_custom_storage_preserved() -> None:
+    """Ported: 'should preserve custom storage format after backup code
+    verification' — custom encrypt/decrypt callables round-trip."""
+
+    def verify_format(raw: str) -> None:
+        assert ":custom" in raw
+
+    await _run_backup_code_storage_case(
+        store_backup_codes={"encrypt": _custom_encrypt, "decrypt": _custom_decrypt},
+        decode_stored=_decode_stored_custom,
+        verify_format=verify_format,
+    )
