@@ -379,3 +379,202 @@ async def test_sign_in_requires_verification() -> None:
     assert r.status == 401
     assert r.json()["code"] == "PHONE_NUMBER_NOT_VERIFIED"
     assert sms.find_otp("+15559994444") is not None
+
+
+async def test_verify_expired_code() -> None:
+    """Upstream: 'should not verify if code expired'.
+
+    A verification row whose ``expiresAt`` is in the past is rejected with
+    ``OTP_EXPIRED`` and deleted, mirroring upstream's expiry check.
+    """
+    import time
+
+    from better_auth_memory_adapter import memory_adapter
+
+    adapter = memory_adapter()
+    driver, _ = _build_driver(adapter, MockSMS())
+    # Seed an already-expired OTP row directly (identifier + "<otp>:<attempts>").
+    now = int(time.time())
+    await adapter.create(
+        model="verification",
+        data={
+            "identifier": "phone-number:sign-in:+15559995555",
+            "value": "123456:0",
+            "expiresAt": now - 10,
+            "createdAt": now - 70,
+            "updatedAt": now - 70,
+        },
+    )
+    r = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": "+15559995555", "otp": "123456"},
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "OTP_EXPIRED"
+
+
+async def test_verify_last_code_invalidates_previous() -> None:
+    """Upstream: 'should verify the last code'.
+
+    Requesting a second OTP supersedes the first: the stale code no longer
+    verifies, but the freshly issued one does.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver(memory_adapter(), sms)
+    phone = "+15559996666"
+
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
+    )
+    first_otp = sms.find_otp(phone)
+    sms.clear()
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
+    )
+    second_otp = sms.find_otp(phone)
+    assert second_otp != first_otp
+
+    # The superseded code is rejected.
+    stale = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": phone, "otp": first_otp},
+    )
+    assert stale.status == 400
+    assert stale.json()["code"] == "INVALID_OTP"
+
+    # The latest code verifies.
+    ok = await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": phone, "otp": second_otp},
+    )
+    assert ok.status == 200, ok.json()
+    assert ok.json()["status"] is True
+
+
+async def test_request_password_reset_unknown_user_succeeds() -> None:
+    """Upstream: request-password-reset must not leak which numbers exist.
+
+    An unknown phone returns success with no SMS dispatched.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver(memory_adapter(), sms)
+    r = await driver.request(
+        "POST",
+        "/phone-number/request-password-reset",
+        json_body={"phone_number": "+15550009999"},
+    )
+    assert r.status == 200, r.json()
+    assert r.json()["success"] is True
+    assert not [m for m in sms.sent if m.to == "+15550009999"]
+
+
+async def test_reset_password_creates_credential_account() -> None:
+    """Upstream: 'should reset password and create credential account'.
+
+    A phone-only user (verified via OTP, no password) gains a credential
+    account through the reset flow, after which phone+password sign-in works.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver(memory_adapter(), sms)
+    phone = "+15559997777"
+
+    # Create + verify a phone-only user (no credential account yet).
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
+    )
+    await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": phone, "otp": sms.find_otp(phone)},
+    )
+    driver.cookies.clear()
+    sms.clear()
+
+    # Reset password -> creates the credential account.
+    await driver.request(
+        "POST",
+        "/phone-number/request-password-reset",
+        json_body={"phone_number": phone},
+    )
+    r = await driver.request(
+        "POST",
+        "/phone-number/reset-password",
+        json_body={
+            "phone_number": phone,
+            "otp": sms.find_otp(phone),
+            "new_password": "freshsecret",
+        },
+    )
+    assert r.status == 200, r.json()
+
+    # The new credential lets the user sign in by phone.
+    signin = await driver.request(
+        "POST",
+        "/sign-in/phone-number",
+        json_body={"phone_number": phone, "password": "freshsecret"},
+    )
+    assert signin.status == 200, signin.json()
+    assert "better-auth.session_token" in driver.cookies
+
+
+async def test_reset_password_too_many_attempts() -> None:
+    """Upstream: 'should block reset password after exceeding allowed attempts'.
+
+    Wrong reset codes increment the attempt counter; exceeding the limit trips
+    ``TOO_MANY_ATTEMPTS`` on the reset-password endpoint too.
+    """
+    from better_auth_memory_adapter import memory_adapter
+
+    sms = MockSMS()
+    driver, _ = _build_driver_opts(memory_adapter(), sms, allowed_attempts=2)
+    phone = "+15559998888"
+
+    # Create + verify a user so request-password-reset issues a code.
+    await driver.request(
+        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
+    )
+    await driver.request(
+        "POST",
+        "/phone-number/verify",
+        json_body={"phone_number": phone, "otp": sms.find_otp(phone)},
+    )
+    sms.clear()
+    await driver.request(
+        "POST",
+        "/phone-number/request-password-reset",
+        json_body={"phone_number": phone},
+    )
+
+    for _ in range(2):
+        bad = await driver.request(
+            "POST",
+            "/phone-number/reset-password",
+            json_body={
+                "phone_number": phone,
+                "otp": "000000",
+                "new_password": "whatever1",
+            },
+        )
+        assert bad.status == 400
+        assert bad.json()["code"] == "INVALID_OTP"
+
+    blocked = await driver.request(
+        "POST",
+        "/phone-number/reset-password",
+        json_body={
+            "phone_number": phone,
+            "otp": "000000",
+            "new_password": "whatever1",
+        },
+    )
+    assert blocked.status == 403
+    assert blocked.json()["code"] == "TOO_MANY_ATTEMPTS"
