@@ -738,6 +738,97 @@ async def test_list_sort_by_name() -> None:
     assert names == ["alpha", "bravo", "charlie"]
 
 
+async def test_list_echoes_limit_value() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(3):
+        await _create(driver, name=f"k{i}")
+    r = await driver.request("GET", "/api-key/list", query="limit=2")
+    data = r.json()
+    assert data["limit"] == 2
+    assert data["total"] >= 3
+    assert len(data["apiKeys"]) <= 2
+
+
+async def test_list_echoes_offset_and_skips() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(3):
+        await _create(driver, name=f"k{i}")
+    all_results = (await driver.request("GET", "/api-key/list")).json()
+    offset_results = (await driver.request("GET", "/api-key/list", query="offset=1")).json()
+    assert offset_results["offset"] == 1
+    assert len(offset_results["apiKeys"]) == len(all_results["apiKeys"]) - 1
+
+
+async def test_list_pagination_limit_and_offset_no_overlap() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(5):
+        await _create(driver, name=f"k{i}")
+    page1 = (await driver.request("GET", "/api-key/list", query="limit=2&offset=0")).json()
+    page2 = (await driver.request("GET", "/api-key/list", query="limit=2&offset=2")).json()
+    assert len(page1["apiKeys"]) <= 2
+    assert len(page2["apiKeys"]) <= 2
+    assert page1["limit"] == 2
+    assert page1["offset"] == 0
+    assert page2["offset"] == 2
+    page1_ids = {k["id"] for k in page1["apiKeys"]}
+    page2_ids = {k["id"] for k in page2["apiKeys"]}
+    assert page1_ids.isdisjoint(page2_ids)
+
+
+async def test_list_sort_by_created_at_ascending() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(3):
+        await _create(driver, name=f"k{i}")
+    r = await driver.request(
+        "GET", "/api-key/list", query="sortBy=createdAt&sortDirection=asc"
+    )
+    keys = r.json()["apiKeys"]
+    assert len(keys) > 1
+    times = [k["createdAt"] for k in keys]
+    assert times == sorted(times)
+
+
+async def test_list_sort_by_created_at_descending() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(3):
+        await _create(driver, name=f"k{i}")
+    r = await driver.request(
+        "GET", "/api-key/list", query="sortBy=createdAt&sortDirection=desc"
+    )
+    keys = r.json()["apiKeys"]
+    assert len(keys) > 1
+    times = [k["createdAt"] for k in keys]
+    assert times == sorted(times, reverse=True)
+
+
+async def test_list_combine_sorting_with_pagination() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(5):
+        await _create(driver, name=f"k{i}")
+    r = await driver.request(
+        "GET",
+        "/api-key/list",
+        query="limit=3&offset=0&sortBy=createdAt&sortDirection=desc",
+    )
+    data = r.json()
+    assert len(data["apiKeys"]) <= 3
+    assert data["limit"] == 3
+    times = [k["createdAt"] for k in data["apiKeys"]]
+    assert times == sorted(times, reverse=True)
+
+
+async def test_list_handles_string_query_params() -> None:
+    driver, _ = await _signed_in_driver()
+    for i in range(3):
+        await _create(driver, name=f"k{i}")
+    # Query params always arrive as strings over the wire; they must coerce.
+    r = await driver.request("GET", "/api-key/list", query="limit=2&offset=1")
+    data = r.json()
+    assert data["limit"] == 2
+    assert data["offset"] == 1
+    assert len(data["apiKeys"]) <= 2
+
+
 # --------------------------------------------------------------------------- permissions
 
 

@@ -6,7 +6,7 @@ A Python port of [better-auth](https://github.com/better-auth/better-auth) (TS, 
 
 > **Not full parity yet. Not released.** A previous revision of this README claimed "full feature parity, 632 passing." That claim was wrong and was removed. The definition of *done* in this project is **better-auth's own test suite, translated vitest→pytest, passing against the Python implementation** — not lines of code, and not "the endpoint exists."
 >
-> By that gate we are **substantially advanced but not yet complete**: **1,678** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **46 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
+> By that gate we are **substantially advanced but not yet complete**: **1,685** passing Python tests against **3,468** upstream `it()`/`test()` cases across the whole reference repo (≈ **46 %** by raw test-case count). Note the upstream denominator includes the frontend SDKs (`expo`, `electron`, the React/Vue/Svelte clients) that are **explicitly out of scope** here — measured against backend areas only, coverage is much higher and many areas now meet or exceed upstream. We will only flip the headline to "full parity" when every row below reads ✅, and we will not publish to PyPI before then.
 
 Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`test()` cases* for the same area, both measured directly (`uv run pytest --co` vs `grep` over `reference/**/*.test.ts`). A ratio ≥ 1.0 means we exercise the behavior at least as thoroughly as upstream; a low ratio means the surface exists but upstream covers far more edge cases than we've ported yet.
 
@@ -41,7 +41,7 @@ Counts are *passing Python tests* (e2e + unit + package) vs *upstream `it()`/`te
 | email_otp | 46 | 73 | 63 % — attempts, resend, change-email |
 | mcp (FastMCP) | 25 | 44 | 57 % — RFC 9728 resource server; issuer cases in oauth_provider |
 | username | 21 | 37 | 57 % |
-| api_key | 102 | 178 | 57 % — multi-config, scopes, org-owned, legacy metadata migration, deferUpdates via backgroundTasks |
+| api_key | 109 | 178 | 61 % — multi-config, scopes, org-owned, legacy metadata migration, deferUpdates via backgroundTasks, list pagination + sorting |
 | stripe | 142 | 157 | 90 % — metered/upgrade/customer/webhook + checkout hook + schedule + auto-managed seats + org member-change seat-sync + seat-swap upgrades + multiset line-item diff (immediate + scheduled: in-place base swap, deletes for removed prices, adds for introduced prices, no duplicates) + trial-abuse prevention + trial-data propagation + cancel/schedule webhook lifecycle + org customer creation/reuse/billing-portal + org dashboard webhook + cross-org isolation + org subscription update/cancel/delete webhook lifecycle + org customer-lookup customerType isolation + signup customer dedup/email-sync + getCustomerCreateParams defu-merge + search→list fallback |
 | **Behind — surface built, coverage lagging** | | | |
 | custom_session | 5 | 11 | 45 % |
