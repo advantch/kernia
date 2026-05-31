@@ -18,10 +18,11 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 import pytest
-from better_auth.types.secondary_storage import SecondaryStorage
-from better_auth.utils.in_memory_storage import InMemorySecondaryStorage
-from better_auth_redis_storage import redis_storage
-from better_auth_test_utils.containers import docker_available, redis_container
+
+from kernia.types.secondary_storage import SecondaryStorage
+from kernia.utils.in_memory_storage import InMemorySecondaryStorage
+from kernia_redis_storage import redis_storage
+from kernia_test_utils.containers import docker_available, redis_container
 
 # --------------------------------------------------------------------------- factories
 

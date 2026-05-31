@@ -12,12 +12,14 @@ upstream-aligned endpoints.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_passkey import passkey
-from better_auth_test_utils import ASGIDriver, SoftAuthenticator
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_passkey import passkey
+from kernia_test_utils import ASGIDriver, SoftAuthenticator
 from webauthn.helpers import base64url_to_bytes
 
 RP_ID = "localhost"
@@ -26,7 +28,7 @@ ORIGIN = "http://localhost:3000"
 
 def _build() -> tuple[ASGIDriver, object]:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             base_url=ORIGIN,

@@ -1,9 +1,10 @@
-"""Unit tests for better_auth.auth.trusted_origins."""
+"""Unit tests for kernia.auth.trusted_origins."""
 
 from __future__ import annotations
 
 import pytest
-from better_auth.auth.trusted_origins import is_state_changing, is_trusted, normalize_origin
+
+from kernia.auth.trusted_origins import is_state_changing, is_trusted, normalize_origin
 
 
 @pytest.mark.parametrize(

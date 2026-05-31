@@ -1,0 +1,76 @@
+---
+title: "Browser Extension Guide"
+description: "Authenticate browser extensions against a Kernia Python backend."
+---
+
+Browser extensions do not behave like normal web pages. Cookies, redirects, extension origins, content scripts, and background workers all have different constraints. Kernia remains the Python backend; the extension calls its HTTP routes and stores only the minimum client state needed.
+
+## Architecture
+
+| Piece | Responsibility |
+|---|---|
+| Kernia backend | Users, sessions, OAuth callbacks, password flows, API keys, and provider secrets. |
+| Extension background script | Coordinates auth requests and message passing. |
+| Popup/options UI | Renders login, logout, and account state. |
+| Content script | Uses background messaging, not direct secret access. |
+
+## Backend setup
+
+Add the extension origin to trusted origins:
+
+```python title="auth.py"
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url="https://api.example.com/api/auth",
+    trusted_origins=(
+        "chrome-extension://<extension-id>",
+        "moz-extension://<extension-id>",
+    ),
+))
+```
+
+## Manifest permissions
+
+```json title="manifest.json"
+{
+  "permissions": ["storage", "cookies"],
+  "host_permissions": ["https://api.example.com/*"]
+}
+```
+
+Only request the permissions your extension actually uses. If you rely on API keys instead of cookies, you may not need cookie permissions.
+
+## Sign in
+
+For email/password, call the backend from the popup or background script:
+
+```ts title="background.ts"
+export async function signIn(email: string, password: string) {
+  const response = await fetch("https://api.example.com/api/auth/sign-in/email", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, remember_me: true }),
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+```
+
+For OAuth, open the provider URL returned by `/sign-in/social` in a browser identity flow or tab, then return to an extension callback page.
+
+## API access
+
+For background tasks that cannot rely on browser cookies, use the API key or bearer plugin. Store tokens in extension storage and allow users to revoke them from Kernia settings.
+
+## Security
+
+- Keep OAuth client secrets on the Python backend.
+- Do not expose session tokens or API keys to content scripts.
+- Validate every protected API request on the backend.
+- Treat extension UI as untrusted presentation code.
+
+## Testing
+
+Test popup login, OAuth return, session refresh, logout, token revocation, extension reload, and backend rejection when the extension origin is not trusted.

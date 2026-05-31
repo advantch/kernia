@@ -1,9 +1,9 @@
 # Last Login Method
 
-> Module: `better_auth.plugins.last_login_method`
+> Module: `kernia.plugins.last_login_method`
 > Constructor: `last_login_method`
 
-last_login_method — see reference/packages/better-auth/src/plugins/last-login-method/.
+last_login_method — see Better Auth reference: plugins/last-login-method/.
 
 ## Endpoints
 
@@ -16,12 +16,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.last_login_method import last_login_method
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.last_login_method import last_login_method
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

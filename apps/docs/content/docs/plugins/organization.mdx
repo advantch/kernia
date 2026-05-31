@@ -1,0 +1,147 @@
+---
+title: "Organization"
+description: "Organizations, members, invitations, teams, roles, and active organization sessions."
+---
+
+The Organization plugin adds multi-tenant organization records, memberships, invitations, active organization state on sessions, optional teams, and optional dynamic access-control roles.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.organization import organization
+
+async def send_invitation(invitation):
+    # Send email through your SMTP, Resend, Postmark, or queue integration.
+    ...
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=(
+        organization(
+            teams=True,
+            dynamic_access_control=True,
+            invitation_expires_in=60 * 60 * 24 * 2,
+            send_invitation=send_invitation,
+        ),
+    ),
+))
+```
+
+## Options
+
+| Option | Default | Description |
+|---|---:|---|
+| `teams` | `False` | Registers team CRUD routes and adds `team` / `teamMember` tables. |
+| `dynamic_access_control` | `False` | Registers role CRUD routes and adds `organizationRole`. |
+| `invitation_expires_in` | `172800` | Invitation TTL in seconds. |
+| `send_invitation` | `None` | Async callable invoked after an invitation row is created. |
+
+## Organization routes
+
+<APIMethod method="POST" path="/api/auth/organization/create">
+  Body: `{ "name": "Acme", "slug": "acme", "logo": "https://...", "metadata": { } }`. Creates an organization and owner membership for the caller.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/organization/list">
+  Lists organizations for the current user.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/organization/get">
+  Query by organization ID or slug and return organization details.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/update">
+  Updates name, slug, logo, or metadata. Requires an owner/admin style permission.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/delete">
+  Deletes an organization after permission checks.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/set-active">
+  Body: `{ "organization_id": "org_123" }`. Writes `activeOrganizationId` onto the current session.
+</APIMethod>
+
+## Invitation routes
+
+<APIMethod method="POST" path="/api/auth/organization/invite-member">
+  Body: `{ "organization_id": "org_123", "email": "user@example.com", "role": "member" }`. Creates a pending invitation and calls `send_invitation` when configured.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/accept-invitation">
+  Accepts an invitation and creates a membership for the signed-in user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/reject-invitation">
+  Rejects an invitation.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/cancel-invitation">
+  Cancels a pending invitation.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/organization/list-invitations">
+  Lists invitations for an organization or the current user depending on query parameters.
+</APIMethod>
+
+## Member routes
+
+<APIMethod method="GET" path="/api/auth/organization/list-members">
+  Lists members for an organization.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/remove-member">
+  Removes a member after permission checks.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/update-member-role">
+  Changes a member role.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/leave">
+  Lets the current user leave an organization when it would not leave the organization without an owner.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/organization/has-permission">
+  Checks role permissions for an organization-scoped action.
+</APIMethod>
+
+## Team routes
+
+Enabled with `organization(teams=True)`.
+
+<APIMethod method="POST" path="/api/auth/organization/teams/create">Creates a team.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/teams/update">Updates a team.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/teams/delete">Deletes a team.</APIMethod>
+<APIMethod method="GET" path="/api/auth/organization/teams/list">Lists organization teams.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/teams/add-member">Adds a user to a team.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/teams/remove-member">Removes a user from a team.</APIMethod>
+
+## Dynamic access control
+
+Enabled with `organization(dynamic_access_control=True)`.
+
+<APIMethod method="POST" path="/api/auth/organization/create-role">Creates an organization role with permissions.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/update-role">Updates an organization role.</APIMethod>
+<APIMethod method="POST" path="/api/auth/organization/delete-role">Deletes an organization role.</APIMethod>
+<APIMethod method="GET" path="/api/auth/organization/list-roles">Lists built-in and organization-defined roles.</APIMethod>
+
+## Schema changes
+
+Core tables: `organization`, `member`, and `invitation`. Session is extended with `activeOrganizationId`. When teams are enabled, the plugin adds `team`, `teamMember`, and `invitation.teamId`. When dynamic access control is enabled, it adds `organizationRole`.
+
+## Demo coverage
+
+A real SaaS demo should show organization switcher state, member list, invitation send/cancel/accept flows, role changes, team membership, and permission failures. These should call the HTTP routes above rather than mutating rows directly.

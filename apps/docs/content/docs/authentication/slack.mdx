@@ -1,0 +1,70 @@
+---
+title: "Slack"
+description: "Configure Slack OAuth for Kernia."
+---
+
+<ProviderHeading provider="Slack" />
+
+Slack OAuth is useful for workspace-oriented products. Decide whether your product needs sign-in with Slack identity, workspace installation, or both. Kernia's social provider handles sign-in; Slack app installation and bot tokens are separate product flows.
+
+## Create the Slack app
+
+In Slack API, create an app and add redirect URLs:
+
+```text
+http://localhost:8000/api/auth/callback/slack
+https://api.example.com/api/auth/callback/slack
+```
+
+Copy the client ID and client secret from **Basic Information**.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import slack
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "slack": slack(
+            client_id=env.SLACK_CLIENT_ID,
+            client_secret=env.SLACK_CLIENT_SECRET,
+            scopes=("openid", "profile", "email"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "slack", callback_url: appCallbackURL }),
+});
+```
+
+## Workspace behavior
+
+Slack identity and workspace installation are different flows. If your app needs workspace access, store installation tokens through an app-specific integration flow and do not confuse them with Kernia session tokens.
+
+## Troubleshooting
+
+- Redirect URI mismatch: Slack requires exact URLs.
+- Missing email: request the OpenID Connect email scope.
+- Wrong workspace: enforce workspace policy after Slack returns the team/workspace identity.
+
+## Test coverage
+
+Test sign-in, denied consent, workspace policy rejection, missing email, and a separate installation flow if your product uses Slack bot tokens.

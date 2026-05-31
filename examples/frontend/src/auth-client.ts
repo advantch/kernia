@@ -18,6 +18,6 @@ const baseURL =
     : "http://localhost:5173/api/auth";
 
 export const authClient = createAuthClient({
-  baseURL,
+  baseURL: `${window.location.origin}/api/auth`,
   plugins: [organizationClient()],
 });

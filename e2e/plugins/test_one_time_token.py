@@ -14,13 +14,12 @@ import time
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.one_time_token import one_time_token
-from better_auth.plugins.one_time_token.routes import default_key_hasher
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver, all_adapters_param
+
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.one_time_token import one_time_token
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver, all_adapters_param
 
 
 def _header(r, name: str) -> str | None:
@@ -32,7 +31,7 @@ def _header(r, name: str) -> str | None:
 
 def _build_driver(adapter: Any, **plugin_kwargs):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             plugins=[email_and_password(), one_time_token(**plugin_kwargs)],
@@ -324,4 +323,74 @@ async def test_ott_generate_and_verify(adapter_factory) -> None:
     r = await driver.request("POST", "/one-time-token/verify", json_body={"token": token})
     assert r.status == 200, r.json()
     body = r.json()
-    assert body["session"]["token"]
+    assert body["userId"] == user_id
+    assert body["purpose"] == "checkout"
+
+
+@pytest.mark.parametrize(*all_adapters_param())
+async def test_ott_single_use(adapter_factory) -> None:
+    adapter = await adapter_factory()
+    driver, _ = _build_driver(adapter)
+    await _sign_up(driver)
+
+    r = await driver.request(
+        "POST", "/generate-one-time-token", json_body={"purpose": "default"}
+    )
+    token = r.json()["token"]
+    r1 = await driver.request(
+        "POST", "/verify-one-time-token", json_body={"token": token}
+    )
+    assert r1.status == 200
+    r2 = await driver.request(
+        "POST", "/verify-one-time-token", json_body={"token": token}
+    )
+    assert r2.status == 400
+    assert r2.json()["code"] == "ONE_TIME_TOKEN_INVALID"
+
+
+@pytest.mark.parametrize(*all_adapters_param())
+async def test_ott_requires_session(adapter_factory) -> None:
+    adapter = await adapter_factory()
+    driver, _ = _build_driver(adapter)
+    r = await driver.request(
+        "POST", "/generate-one-time-token", json_body={"purpose": "default"}
+    )
+    assert r.status == 401
+    assert r.json()["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.parametrize(*all_adapters_param())
+async def test_ott_expired_rejected(adapter_factory) -> None:
+    """Bypass the endpoint to write a pre-expired row, then verify it bounces."""
+    import time as _time
+
+    from kernia.types.adapter import Where
+
+    adapter = await adapter_factory()
+    driver, auth = _build_driver(adapter)
+    await _sign_up(driver)
+
+    now = int(_time.time())
+    await auth.context.adapter.create(
+        model="verification",
+        data={
+            "identifier": "one-time-token:expired-token-123",
+            "value": "some-user-id:default",
+            "expiresAt": now - 60,
+            "createdAt": now - 120,
+            "updatedAt": now - 120,
+        },
+    )
+    r = await driver.request(
+        "POST",
+        "/verify-one-time-token",
+        json_body={"token": "expired-token-123"},
+    )
+    assert r.status == 400
+    assert r.json()["code"] == "ONE_TIME_TOKEN_EXPIRED"
+    # And the row was consumed.
+    row = await auth.context.adapter.find_one(
+        model="verification",
+        where=(Where(field="identifier", value="one-time-token:expired-token-123"),),
+    )
+    assert row is None

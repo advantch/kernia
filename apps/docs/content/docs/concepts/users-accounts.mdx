@@ -1,0 +1,80 @@
+---
+title: "Users and Accounts"
+description: "Manage users, linked accounts, passwords, email changes, and account deletion."
+---
+
+Kernia separates users from accounts. A `user` is the person in your application. An `account` is a credential source: email/password, a social provider, a passkey account, a phone credential, or another plugin-owned identity.
+
+## Update user profile
+
+~~~ts
+await fetch("http://localhost:8000/api/auth/update-user", {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ name: "Ada Lovelace", image: "https://example.com/ada.png" }),
+});
+~~~
+
+<APIMethod method="POST" path="/api/auth/update-user">
+  Updates mutable profile fields on the active user.
+</APIMethod>
+
+## Change email
+
+Email changes require an active session and should use verification when mailbox ownership matters.
+
+<APIMethod method="POST" path="/api/auth/change-email">
+  Changes the active user's email according to configured verification rules.
+</APIMethod>
+
+## Change password
+
+<APIMethod method="POST" path="/api/auth/change-password">
+  Verifies the current password, hashes the new password, and can revoke other sessions.
+</APIMethod>
+
+Password updates should also rotate sensitive sessions in application code when your product requires it.
+
+## Delete user
+
+<APIMethod method="POST" path="/api/auth/delete-user">
+  Deletes the active user and related sessions/accounts through the adapter.
+</APIMethod>
+
+Expose deletion behind confirmation UI and audit logging. For regulated SaaS products, coordinate deletion with billing, workspace ownership, and data retention policies.
+
+## Linked accounts
+
+<APIMethod method="GET" path="/api/auth/list-accounts">
+  Lists credential and OAuth accounts linked to the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/unlink-account">
+  Unlinks a provider account from the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/get-access-token">
+  Returns a stored OAuth access token when present and not expired.
+</APIMethod>
+
+## Account linking policy
+
+~~~python
+from kernia.types.init_options import AccountLinkingOptions, AccountOptions
+
+account=AccountOptions(
+    account_linking=AccountLinkingOptions(
+        enabled=True,
+        trusted_providers=("google", "github"),
+        allow_different_emails=False,
+    ),
+    encrypt_oauth_tokens=True,
+)
+~~~
+
+Use trusted provider linking only for providers that verify email ownership. Do not automatically link unrelated emails unless your product has a separate proof step.
+
+## Settings page coverage
+
+A proper SaaS settings page should use these APIs for profile editing, linked account display, session revocation, password changes, API keys, and security state. The UI should show unavailable providers as unavailable rather than treating missing credentials as a successful state.

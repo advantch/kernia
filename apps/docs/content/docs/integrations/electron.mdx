@@ -1,0 +1,74 @@
+---
+title: "Electron"
+description: "Use Electron renderer and main-process flows with a Kernia Python backend."
+---
+
+Electron apps need explicit handling for cookies, redirects, native windows, and process boundaries. Kernia still runs on the Python backend; the Electron app calls the same auth routes as a browser client.
+
+## Backend setup
+
+Mount Kernia on a reachable API origin:
+
+```python title="main.py"
+from fastapi import FastAPI
+from kernia_fastapi import mount_kernia
+
+app = FastAPI()
+mount_kernia(app, auth)
+```
+
+Set `KERNIA_BASE_URL` to the backend auth mount:
+
+```dotenv
+KERNIA_BASE_URL=http://localhost:8000/api/auth
+```
+
+## Renderer calls
+
+```ts title="renderer/auth.ts"
+export async function getSession() {
+  const response = await fetch(`${authBaseURL}/get-session`, {
+    credentials: "include",
+  });
+  return response.ok ? response.json() : null;
+}
+```
+
+## OAuth popup
+
+Call `/sign-in/social` from the renderer or main process, open the returned provider URL in a controlled `BrowserWindow`, and wait for the final callback URL. Keep the OAuth client secret on the Python server.
+
+```ts title="main/oauth.ts"
+const child = new BrowserWindow({ parent: mainWindow, modal: true });
+child.loadURL(providerUrl);
+child.webContents.on("will-redirect", (_event, url) => {
+  if (url.startsWith(appCallbackUrl)) child.close();
+});
+```
+
+## Cookie storage
+
+Use Electron's session partition intentionally. If the app uses multiple windows, confirm they share the same partition when you expect shared auth state.
+
+```ts
+const mainWindow = new BrowserWindow({
+  webPreferences: {
+    partition: "persist:kernia",
+  },
+});
+```
+
+## Backend protection
+
+Electron UI code is not trusted. Protected data must still be checked by Kernia sessions, bearer tokens, or API key flows on the Python backend.
+
+## Packaging notes
+
+- Do not bundle provider secrets into the Electron app.
+- Use production API URLs in packaged builds.
+- Treat auto-update channels as different trusted origins if they have different callback URLs.
+- Test cookie behavior on macOS, Windows, and Linux.
+
+## Test coverage
+
+Test renderer sign-in, OAuth popup close behavior, session refresh after app restart, logout, protected API rejection, and token revocation when bearer/API key auth is used.

@@ -17,12 +17,13 @@ import secrets
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.db.schema import CORE_MODELS
-from better_auth.plugins.phone_number import phone_number, phone_number_schema
-from better_auth.types.adapter import ModelDef
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import (
+
+from kernia.auth import init
+from kernia.db.schema import CORE_MODELS
+from kernia.plugins.phone_number import phone_number, phone_number_schema
+from kernia.types.adapter import ModelDef
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import (
     ASGIDriver,
     MockSMS,
     docker_available,
@@ -39,15 +40,17 @@ def _extended_user_model() -> ModelDef:
 
 
 async def _memory_factory() -> Any:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     return memory_adapter()
 
 
 async def _sqlite_factory() -> Any:
     """SQLAlchemy on shared-cache in-memory SQLite, with the extended user table."""
-    from better_auth_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
+
+    from kernia.types.adapter import ModelDef
+    from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -81,10 +84,10 @@ def _phone_number_adapters() -> tuple[str, list[Any]]:
 
 async def _mongo_placeholder() -> Any:
     try:
-        from better_auth_mongo import mongo_adapter  # type: ignore[attr-defined]
+        from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
     except ImportError:
-        pytest.skip("better_auth_mongo.mongo_adapter is not implemented yet")
-    from better_auth_test_utils.containers import mongodb_container
+        pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
+    from kernia_test_utils.containers import mongodb_container
 
     with mongodb_container() as url:
         return await mongo_adapter(url=url)
@@ -95,7 +98,7 @@ async def _mongo_placeholder() -> Any:
 
 def _build_driver(adapter: Any, sms: MockSMS, *, disable_sign_up: bool = False):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             plugins=[phone_number()],

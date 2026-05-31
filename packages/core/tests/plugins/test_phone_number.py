@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from better_auth.plugins.phone_number import (
+
+from kernia.plugins.phone_number import (
     PHONE_NUMBER_ERROR_CODES,
     PHONE_NUMBER_USER_FIELDS,
     generate_otp,

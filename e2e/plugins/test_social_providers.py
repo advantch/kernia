@@ -7,7 +7,7 @@ verify URL construction. Here we exercise the shared `/sign-in/social` →
 constructed via the generic helper.
 
 The MockIdP transports the token and userinfo endpoints, so anything we plug
-into `BetterAuthOptions.social_providers` can be driven through the same path.
+into `KerniaOptions.social_providers` can be driven through the same path.
 """
 
 from __future__ import annotations
@@ -16,13 +16,15 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.social_providers._helpers import make_provider
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.mock_idp import MockIdP
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.social_providers._helpers import make_provider
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.mock_idp import MockIdP
 
 
 @pytest.fixture
@@ -59,7 +61,7 @@ def _mock_provider() -> object:
 async def test_signin_and_callback(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             base_url="http://localhost",

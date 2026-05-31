@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import re
-
-from better_auth.plugins.device_authorization.routes import (
-    DEFAULT_USER_CODE_CHARSET,
+from kernia.plugins.device_authorization.routes import (
     DEVICE_CODE_CHARSET,
     _default_generate_device_code,
     _default_generate_user_code,

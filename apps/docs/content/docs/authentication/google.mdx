@@ -1,0 +1,144 @@
+---
+title: "Google"
+description: "Configure Google OAuth for Kernia."
+---
+
+<ProviderHeading provider="Google" />
+
+Kernia's Google provider implements the OAuth 2.0 authorization-code flow against Google's OpenID Connect endpoints. The server configuration is Python and uses `KerniaOptions.social_providers`, while the browser starts the same redirect flow through `/sign-in/social`.
+
+## Get your Google credentials
+
+<Steps>
+  <Step>
+    ### Create an OAuth client
+
+    Open Google Cloud Console, go to **APIs & Services** > **Credentials**, and create an **OAuth client ID** for a web application.
+  </Step>
+
+  <Step>
+    ### Add redirect URIs
+
+    Add the public Kernia callback URL. The default FastAPI demo backend uses:
+
+    ```text
+    http://localhost:8000/api/auth/callback/google
+    ```
+
+    Production should use your public API domain:
+
+    ```text
+    https://api.example.com/api/auth/callback/google
+    ```
+
+    If you change `base_path`, update the redirect URI to match the mounted auth path.
+  </Step>
+
+  <Step>
+    ### Store the credentials
+
+    ```dotenv title=".env"
+    KERNIA_SECRET=change-me-to-a-long-random-secret
+    KERNIA_BASE_URL=http://localhost:8000/api/auth
+    GOOGLE_CLIENT_ID=...
+    GOOGLE_CLIENT_SECRET=...
+    ```
+  </Step>
+</Steps>
+
+<Callout type="warn" title="Set the full auth base URL">
+  Kernia constructs the Google callback as `base_url + /callback/google`. For a backend mounted at `/api/auth`, `base_url` should be `https://api.example.com/api/auth`, not only `https://api.example.com`.
+</Callout>
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.social_providers import google
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    social_providers={
+        "google": google(
+            client_id=os.environ["GOOGLE_CLIENT_ID"],
+            client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+            scopes=("openid", "email", "profile"),
+        ),
+    },
+))
+```
+
+To restrict sign-ins to a Google Workspace domain, pass `hd`:
+
+```python
+import os
+
+social_providers={
+    "google": google(
+        client_id=os.environ["GOOGLE_CLIENT_ID"],
+        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        hd="example.com",
+    ),
+}
+```
+
+## Client usage
+
+Start the redirect flow through Kernia's social sign-in route:
+
+```ts title="src/lib/google.ts"
+export async function signInWithGoogle() {
+  const response = await fetch("http://localhost:8000/api/auth/sign-in/social", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      provider: "google",
+      callback_url: "http://localhost:5173/dashboard",
+    }),
+  });
+
+  if (!response.ok) throw await response.json();
+  const data = await response.json();
+  if (data.redirect) window.location.href = data.url;
+  return data;
+}
+```
+
+## Provider behavior
+
+The current Kernia Google provider sets `access_type=offline` and `prompt=select_account` during authorization. It verifies `id_token` responses against Google's JWKS, falls back to the userinfo endpoint when needed, and stores the linked account through the shared OAuth account-linking flow.
+
+| Capability | Current behavior |
+|---|---|
+| Redirect OAuth sign-in | Supported. |
+| Custom scopes | Supported through the `scopes` tuple. |
+| Workspace domain hint | Supported through `hd`. |
+| Direct ID-token sign-in | Not exposed by the current Python route. |
+| Multiple platform client IDs | Not exposed as an array option today. |
+| Additional scope linking | Should be implemented through account linking before documenting as supported. |
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Body: `{ "provider": "google", "callback_url": "http://localhost:5173/dashboard" }`. Returns `{ "url": "https://accounts.google.com/...", "redirect": true }`.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/callback/google">
+  Handles the Google callback, exchanges the code, verifies the profile, creates or links the user, sets the session cookie, and redirects to the callback URL from state.
+</APIMethod>
+
+## Troubleshooting
+
+- `redirect_uri_mismatch`: the Google Cloud redirect URI must exactly match `KERNIA_BASE_URL + /callback/google`.
+- `PROVIDER_NOT_FOUND`: the provider key in `social_providers` must be exactly `"google"`.
+- The browser returns from Google but no session appears: confirm cookies are accepted for the API origin and frontend calls include credentials.
+- Users see the wrong Google account: Kernia currently sends `prompt=select_account`, so Google should show account selection unless an enterprise policy suppresses it.

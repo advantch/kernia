@@ -1,0 +1,12 @@
+{
+  "title": "Errors",
+  "pages": [
+    "index",
+    "invalid_code",
+    "no_code",
+    "state_mismatch",
+    "unable_to_create_session",
+    "unable_to_create_user",
+    "unknown"
+  ]
+}

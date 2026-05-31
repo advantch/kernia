@@ -1,0 +1,70 @@
+---
+title: "MongoDB"
+description: "Use MongoDB as a document adapter for Kernia auth data."
+---
+
+The Mongo adapter stores Kernia logical models as MongoDB collections and translates Kernia `Where` clauses into BSON filters. It is useful for applications already standardized on MongoDB and for teams that want document storage for plugin metadata.
+
+## Installation
+
+```bash
+uv add kernia kernia-mongo motor
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_mongo import mongo_adapter
+
+client = AsyncIOMotorClient(os.environ["MONGODB_URI"])
+adapter = mongo_adapter(client["app"])
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+))
+```
+
+## Collections
+
+Core collections correspond to `user`, `session`, `account`, and `verification`. Plugin tables become additional collections.
+
+Create indexes for:
+
+- User id and email.
+- Session token and user id.
+- Account provider and provider account id.
+- Verification identifier and token.
+- API key prefix or key hash.
+- Organization slug and membership lookups.
+- SSO provider ids and domains.
+- SCIM directory tokens.
+
+## Query behavior
+
+The adapter supports Kernia `Where` operators by translating them to Mongo filters. Test `and`, `or`, case sensitivity, date comparisons, and pagination before using custom plugins that depend on complex filters.
+
+## Schema and migrations
+
+MongoDB does not use Alembic migrations. You still need deployment checks that ensure collections and indexes exist before traffic reaches auth routes.
+
+```python title="indexes.py"
+async def ensure_auth_indexes(db):
+    await db.user.create_index("email", unique=True, sparse=True)
+    await db.session.create_index("token", unique=True)
+    await db.account.create_index([("provider_id", 1), ("account_id", 1)], unique=True)
+```
+
+## Transactions
+
+Use a MongoDB deployment that supports transactions if your application relies on multi-document atomicity. OAuth callbacks, user creation, linked accounts, and organization membership writes are easier to reason about with transaction support.
+
+## Test and demo coverage
+
+Adapter tests should run against a MongoDB service, not an in-memory replacement. Cover sign-up, sign-in, OAuth callback, session revoke, verification token consumption, API keys, organization membership, and any plugin collections you enable.

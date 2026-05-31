@@ -1,0 +1,54 @@
+---
+title: "Options Reference"
+description: "Reference for KerniaOptions and related configuration objects."
+---
+
+`KerniaOptions` is the object passed to `kernia.auth.init`. It is a Python dataclass, so applications should construct it with named arguments.
+
+## Required fields
+
+| Option | Type | Notes |
+|---|---|---|
+| `database` | `CustomAdapter` | Primary adapter for users, sessions, accounts, verification rows, and plugin tables. |
+| `secret` | `str` | Signs cookies and verification values. |
+
+## URL fields
+
+| Option | Default | Notes |
+|---|---|---|
+| `base_url` | `http://localhost:3000` | Public auth base URL. For mounted APIs, include `/api/auth`. |
+| `base_path` | `/api/auth` | Framework mount path. |
+| `trusted_origins` | `()` | Browser origins allowed to make credentialed auth requests. |
+
+## Feature blocks
+
+`email_and_password`, `session`, `rate_limit`, and `account` accept their own dataclasses. Use `advanced` for plugin-specific callbacks and settings that are not first-class dataclass fields yet.
+
+## Plugins
+
+`plugins` is an ordered sequence. The order matters when hooks wrap the same routes. Admin gates and captcha checks should be configured intentionally.
+
+## Social providers
+
+`social_providers` maps provider ids to provider constructors from `kernia.social_providers`.
+
+## Secondary storage
+
+`secondary_storage` is optional and used by plugins that need short-lived distributed state. Redis is the production path.
+
+## Example
+
+~~~python
+from kernia import KerniaOptions
+from kernia.types.init_options import EmailPasswordOptions, SessionOptions
+
+options = KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    trusted_origins=("http://localhost:5173",),
+    email_and_password=EmailPasswordOptions(enabled=True),
+    session=SessionOptions(expires_in=60 * 60 * 24 * 7),
+    plugins=(api_key(),),
+)
+~~~

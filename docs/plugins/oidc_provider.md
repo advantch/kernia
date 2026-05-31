@@ -1,31 +1,12 @@
 # Oidc Provider
 
-> Module: `better_auth.plugins.oidc_provider`
+> Module: `kernia.plugins.oidc_provider`
 > Constructor: `oidc_provider`
 
-Deprecated shim for the standalone OAuth2.1 / OIDC provider.
+OIDC provider plugin compatibility entry point.
 
-Mirrors better-auth upstream, where the in-tree ``oidc-provider`` plugin is
-**deprecated** in favour of the dedicated ``@better-auth/oauth-provider`` package
-(the full OAuth 2.1 + OpenID Connect issuer: PKCE, refresh rotation with reuse
-detection, RFC 7662 introspection, RFC 7009 revocation, RFC 8414 metadata,
-dynamic client registration, …).
-
-The Python port follows the same split: the real implementation lives in the
-``better_auth_oauth_provider`` package. This module remains importable so legacy
-call sites keep working, but every entry point emits a :class:`DeprecationWarning`
-and delegates to ``better_auth_oauth_provider``.
-
-Migration::
-
-    # before (deprecated)
-    from better_auth.plugins.oidc_provider import oidc_provider
-
-    # after
-    from better_auth_oauth_provider import oauth_provider, OAuthProviderOptions
-
-Importing this shim does *not* pull in the provider package; the delegation is
-lazy so core has no hard dependency on the standalone package.
+The implementation lives in the standalone ``kernia-oauth-provider`` package so
+projects that do not issue OAuth/OIDC tokens do not need those dependencies.
 
 ## Endpoints
 
@@ -38,12 +19,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.oidc_provider import oidc_provider
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.oidc_provider import oidc_provider
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

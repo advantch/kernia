@@ -1,0 +1,103 @@
+---
+title: "State Mismatch"
+description: "OAuth or SSO state verification failed."
+---
+
+# State Mismatch
+
+`STATE_MISMATCH` occurs when an OAuth or SSO callback does not match the state value created when the flow started. State protects against CSRF and replay, so Kernia rejects the callback instead of creating a session.
+
+## Response shape
+
+```json
+{
+  "code": "STATE_MISMATCH",
+  "message": "State verification failed",
+  "status": 400
+}
+```
+
+## Common causes
+
+- The user waited past the state expiration window.
+- The callback URL was loaded twice after the state was consumed.
+- Redis or secondary storage evicted the state key.
+- Multiple backend instances do not share verification storage.
+- `KERNIA_SECRET` changed between flow start and callback.
+- Cookie domain, path, SameSite, or Secure settings prevented state cookies from returning.
+- A proxy or provider modified the `state` query parameter.
+- The callback hit a different environment than the one that started the flow.
+
+## Strategies
+
+Kernia deployments normally use database or secondary-storage state for OAuth and SSO. Some deployments may use cookie-backed state for specific clients. The failure mode is different for each strategy.
+
+| Strategy | Failure mode |
+|---|---|
+| Database | The verification row for the state does not exist, expired, or was already consumed. |
+| Redis or secondary storage | The key expired, was evicted, or was written by a different unshared instance. |
+| Cookie | The encrypted state cookie was not returned, could not be decrypted, or had expired. |
+
+## Database state
+
+Database state failures usually mean the callback cannot find the verification record that was created when the flow started.
+
+Check:
+
+- The `verification` table or collection exists.
+- All app instances share the same database.
+- Expiration cleanup did not remove the state before the user returned.
+- The callback was not replayed by refresh, back button, link scanner, or proxy retry.
+- `KERNIA_SECRET` did not change without a previous-secret window.
+
+## Secondary storage state
+
+If Redis or another secondary store is used, state verification depends on that store being shared and durable enough for the full provider round trip.
+
+Check:
+
+- Redis is reachable from every app instance.
+- TTL is longer than the expected provider login time.
+- The eviction policy cannot remove auth verification keys under memory pressure.
+- Local development is not mixing in-memory storage with multiple processes.
+
+## Cookie state
+
+Cookie state failures usually mean the browser did not return the state cookie to the callback route.
+
+Check:
+
+- Cookie domain and path match the callback URL.
+- HTTPS is used when `Secure` cookies are set.
+- SameSite settings match your app/API domain arrangement.
+- The callback is not crossing from a provider into a different browser profile, WebView, or extension partition.
+- A CDN or proxy is not dropping the `Cookie` header.
+
+## Preview deployments
+
+Preview URLs are a common source of state errors. Do not start the flow on one preview domain and receive the callback on another. If your platform creates unique preview hostnames, register callbacks and trusted origins for the exact environment being tested.
+
+## How to fix
+
+- Use shared database or Redis verification storage across all backend instances.
+- Do not rotate secrets during active OAuth flows without a previous-secret window.
+- Confirm provider callback URLs use the same environment as the initiating app.
+- Inspect callback cookies and query parameters in development.
+- Avoid provider redirects that strip query parameters.
+
+## Security note
+
+Do not bypass state validation to make a provider flow work. Fix storage, cookies, URLs, or proxy behavior instead.
+
+## Debug checklist
+
+1. Start the flow and record the frontend origin, auth base URL, and provider URL.
+2. Confirm a state value or state cookie is created.
+3. Complete the provider flow once.
+4. Inspect the callback query string and cookies.
+5. Confirm the backend instance can read the same database or Redis key that created the flow.
+6. Retry with a fresh flow after clearing old cookies.
+
+## Tests
+
+Tests should cover valid state, missing state, expired state, replayed callback, wrong state, and secret-rotation behavior when previous secrets are configured.

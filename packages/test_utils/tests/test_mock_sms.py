@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from better_auth_test_utils import MockSMS
+
+from kernia_test_utils import MockSMS
 
 
 async def test_send_captures() -> None:

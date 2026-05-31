@@ -6,18 +6,19 @@ Demonstrates that swapping adapters changes zero application code.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_sqlalchemy import sqlalchemy_adapter
-from better_auth_test_utils import ASGIDriver
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_sqlalchemy import sqlalchemy_adapter
+from kernia_test_utils import ASGIDriver
 
 
 @pytest.fixture
 async def driver() -> ASGIDriver:
     adapter = await sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             plugins=[email_and_password()],

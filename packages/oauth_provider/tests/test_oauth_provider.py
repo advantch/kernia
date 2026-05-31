@@ -14,17 +14,16 @@ from __future__ import annotations
 import base64
 
 import pytest
-from better_auth.auth import init
-from better_auth.error import APIError
-from better_auth.oauth2 import pkce_challenge, pkce_verifier
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+
+from kernia.auth import init
+from kernia.oauth2 import pkce_challenge, pkce_verifier
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 
 def _basic(client_id: str, client_secret: str) -> str:
@@ -35,7 +34,7 @@ def _basic(client_id: str, client_secret: str) -> str:
 @pytest.fixture
 async def setup():
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -262,7 +261,7 @@ async def test_dynamic_registration(setup) -> None:
 
 async def test_dynamic_registration_disabled() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[

@@ -1,0 +1,60 @@
+---
+title: "Next.js Example"
+description: "Wire a Next.js app to a Kernia Python auth backend."
+---
+
+This example treats Next.js as the product frontend and Kernia as a separate Python auth/API backend. It mirrors the client and server-component boundary from the Next integration page.
+
+## Commands
+
+```bash
+pnpm create next-app kernia-next
+cd kernia-next
+pnpm add better-auth@1.6.11
+```
+
+The JavaScript client package is used only for browser interop. Server packages, CLI commands, and Python imports stay under Kernia names.
+
+## Environment
+
+```dotenv
+NEXT_PUBLIC_AUTH_BASE_URL=http://localhost:8000/api/auth
+AUTH_BASE_URL=http://localhost:8000/api/auth
+```
+
+## Server session read
+
+```ts title="src/lib/session.ts"
+import { headers } from "next/headers";
+
+export async function getServerSession() {
+  const cookie = (await headers()).get("cookie") ?? "";
+  const response = await fetch(`${process.env.AUTH_BASE_URL}/get-session`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  return response.ok ? response.json() : null;
+}
+```
+
+## Client sign-in
+
+```ts title="src/lib/auth.ts"
+export async function signInEmail(email: string, password: string) {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_AUTH_BASE_URL}/sign-in/email`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, remember_me: true }),
+  });
+  if (!response.ok) throw await response.json();
+}
+```
+
+## Middleware
+
+Use middleware only for redirects. Protected data still needs backend authorization.
+
+## Required checks
+
+Test sign-in, sign-out, server-rendered dashboard session reads, OAuth redirect URLs, same-origin proxy behavior, and cookies through the deployed domain.

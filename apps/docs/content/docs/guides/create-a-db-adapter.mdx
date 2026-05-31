@@ -1,0 +1,66 @@
+---
+title: "Create a Database Adapter"
+description: "Build a custom Kernia database adapter."
+---
+
+Create a custom adapter when SQLAlchemy, Mongo, or the built-in memory adapter cannot represent your database cleanly. The adapter is security-critical: sessions, verification tokens, OAuth accounts, API keys, passkeys, SSO providers, and billing records all depend on correct storage semantics.
+
+## Adapter shape
+
+```python title="adapter.py"
+from kernia.adapters import CustomAdapter
+
+class MyAdapter(CustomAdapter):
+    async def create(self, model: str, data: dict) -> dict: ...
+    async def find_one(self, model: str, where: list) -> dict | None: ...
+    async def find_many(self, model: str, where: list | None = None, *, limit=None, offset=None, sort=None) -> list[dict]: ...
+    async def update(self, model: str, where: list, data: dict) -> dict | None: ...
+    async def update_many(self, model: str, where: list, data: dict) -> int: ...
+    async def delete(self, model: str, where: list) -> int: ...
+    async def delete_many(self, model: str, where: list) -> int: ...
+    async def count(self, model: str, where: list | None = None) -> int: ...
+```
+
+## Where clauses
+
+Support the full Kernia `Where` grammar that your routes and plugins use: equality, inequality, null checks, comparisons, `in`, string matching, `and`, and `or`. Incorrect filtering is an auth bug, not a minor adapter difference.
+
+## Schema
+
+Adapters should expose a way to inspect or apply the resolved Kernia schema. Core models are user, session, account, and verification. Plugins add their own models.
+
+Required uniqueness usually includes:
+
+- User id and email.
+- Session token.
+- Account provider plus provider account id.
+- Verification identifier plus token.
+- API key hash or prefix.
+- Passkey credential id.
+- SSO provider id and domain.
+
+## Transactions
+
+Implement transaction support when your database can provide it. OAuth callbacks, sign-up, linked account creation, verification token consumption, and billing webhook updates are all safer with atomic writes.
+
+## Test suite
+
+Run the shared adapter contract tests and route tests:
+
+```bash
+uv run pytest packages/kernia-test-utils packages/<your-adapter> e2e/ -q
+```
+
+Add backend-specific tests for concurrency, unique violations, JSON round-trips, date precision, pagination, and transaction rollback.
+
+## Documentation
+
+Your adapter docs should include install command, import path, connection example, supported database versions, migration/index instructions, transaction support, known limitations, and test coverage.
+
+## Release checklist
+
+- Real database tests pass in CI.
+- Migrations or index creation are documented.
+- Unsupported plugins are called out.
+- Secrets and connection strings are never logged.
+- Examples use `kernia`, `kernia-*`, and `kernia_*` names.

@@ -1,22 +1,23 @@
-"""Smoke: building a `BetterAuth` handle from options + plugins works end-to-end.
+"""Smoke: building a `Kernia` handle from options + plugins works end-to-end.
 
-Exercises every Phase-1 contract: BetterAuthOptions, plugin registration, endpoint
+Exercises every Phase-1 contract: KerniaOptions, plugin registration, endpoint
 ownership stamping, the error registry, and cookie signing.
 """
 
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.cookies import new_token, render_set_cookie, sign, verify
-from better_auth.plugins import email_and_password
-from better_auth.types.cookie import CookieAttributes
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+
+from kernia.auth import init
+from kernia.cookies import new_token, render_set_cookie, sign, verify
+from kernia.plugins import email_and_password
+from kernia.types.cookie import CookieAttributes
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 def test_init_with_email_password_plugin_registers_routes() -> None:
-    options = BetterAuthOptions(
+    options = KerniaOptions(
         database=memory_adapter(),
         secret="test-secret",
         plugins=[email_and_password()],
@@ -43,12 +44,12 @@ def test_init_with_email_password_plugin_registers_routes() -> None:
 
 def test_init_rejects_missing_secret() -> None:
     with pytest.raises(ValueError, match="secret is required"):
-        init(BetterAuthOptions(database=memory_adapter(), secret=""))
+        init(KerniaOptions(database=memory_adapter(), secret=""))
 
 
 def test_init_detects_endpoint_collisions() -> None:
     # Registering the same plugin twice triggers the collision check.
-    options = BetterAuthOptions(
+    options = KerniaOptions(
         database=memory_adapter(),
         secret="s",
         plugins=[email_and_password(), email_and_password()],

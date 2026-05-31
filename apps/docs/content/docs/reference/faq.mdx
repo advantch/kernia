@@ -1,0 +1,54 @@
+---
+title: "FAQ"
+description: "Common Kernia questions."
+---
+
+This page collects practical questions that come up when using Kernia in Python backends and JavaScript frontends.
+
+<Accordions>
+  <Accordion id="is-kernia-a-javascript-auth-server" title="Is Kernia a JavaScript auth server?">
+    No. Kernia is the Python server implementation. JavaScript clients talk to its HTTP routes with cookies included.
+  </Accordion>
+
+  <Accordion id="can-i-use-js-client" title="Can I use the official JS client?">
+    Yes, for compatible routes and payloads. The frontend can use the Better Auth JavaScript client where the HTTP contract is compatible, while Python packages, imports, and CLI commands remain Kernia names.
+  </Accordion>
+
+  <Accordion id="cookie-names" title="Why do some cookie names mention Better Auth?">
+    Cookie names are wire compatibility identifiers. Changing them would break browser clients and conformance tests that expect the established cookie contract. Treat them as protocol names, not Python import names.
+  </Accordion>
+
+  <Accordion id="get-session" title="Why does get-session return null?">
+    Check that the frontend sends `credentials: "include"`, CORS allows credentials, the API origin is trusted, and the session cookie domain matches the backend host.
+
+    ```ts
+    await fetch("http://localhost:8000/api/auth/get-session", {
+      credentials: "include",
+    });
+    ```
+  </Accordion>
+
+  <Accordion id="which-adapter" title="Which adapter should I use?">
+    Use SQLAlchemy with PostgreSQL for most production SaaS apps. Use SQLite for local prototypes, Mongo when your application is already document-based, Redis as secondary storage, and memory only for tests or examples.
+  </Accordion>
+
+  <Accordion id="missing-provider-credentials" title="Should missing provider credentials render a working button?">
+    No. The UI should show not-configured or disabled states until the backend has the required credentials and admin config enables the method. Do not fake successful OAuth, SSO, email, SMS, or Stripe flows in the demo.
+  </Accordion>
+
+  <Accordion id="schema-change" title="Why did adding a plugin require a migration?">
+    Plugins can contribute tables, indexes, and fields. Run `kernia info --app app.auth:auth` to inspect contributors, then run `kernia generate` or your adapter-specific migration process.
+  </Accordion>
+
+  <Accordion id="oauth-callback" title="Why does OAuth fail with redirect_uri_mismatch?">
+    Provider callback URLs must match the public auth mount exactly. For a FastAPI backend mounted at `/api/auth`, Google should receive a callback like `https://api.example.com/api/auth/callback/google`.
+  </Accordion>
+
+  <Accordion id="admin-security" title="Can the frontend protect admin pages by hiding navigation?">
+    No. Frontend navigation is presentation only. Admin config, user management, billing setup, SSO, SCIM, and API key routes must enforce authorization on the backend.
+  </Accordion>
+</Accordions>
+
+## More help
+
+Start with the pages closest to the failing surface: [FastAPI](/docs/integrations/fastapi), [database](/docs/concepts/database), [session management](/docs/concepts/session-management), [security](/docs/reference/security), and [testing](/docs/reference/testing).

@@ -10,11 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_otp import email_otp
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import (
+
+from kernia.auth import init
+from kernia.plugins.email_otp import email_otp
+from kernia.plugins.email_password import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import (
     ASGIDriver,
     MockSMTP,
     SentEmail,
@@ -41,7 +42,7 @@ def _build_driver(
         )
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             base_url="http://localhost:3000",

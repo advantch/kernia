@@ -1,0 +1,61 @@
+---
+title: "Introduction"
+description: "Kernia is a Python authentication package for modern SaaS applications."
+---
+
+# Introduction
+
+Kernia is a Python authentication package for teams building SaaS products with FastAPI, Starlette, Django, SQLAlchemy, Mongo, Redis storage, Stripe billing, and enterprise identity requirements.
+
+Kernia is compatible with the Better Auth wire protocol where clients depend on route shape, cookie behavior, and JSON payloads. The public Python surface is Kernia: packages use `kernia-*`, imports use `kernia_*`, and the CLI command is `kernia`.
+
+## What Kernia gives you
+
+| Area | Included surface |
+|---|---|
+| Server auth | Email/password, sessions, users, accounts, hooks, cookies, and rate limits. |
+| Python integrations | FastAPI, Starlette, Django, SQLAlchemy, Mongo, Redis storage, memory adapter. |
+| SaaS features | Organizations, admin, admin config, API keys, linked accounts, sessions, billing. |
+| Enterprise | SSO, SCIM, OAuth provider, passkeys, two-factor, SIWE, phone, username. |
+| Billing | Stripe checkout, portal, catalog import, entitlements, usage tracking, customer state. |
+
+## How it fits together
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.organization import organization
+from kernia.plugins.api_key import api_key
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    plugins=[
+        organization(),
+        api_key(),
+    ],
+))
+```
+
+Framework packages mount the auth instance. Browser clients call the mounted routes. Adapters persist users, sessions, accounts, verification tokens, and plugin tables.
+
+## Design goals
+
+- Python-first server packages and imports.
+- Compatibility at the HTTP and cookie boundary where clients rely on it.
+- Real adapters and migrations instead of demo-only storage.
+- Plugin docs that identify routes, schema, options, and test coverage.
+- SaaS demo flows that call the backend and show not-configured states honestly.
+
+## Documentation model
+
+Each feature page explains installation, server configuration, client usage, routes, schema changes, options, examples, troubleshooting, and test or demo coverage. Pages do not claim support for a provider or plugin unless the repo exposes that package or the page clearly marks it as a compatibility or configuration pattern.
+
+## Start here
+
+1. Read [Installation](/docs/installation) to create a Python project.
+2. Read [Basic Usage](/docs/basic-usage) to mount Kernia on FastAPI.
+3. Open [FastAPI SaaS Demo](/docs/examples/fastapi-saas-demo) for the reference app.
+4. Open [Stripe](/docs/plugins/stripe) for billing, entitlements, and usage tracking.
+5. Open [Testing](/docs/reference/testing) before declaring a plugin or adapter production-ready.

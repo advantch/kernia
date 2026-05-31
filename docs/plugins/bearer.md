@@ -1,9 +1,9 @@
 # Bearer
 
-> Module: `better_auth.plugins.bearer`
+> Module: `kernia.plugins.bearer`
 > Constructor: `bearer`
 
-bearer — see reference/packages/better-auth/src/plugins/bearer/.
+bearer — see Better Auth reference: plugins/bearer/.
 
 ## Endpoints
 
@@ -16,12 +16,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.bearer import bearer
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.bearer import bearer
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

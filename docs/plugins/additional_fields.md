@@ -1,11 +1,11 @@
 # Additional Fields
 
-> Module: `better_auth.plugins.additional_fields`
-> Constructor: `AdditionalFieldsConfig`
+> Module: `kernia.plugins.additional_fields`
+> Constructor: `additional_fields`
 
 additional_fields plugin — declare extra user/session fields on the schema.
 
-Mirrors `reference/packages/better-auth/src/plugins/additional-fields/`.
+Mirrors `Better Auth reference: plugins/additional-fields/`.
 
 Usage:
 
@@ -32,12 +32,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.additional_fields import AdditionalFieldsConfig
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.additional_fields import additional_fields
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

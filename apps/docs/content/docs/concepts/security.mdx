@@ -1,0 +1,45 @@
+---
+title: "Security"
+description: "Security model for passwords, cookies, OAuth, rate limits, trusted origins, and operational deployment."
+---
+
+Kernia's security model is built around server-owned sessions, HTTP-only cookies, signed verification tokens, modern password hashing, strict redirect validation, and explicit trusted origins. Keep the auth server behind HTTPS in every non-local environment.
+
+## Password hashing
+
+Kernia hashes new passwords with Argon2id through `argon2-cffi`. Legacy scrypt hashes can be verified and should be rehashed after successful login.
+
+## Secrets
+
+`KERNIA_SECRET` signs cookies and verification values. Generate at least 32 random bytes and store it in a secret manager. Rotating the secret invalidates existing cookies unless you add a controlled rotation layer.
+
+## CSRF and origins
+
+Credentialed browser requests should come from known origins. Set `trusted_origins` and configure framework CORS to the same frontend origins.
+
+~~~python
+KerniaOptions(
+    trusted_origins=("https://app.example.com",),
+    base_url="https://api.example.com/api/auth",
+)
+~~~
+
+## OAuth state and PKCE
+
+Social routes sign state values with the server secret and use provider-specific authorization code exchange. Providers that support PKCE should keep the verifier server-side or inside signed state.
+
+## Cookies
+
+Session cookies are HTTP-only. Do not expose the raw session token to application JavaScript. Use `/get-session` or framework dependencies to read the active session.
+
+## Rate limiting
+
+Keep rate limits enabled for password, OTP, magic-link, two-factor, anonymous, device authorization, and token issuance routes.
+
+## Admin surfaces
+
+Admin configuration, user management, Stripe setup, SSO provider registration, and SCIM credentials should require an admin plugin role or explicit admin user IDs. Do not expose these routes based only on frontend navigation.
+
+## Reporting vulnerabilities
+
+Security bugs should include affected package version, enabled plugins, framework integration, reproduction steps, and whether the issue crosses a trust boundary such as cookies, OAuth callbacks, admin routes, or database writes.

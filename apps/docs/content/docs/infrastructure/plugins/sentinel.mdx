@@ -1,0 +1,108 @@
+---
+title: "Sentinel"
+description: "Monitor auth risk signals around a Kernia deployment."
+---
+
+Better Auth Sentinel is a hosted infrastructure plugin for abuse detection and security enforcement. Kernia does not currently ship a managed Sentinel service. The Kernia equivalent is an application security layer built with rate limits, captcha, breached-password checks, hooks, audit events, and session revocation.
+
+Use this page to design Sentinel-style protections without claiming that a hosted Sentinel plugin exists.
+
+## Installation
+
+Install the protections you plan to use:
+
+```bash
+uv add kernia kernia-api-key kernia-redis-storage
+```
+
+Add provider packages for the checks you enable. Use Redis for shared rate limits and a captcha provider for bot challenges.
+
+## Server configuration
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.captcha import captcha
+from kernia.plugins.have_i_been_pwned import have_i_been_pwned
+from kernia.plugins.rate_limit import rate_limit
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    plugins=[
+        rate_limit(storage=redis_storage),
+        captcha(provider=turnstile_provider),
+        have_i_been_pwned(),
+    ],
+))
+```
+
+## Signals
+
+Track security signals at the route boundary and store them as audit events:
+
+| Signal | How to collect |
+|---|---|
+| Repeated invalid passwords | Email/password sign-in failure hook. |
+| OTP failures | Email OTP and phone verification failure hooks. |
+| Captcha failures | Captcha plugin result. |
+| Impossible travel | Compare new session IP geo to last session. |
+| Unusual API key usage | API key usage logs by key, route, and IP. |
+| SSO errors | SSO callback and domain verification errors. |
+| SCIM failures | SCIM token and directory sync errors. |
+| Webhook signature failures | Stripe webhook verification failure path. |
+| Admin config changes | Admin config write routes. |
+
+## Enforcement
+
+Sentinel-style enforcement should happen before the sensitive auth action executes.
+
+```python title="security.py"
+async def before_password_sign_in(ctx):
+    key = f"password:{ctx.request.ip}:{ctx.body.email.lower()}"
+    failures = await security_store.increment(key, ttl_seconds=3600)
+
+    if failures >= 5:
+        await audit("auth.blocked", reason="credential_stuffing", email=ctx.body.email)
+        raise AuthError("RATE_LIMITED", status=429)
+
+    if failures >= 3:
+        await require_captcha(ctx)
+```
+
+## Feature mapping
+
+| Better Auth Sentinel feature | Kernia implementation path |
+|---|---|
+| Credential stuffing | Rate-limit failed password attempts by IP, email, and visitor fingerprint. |
+| Impossible travel | Compare session geography and require step-up authentication. |
+| Bot blocking | Captcha plugin or edge bot detection before auth routes. |
+| Suspicious IP blocking | Edge firewall plus application deny list. |
+| Compromised password | Have I Been Pwned plugin during sign-up and password change. |
+| Stale account alert | Hook on sign-in when `last_active_at` is older than your threshold. |
+| Free trial abuse | Billing/customer checks and visitor fingerprint limits. |
+
+## Response
+
+Security responses should be explicit and testable:
+
+- Return `429` for rate limits.
+- Return a captcha challenge for suspicious but not blocked traffic.
+- Require two-factor or passkey verification for step-up flows.
+- Revoke sessions when account takeover is suspected.
+- Record audit events for every block, challenge, admin override, and session revoke.
+
+## Schema changes
+
+Most teams add:
+
+| Table | Purpose |
+|---|---|
+| `security_event` | Immutable stream of challenges, blocks, suspicious logins, and admin overrides. |
+| `rate_limit_bucket` | Shared counters when Redis is not used. |
+| `trusted_device` | Device identity for unknown-device notifications. |
+| `session_risk` | Risk score and reason attached to active sessions. |
+
+## Test and demo coverage
+
+Tests should exercise the public auth route and prove that repeated failures trigger challenge or block behavior before the route creates a session. The SaaS demo should show security state in the admin area, including recent blocks, captcha failures, high-risk sessions, and revocation actions.

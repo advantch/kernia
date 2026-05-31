@@ -1,9 +1,10 @@
-"""Unit tests for better_auth.crypto — argon2id default, scrypt legacy verify."""
+"""Unit tests for kernia.crypto — argon2id default, scrypt legacy verify."""
 
 from __future__ import annotations
 
 import pytest
-from better_auth.crypto import hash_password, needs_rehash, verify_password
+
+from kernia.crypto import hash_password, needs_rehash, verify_password
 
 
 def test_argon2_round_trip() -> None:
@@ -26,7 +27,7 @@ def test_argon2_constant_time_does_not_leak_via_truthy() -> None:
 
 def test_legacy_scrypt_hash_still_verifies() -> None:
     # construct the legacy format directly to prove backwards compat
-    from better_auth.crypto import _legacy_scrypt_hash  # type: ignore[attr-defined]
+    from kernia.crypto import _legacy_scrypt_hash  # type: ignore[attr-defined]
 
     legacy = _legacy_scrypt_hash("legacy-pw")
     assert legacy.startswith("scrypt$")
@@ -35,7 +36,7 @@ def test_legacy_scrypt_hash_still_verifies() -> None:
 
 
 def test_needs_rehash_flags_legacy() -> None:
-    from better_auth.crypto import _legacy_scrypt_hash  # type: ignore[attr-defined]
+    from kernia.crypto import _legacy_scrypt_hash  # type: ignore[attr-defined]
 
     legacy = _legacy_scrypt_hash("pw")
     modern = hash_password("pw")

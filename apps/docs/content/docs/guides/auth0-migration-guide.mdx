@@ -1,0 +1,72 @@
+---
+title: "Migrating from Auth0 to Kernia"
+description: "Move users, sessions, social accounts, roles, and enterprise auth from Auth0 to Kernia."
+---
+
+Auth0 migrations are data and product migrations, not just SDK swaps. Plan the cutover around user identifiers, password hash portability, social account links, enterprise connections, roles, email verification state, and session behavior.
+
+## Before you start
+
+- Export a staging copy of users, identities, roles, organizations, and enterprise connections.
+- Identify which Auth0 user id becomes the Kernia `user.id` or an external id.
+- Decide whether sessions are cut over at once or users sign in again.
+- Map Auth0 connections to Kernia social providers, SSO, email/password, and passwordless flows.
+- Decide how to handle password hashes that cannot be verified outside Auth0.
+
+## Kernia setup
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.admin import admin
+from kernia.plugins.organization import organization
+from kernia.plugins.sso import sso
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    plugins=[
+        admin(),
+        organization(),
+        sso(),
+    ],
+))
+```
+
+## Data mapping
+
+| Auth0 | Kernia |
+|---|---|
+| User profile | `user` row plus custom fields if needed. |
+| Email verification | `user.email_verified`. |
+| Database connection | Email/password provider. |
+| Social identity | `account` row with provider id and provider account id. |
+| Organization | Organization plugin organization and membership rows. |
+| Enterprise connection | SSO provider configuration. |
+| Roles/permissions | Admin or organization role model. |
+
+## Password migration
+
+If exported password hashes are supported by your security policy, implement a temporary verifier that accepts the legacy hash and rewrites the password with Kernia's current hashing after successful sign-in. If Auth0 does not export usable hashes for your tenant, run a reset-password migration and communicate the change before cutover.
+
+## Social accounts
+
+Preserve provider account ids, not display names or emails alone. Account linking should match on the provider id plus provider account id. Email-only matching can attach the wrong identity when providers return unverified or mutable emails.
+
+## Enterprise SSO
+
+Create SSO provider rows from Auth0 enterprise connections. Verify ACS URLs, entity IDs, certificates, signed response requirements, and domain routing in staging before enabling production domains.
+
+## Cutover
+
+1. Freeze Auth0 profile writes or run a final delta sync.
+2. Apply Kernia migrations.
+3. Import users, accounts, organizations, SSO providers, and roles.
+4. Configure provider callbacks to the Kernia backend.
+5. Deploy the frontend with Kernia routes.
+6. Run login, logout, password reset, OAuth, SSO, and session checks.
+
+## Validation
+
+Run browser login, logout, session refresh, password reset, OAuth callback, SSO callback, protected-route checks, and admin user management before changing production DNS or cookies.

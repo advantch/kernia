@@ -9,15 +9,15 @@ core router maps camelCase JSON keys onto the snake_case dataclass fields.
 
 from __future__ import annotations
 
-from better_auth.auth import init
-from better_auth.plugins.access import create_access_control
-from better_auth.plugins.admin import admin
-from better_auth.plugins.admin.plugin import AdminOptions
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions, EmailPasswordOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+import pytest
+
+from kernia.auth import init
+from kernia.plugins.admin import admin
+from kernia.plugins.email_password import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 # ---------------------------------------------------------------------------
 # Harness helpers
@@ -27,7 +27,7 @@ from better_auth_test_utils import ASGIDriver
 def _make_auth(admin_plugin: object | None = None) -> tuple[object, object]:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             email_and_password=EmailPasswordOptions(enabled=True),

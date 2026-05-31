@@ -10,12 +10,11 @@ import json
 from datetime import UTC
 
 import pytest
-from authlib.jose import JsonWebKey
-from authlib.jose import jwt as jose_jwt
-from better_auth.auth import init
-from better_auth.plugins.jwt import jwt as jwt_plugin
-from better_auth.plugins.jwt import plugin as jwt_mod
-from better_auth.plugins.jwt.plugin import (
+from authlib.jose import JsonWebKey, jwt as jose_jwt
+
+from kernia.auth import init
+from kernia.plugins.jwt import jwt as jwt_plugin
+from kernia.plugins.jwt.plugin import (
     JwtOptions,
     _create_key,
     _get_active_key,
@@ -24,14 +23,14 @@ from better_auth.plugins.jwt.plugin import (
     to_exp_jwt,
     verify_local_jwt,
 )
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 def _auth(opts: JwtOptions | None = None):
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[jwt_plugin(opts)],

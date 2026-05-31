@@ -6,17 +6,19 @@ client-side, then posts it to `/siwe/verify` and asserts a session is issued.
 
 from __future__ import annotations
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.siwe import siwe
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+import pytest
+
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.siwe import siwe
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _build() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), siwe()],

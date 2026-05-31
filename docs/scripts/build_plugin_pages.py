@@ -1,4 +1,4 @@
-"""Generate one Markdown page per plugin under packages/core/src/better_auth/plugins/.
+"""Generate one Markdown page per plugin under packages/core/src/kernia/plugins/.
 
 Reads each plugin's `__init__.py` docstring and, where the constructor can be
 imported, walks its endpoint list and schema. Writes one file per plugin into
@@ -16,9 +16,14 @@ import importlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLUGINS_DIR = REPO_ROOT / "packages" / "core" / "src" / "better_auth" / "plugins"
+PLUGINS_DIR = REPO_ROOT / "packages" / "core" / "src" / "kernia" / "plugins"
 DOCS_DIR = REPO_ROOT / "docs" / "plugins"
 TEMPLATE = (REPO_ROOT / "docs" / "_includes" / "_plugin_template.md").read_text()
+CONSTRUCTOR_OVERRIDES = {
+    "custom_session": "with_custom_session",
+    "email_password": "email_and_password",
+    "haveibeenpwned": "have_i_been_pwned",
+}
 
 
 def _docstring_from_init(init_py: Path) -> str:
@@ -27,11 +32,17 @@ def _docstring_from_init(init_py: Path) -> str:
     except SyntaxError:
         return "_(plugin docstring unavailable)_"
     doc = ast.get_docstring(mod)
-    return doc or "_(no docstring)_"
+    if not doc:
+        return "_(no docstring)_"
+    return (
+        doc.replace("reference/packages/better-auth/src/", "Better Auth reference: ")
+        .replace("reference/packages/better-auth/src", "Better Auth reference")
+        .replace("better-auth", "Better Auth")
+    )
 
 
 def _constructor_name(plugin_dir: Path) -> str:
-    """Heuristic: read `__all__` from the package init and pick the first export."""
+    """Heuristic: read `__all__` and pick the first plugin factory export."""
     init_py = plugin_dir / "__init__.py"
     try:
         mod = ast.parse(init_py.read_text())
@@ -41,10 +52,21 @@ def _constructor_name(plugin_dir: Path) -> str:
         if isinstance(node, ast.Assign):
             for tgt in node.targets:
                 if isinstance(tgt, ast.Name) and tgt.id == "__all__":
-                    if isinstance(node.value, ast.List | ast.Tuple):
+                    if isinstance(node.value, (ast.List, ast.Tuple)):
+                        exports: list[str] = []
                         for elt in node.value.elts:
                             if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                                return elt.value
+                                exports.append(elt.value)
+                        if plugin_dir.name in exports:
+                            return plugin_dir.name
+                        override = CONSTRUCTOR_OVERRIDES.get(plugin_dir.name)
+                        if override in exports:
+                            return override
+                        for export in exports:
+                            if export.islower() and not export.startswith(("build_", "create_", "generate_")):
+                                return export
+                        if exports:
+                            return exports[0]
     return plugin_dir.name
 
 
@@ -92,7 +114,7 @@ def _schema_section(plugin_obj: object | None) -> str:
 
 def render_plugin(plugin_dir: Path) -> tuple[str, str]:
     name = plugin_dir.name
-    mod_path = f"better_auth.plugins.{name}"
+    mod_path = f"kernia.plugins.{name}"
     init_py = plugin_dir / "__init__.py"
 
     docstring = _docstring_from_init(init_py)
@@ -136,10 +158,27 @@ def main() -> None:
         print(f"wrote {out_path.relative_to(REPO_ROOT)}")
 
     # Index page.
-    lines = ["# Plugins", "", "Each page below documents a single built-in plugin.", ""]
+    lines = [
+        "# Plugins",
+        "",
+        "Each page below documents a built-in plugin or standalone package.",
+        "",
+    ]
     for name in rendered:
         title = name.replace("_", " ").title()
         lines.append(f"- [{title}]({name}.md)")
+    lines.extend(
+        [
+            "- [Stripe](stripe.md)",
+            "- [API keys](api_key.md)",
+            "- [Passkeys](passkey.md)",
+            "- [SSO](sso.md)",
+            "- [SCIM](scim.md)",
+            "- [OAuth provider](oauth_provider.md)",
+            "- [Redis storage](redis_storage.md)",
+            "- [Adapters](adapters.md)",
+        ]
+    )
     (DOCS_DIR / "index.md").write_text("\n".join(lines) + "\n")
     print(f"wrote docs/plugins/index.md ({len(rendered)} plugins)")
 

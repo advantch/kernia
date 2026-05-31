@@ -7,16 +7,16 @@ cd "$ROOT"
 
 # (path, dist-name, import-name, summary, deps)
 PKGS=(
-    "packages/mongodb_adapter|better-auth-mongodb|better_auth_mongodb|MongoDB adapter for better-auth (motor)|better-auth,motor>=3"
-    "packages/redis_storage|better-auth-redis-storage|better_auth_redis_storage|Redis-backed secondary storage for better-auth|better-auth,redis>=5"
-    "packages/api_key|better-auth-api-key|better_auth_api_key|API key plugin for better-auth|better-auth"
-    "packages/passkey|better-auth-passkey|better_auth_passkey|WebAuthn/FIDO2 passkey plugin for better-auth|better-auth,webauthn>=2"
-    "packages/sso|better-auth-sso|better_auth_sso|SAML + OIDC SSO plugin for better-auth|better-auth,authlib>=1.3,python3-saml>=1.16"
-    "packages/oauth_provider|better-auth-oauth-provider|better_auth_oauth_provider|OAuth2/OIDC provider (issuer side) plugin|better-auth,authlib>=1.3"
-    "packages/scim|better-auth-scim|better_auth_scim|SCIM 2.0 provisioning plugin|better-auth"
-    "packages/stripe|better-auth-stripe|better_auth_stripe|Stripe billing + webhooks plugin|better-auth,stripe>=10"
-    "packages/starlette_integration|better-auth-starlette|better_auth_starlette|Starlette integration|better-auth,starlette>=0.37"
-    "packages/django_integration|better-auth-django|better_auth_django|Django integration|better-auth,django>=4.2,anyio>=4"
+    "packages/mongodb_adapter|kernia-mongodb|kernia_mongodb|MongoDB adapter for Kernia (motor)|kernia,motor>=3"
+    "packages/redis_storage|kernia-redis-storage|kernia_redis_storage|Redis-backed secondary storage for Kernia|kernia,redis>=5"
+    "packages/api_key|kernia-api-key|kernia_api_key|API key plugin for Kernia|kernia"
+    "packages/passkey|kernia-passkey|kernia_passkey|WebAuthn/FIDO2 passkey plugin for Kernia|kernia,webauthn>=2"
+    "packages/sso|kernia-sso|kernia_sso|SAML + OIDC SSO plugin for Kernia|kernia,authlib>=1.3,python3-saml>=1.16"
+    "packages/oauth_provider|kernia-oauth-provider|kernia_oauth_provider|OAuth2/OIDC provider (issuer side) plugin|kernia,authlib>=1.3"
+    "packages/scim|kernia-scim|kernia_scim|SCIM 2.0 provisioning plugin|kernia"
+    "packages/stripe|kernia-stripe|kernia_stripe|Stripe billing + webhooks plugin|kernia,stripe>=10"
+    "packages/starlette_integration|kernia-starlette|kernia_starlette|Starlette integration|kernia,starlette>=0.37"
+    "packages/django_integration|kernia-django|kernia_django|Django integration|kernia,django>=4.2,anyio>=4"
 )
 
 for entry in "${PKGS[@]}"; do

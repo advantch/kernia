@@ -25,15 +25,15 @@ from __future__ import annotations
 import base64
 from urllib.parse import quote
 
-import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_scim import SCIMOptions, SCIMProvider, scim
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.admin import admin
+from kernia.plugins.email_password import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_api_key import api_key
+from kernia_memory_adapter import memory_adapter
+from kernia_scim import apply_patch_ops, scim
+from kernia_test_utils import ASGIDriver
 
 USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 LIST_RESPONSE = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
@@ -46,20 +46,33 @@ PATCH_OP = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 # ---------------------------------------------------------------------------
 
 
-class Harness:
-    def __init__(self, scim_options: SCIMOptions | None = None) -> None:
-        self.db = memory_adapter()
-        self.auth = init(
-            BetterAuthOptions(
-                database=self.db,
-                secret="test-secret-key",
-                base_url="http://localhost:3000",
-                plugins=[
-                    email_and_password(),
-                    scim(scim_options),
-                    organization(),
-                ],
-            )
+def test_apply_patch_nested_path() -> None:
+    doc: dict = {}
+    apply_patch_ops(doc, [{"op": "Add", "path": "name.formatted", "value": "X"}])
+    assert doc == {"name": {"formatted": "X"}}
+
+
+def test_apply_patch_bulk_replace_without_path() -> None:
+    doc: dict = {"a": 1}
+    apply_patch_ops(doc, [{"op": "Replace", "value": {"a": 2, "b": 3}}])
+    assert doc == {"a": 2, "b": 3}
+
+
+def test_apply_patch_unknown_op_raises() -> None:
+    with pytest.raises(ValueError):
+        apply_patch_ops({}, [{"op": "Mutate", "value": 1}])
+
+
+# ----- Integration --------------------------------------------------------
+
+
+async def _admin_driver() -> tuple[ASGIDriver, object]:
+    db = memory_adapter()
+    auth = init(
+        KerniaOptions(
+            database=db,
+            secret="test-secret-key",
+            plugins=[email_and_password(), admin(), api_key(), scim()],
         )
         self.app = self.auth.router.mount()
         self._default_driver: ASGIDriver | None = None
@@ -744,7 +757,7 @@ async def test_should_clear_secondary_storage_sessions_when_deleting_a_user() ->
 
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             base_url="http://localhost:3000",

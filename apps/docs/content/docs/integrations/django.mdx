@@ -1,0 +1,92 @@
+---
+title: "Django"
+description: "Bridge Kernia's async auth router into Django views and middleware."
+---
+
+The Django integration adapts Kernia's ASGI router to Django's sync request/response model. It provides a class-based view for auth routes, middleware that hydrates `request.kernia_session`, and a `require_session` decorator for protected views.
+
+## Installation
+
+```bash
+uv add kernia kernia-django django asgiref
+```
+
+## Settings
+
+Create the Kernia auth instance in normal Python code, then expose it through `settings.KERNIA` so middleware can resolve sessions.
+
+```python title="settings.py"
+from myapp.auth import auth
+
+INSTALLED_APPS = [
+    # ...
+    "kernia_django",
+]
+
+MIDDLEWARE = [
+    # ...
+    "kernia_django.KerniaMiddleware",
+]
+
+KERNIA = auth
+```
+
+## Auth instance
+
+```python title="myapp/auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.types.init_options import EmailPasswordOptions
+
+from .adapter import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ.get("KERNIA_BASE_URL", "http://localhost:8000/api/auth"),
+    base_path="/api/auth",
+    email_and_password=EmailPasswordOptions(enabled=True),
+))
+```
+
+## URL configuration
+
+Use `setup(auth)` to register the auth bridge at the configured base path.
+
+```python title="urls.py"
+from django.urls import include, path
+from kernia_django import setup
+
+from myapp.auth import auth
+from myapp.views import dashboard
+
+urlpatterns = [
+    path("api/auth/", include(setup(auth))),
+    path("dashboard/", dashboard),
+]
+```
+
+## Protected views
+
+```python title="views.py"
+from django.http import JsonResponse
+from kernia_django import require_session
+
+@require_session
+def dashboard(request):
+    return JsonResponse({"user_id": request.kernia_session.user_id})
+```
+
+`KerniaMiddleware` attaches `request.kernia_session` and a lazy `request.kernia_user` accessor. It reads the compatibility cookie `better-auth.session_token` and resolves it through the configured adapter.
+
+## Runtime boundary
+
+Django remains sync at the edge. `KerniaView` and `KerniaMiddleware` cross into the async Kernia core through `asgiref.sync.async_to_sync`, so each auth request pays one thread hop. Use ASGI deployment if you need high concurrency on the auth endpoints.
+
+## Troubleshooting
+
+- If `request.kernia_session` is always `None`, confirm `KERNIA = auth` is set and the middleware is installed after cookie middleware.
+- If auth URLs 404, ensure `path("api/auth/", include(setup(auth)))` matches `KerniaOptions.base_path`.
+- If OAuth redirects to the wrong callback, set `KERNIA_BASE_URL` to the public auth URL including `/api/auth`.

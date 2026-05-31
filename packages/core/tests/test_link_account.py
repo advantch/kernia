@@ -1,15 +1,16 @@
-"""Unit tests for better_auth.oauth2.link_account."""
+"""Unit tests for kernia.oauth2.link_account."""
 
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.error import APIError
-from better_auth.oauth2.link_account import handle_oauth_user_info
-from better_auth.social_providers._base import OAuthUserProfile
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+
+from kernia.auth import init
+from kernia.error import APIError
+from kernia.oauth2.link_account import handle_oauth_user_info
+from kernia.social_providers._base import OAuthUserProfile
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 def _profile(sub: str = "g-1", email: str = "alice@example.com", verified: bool = True) -> OAuthUserProfile:
@@ -24,7 +25,7 @@ def _profile(sub: str = "g-1", email: str = "alice@example.com", verified: bool 
 
 
 def _build_ctx():
-    auth = init(BetterAuthOptions(database=memory_adapter(), secret="s"))
+    auth = init(KerniaOptions(database=memory_adapter(), secret="s"))
     return auth.context
 
 
@@ -176,10 +177,10 @@ async def test_disable_sign_up_raises_when_no_match() -> None:
 
 
 async def test_tokens_encrypted_when_option_set() -> None:
-    from better_auth.oauth2.encryption import is_encrypted
+    from kernia.oauth2.encryption import is_encrypted
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="cookie-secret",
             advanced={"encrypt_oauth_tokens": True},

@@ -1,0 +1,64 @@
+---
+title: "Magic Link"
+description: "Send one-click sign-in links by email."
+---
+
+Magic link auth sends a signed, short-lived URL to the user. The verification route consumes the token, creates or links the user according to configuration, and sets a session cookie.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.magic_link import magic_link
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.magic_link import magic_link
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        magic_link(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/magic-link">
+  Creates a magic-link token and calls the configured sender.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/magic-link/verify">
+  Consumes the token and creates a session.
+</APIMethod>
+
+## Schema impact
+
+Reuses the core `verification` table.
+
+## Behavior and options
+
+- Configure `advanced["magic-link"]` with `send_magic_link`, `expires_in`, and `disable_sign_up`.
+- Keep links short-lived and single-use.
+- Use explicit unavailable states in the UI when no sender is configured.
+
+## Test and demo coverage
+
+Test send, verify, expired token, reused token, disabled sign-up, missing sender, and the final session cookie.

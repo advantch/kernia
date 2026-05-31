@@ -1,0 +1,98 @@
+---
+title: "Next.js"
+description: "Use Next.js as the frontend for a Kernia Python auth backend."
+---
+
+Better Auth's Next.js guide mounts the auth handler in a Next route. In a Kernia app, that server handler is Python. Next.js should either call the Python auth API directly from client components, or proxy requests to the Python backend from route handlers when you need a same-origin deployment.
+
+## Backend requirement
+
+Run Kernia behind FastAPI, Starlette, or Django and expose an auth base URL such as `https://api.example.com/api/auth`.
+
+~~~python title="app/auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.types.init_options import EmailPasswordOptions
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    trusted_origins=("https://app.example.com",),
+    email_and_password=EmailPasswordOptions(enabled=True),
+))
+~~~
+
+## Client helper
+
+~~~ts title="src/lib/auth.ts"
+export const authBaseURL = process.env.NEXT_PUBLIC_AUTH_BASE_URL!;
+
+export async function authRequest(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${authBaseURL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+~~~
+
+## Sign in from a client component
+
+~~~tsx title="app/login/email-form.tsx"
+"use client";
+
+import { authRequest } from "@/lib/auth";
+
+export function EmailForm() {
+  async function onSubmit(formData: FormData) {
+    await authRequest("/sign-in/email", {
+      method: "POST",
+      body: JSON.stringify({
+        email: formData.get("email"),
+        password: formData.get("password"),
+        remember_me: true,
+      }),
+    });
+  }
+
+  return <form action={onSubmit}>{/* fields */}</form>;
+}
+~~~
+
+## Server components
+
+Server components cannot see browser HTTP-only cookies unless you forward them explicitly. Use `headers()` to pass the cookie header to the Python auth API.
+
+~~~ts title="app/dashboard/page.tsx"
+import { headers } from "next/headers";
+
+export default async function DashboardPage() {
+  const cookie = (await headers()).get("cookie") ?? "";
+  const response = await fetch(`${process.env.AUTH_BASE_URL}/get-session`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  const session = response.ok ? await response.json() : null;
+  return <pre>{JSON.stringify(session, null, 2)}</pre>;
+}
+~~~
+
+## Same-origin proxy option
+
+If you need cookies scoped to the Next domain, proxy `/api/auth/:path*` to the Python service at the platform edge. The proxy must preserve method, body, cookie headers, and every `Set-Cookie` response header.
+
+## Route protection
+
+Protect data in the Python API with `require_session`. Next middleware is useful for navigation, but it is not the authorization boundary.
+
+## OAuth callbacks
+
+Provider dashboards should point to the Python callback URL. If you use a same-origin proxy, point the provider at the public proxied URL and make sure it forwards to Python unchanged.

@@ -20,17 +20,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import (
-    custom_session,
-    email_and_password,
-    multi_session,
-    with_custom_session,
-)
-from better_auth.types.init_options import BetterAuthOptions, SessionOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.adapter_fixtures import all_adapters_param
+
+from kernia.auth import init
+from kernia.plugins import email_and_password, with_custom_session
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.adapter_fixtures import all_adapters_param
 
 
 class DictSessionProvider:
@@ -77,7 +72,7 @@ async def test_custom_session_provider_is_used(adapter_factory) -> None:
     adapter = await adapter_factory()
     provider = DictSessionProvider()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="s",
             plugins=[email_and_password(), with_custom_session(provider)],
@@ -100,6 +95,7 @@ async def test_custom_session_provider_is_used(adapter_factory) -> None:
     assert provider.create_calls == 1
     assert len(provider.store) == 1
     # The default adapter has no session row.
+    from kernia.types.adapter import Where
 
     assert await adapter.count(model="session") == 0  # type: ignore[arg-type]
 

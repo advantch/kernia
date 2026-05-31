@@ -13,7 +13,8 @@ import time
 
 import httpx
 import pytest
-from better_auth.oauth2 import (
+
+from kernia.oauth2 import (
     pkce_challenge,
     pkce_verifier,
     verify_id_token,

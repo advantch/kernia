@@ -1,0 +1,62 @@
+---
+title: "Captcha"
+description: "Gate sensitive auth endpoints behind captcha verification."
+---
+
+The captcha plugin adds a before hook to selected routes. It extracts `x-captcha-token` or `x-captcha-response`, verifies the token with the configured provider, and blocks the auth request when verification fails.
+
+## Installation
+
+~~~bash
+uv add kernia httpx
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.captcha import captcha
+from kernia.plugins.captcha.providers import turnstile
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.captcha import captcha
+from kernia.plugins.captcha.providers import turnstile
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        captcha(turnstile(os.environ["TURNSTILE_SECRET"])),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/captcha/verify">
+  Verifies a captcha token directly for UI flows that want a preflight check.
+</APIMethod>
+
+## Schema impact
+
+No database changes. Captcha state lives at the provider and in the request hook.
+
+## Behavior and options
+
+- Built-in providers include Turnstile, reCAPTCHA v2, reCAPTCHA v3, hCaptcha, and CaptchaFox.
+- Default protected paths are `/sign-in/email`, `/sign-up/email`, and `/forget-password`.
+- Pass `protected_endpoints` to gate additional plugin routes such as OTP or anonymous sign-in.
+
+## Test and demo coverage
+
+Use an injected `httpx` transport to test provider success, provider failure, missing tokens, protected endpoint blocking, and direct verify route behavior.

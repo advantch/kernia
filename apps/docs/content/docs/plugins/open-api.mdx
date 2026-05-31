@@ -1,0 +1,64 @@
+---
+title: "Open API"
+description: "Generate an OpenAPI document and Scalar UI for the mounted auth surface."
+---
+
+The Open API plugin walks the registered Kernia router and emits an OpenAPI 3.1 document with routes from core and enabled plugins. It also serves a Scalar documentation page backed by that document.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.open_api import open_api
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.open_api import open_api
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        open_api(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/openapi.json">
+  Returns the generated OpenAPI 3.1 document for the current Kernia route table.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/scalar">
+  Serves an HTML Scalar UI pointed at `/openapi.json`.
+</APIMethod>
+
+## Schema impact
+
+No database changes. The document is generated from router metadata and Pydantic request models.
+
+## Behavior and options
+
+- Generated schemas reflect only plugins enabled in the current `auth` instance.
+- Treat the document as public API documentation; avoid exposing private admin instances without access controls.
+- Rebuild after route or plugin changes.
+
+## Test and demo coverage
+
+Test that expected routes appear, disabled plugins do not appear, request body schemas are emitted, Scalar loads, and the document validates as OpenAPI 3.1.

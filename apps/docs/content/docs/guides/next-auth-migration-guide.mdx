@@ -1,0 +1,74 @@
+---
+title: "Migrating from Auth.js to Kernia"
+description: "Move an Auth.js or NextAuth.js app to a Kernia Python backend."
+---
+
+Auth.js migrations usually happen when the product moves auth responsibility from a JavaScript framework into a Python backend. Keep the migration focused on the HTTP contract: user data, account links, sessions, cookies, callback URLs, and frontend session reads.
+
+## Inventory
+
+- Providers configured in Auth.js.
+- Adapter tables and user/account/session identifiers.
+- Session strategy: JWT or database.
+- Callback logic that adds fields to sessions or tokens.
+- Middleware and route protection logic.
+- Custom sign-in, sign-out, error, and callback pages.
+
+## Kernia setup
+
+```python title="auth.py"
+from kernia.social_providers import github, google
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url="https://api.example.com/api/auth",
+    social_providers={
+        "github": github(client_id=env.GITHUB_CLIENT_ID, client_secret=env.GITHUB_CLIENT_SECRET),
+        "google": google(client_id=env.GOOGLE_CLIENT_ID, client_secret=env.GOOGLE_CLIENT_SECRET),
+    },
+))
+```
+
+## Data mapping
+
+| Auth.js | Kernia |
+|---|---|
+| User table | `user` model. |
+| Account table | `account` model. |
+| Session table | `session` model when using database sessions. |
+| Verification token | `verification` model. |
+| JWT callback fields | Custom user/session fields or app API response. |
+
+## Frontend migration
+
+Server components and route handlers should forward cookies to Kernia:
+
+```ts title="session.ts"
+import { headers } from "next/headers";
+
+export async function getServerSession() {
+  const cookie = (await headers()).get("cookie") ?? "";
+  const response = await fetch(`${process.env.AUTH_BASE_URL}/get-session`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  return response.ok ? response.json() : null;
+}
+```
+
+## Provider callbacks
+
+Move provider callback URLs from the Next.js app to the Python auth mount:
+
+```text
+https://api.example.com/api/auth/callback/google
+```
+
+## Cutover
+
+Run both systems in staging first. Import users and accounts, switch frontend session reads, test sign-in/sign-out, then update provider consoles. If Auth.js used JWT sessions, plan for users to sign in again unless you intentionally implement a legacy token bridge.
+
+## Validation
+
+Test email sign-in, social sign-in, account linking, server-rendered session reads, middleware redirects, protected API routes, logout, and callback errors.

@@ -1,0 +1,51 @@
+---
+title: "Basic Usage"
+description: "Sign in, read sessions, update users, and sign out with Kernia."
+---
+
+## Create auth
+
+```python
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.types.init_options import EmailPasswordOptions
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    email_and_password=EmailPasswordOptions(enabled=True),
+))
+```
+
+## Sign in
+
+<APIMethod method="POST" path="/api/auth/sign-in/email">
+  Body: `{ "email": "user@example.com", "password": "secure-password", "remember_me": true }`.
+</APIMethod>
+
+## Read session
+
+<APIMethod method="GET" path="/api/auth/get-session">
+  Returns the active session and user or `null`.
+</APIMethod>
+
+## Protect backend routes
+
+```python
+from fastapi import Depends
+from kernia_fastapi import require_session
+from kernia.types.context import Session
+
+@app.get("/api/me")
+async def me(session: Session = Depends(require_session)):
+    return {"user_id": session.user_id}
+```
+
+## Sign out
+
+<APIMethod method="POST" path="/api/auth/sign-out">
+  Revokes the current session and clears cookies.
+</APIMethod>

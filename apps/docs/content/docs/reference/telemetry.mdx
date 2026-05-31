@@ -1,0 +1,74 @@
+---
+title: "Telemetry"
+description: "Opt-in telemetry behavior for Kernia deployments."
+---
+
+Telemetry is disabled unless you enable it. When enabled, Kernia should emit anonymous operational events that help maintainers understand package usage and CLI outcomes without collecting user data, secrets, provider credentials, database URLs, tokens, or email addresses.
+
+## What can be collected
+
+Telemetry events should be aggregate and redacted:
+
+| Field | Example |
+|---|---|
+| Package version | `0.1.0` |
+| Runtime | `python 3.12` |
+| Environment | `development`, `production`, `ci` |
+| Adapter kind | `sqlalchemy`, `mongo`, `memory` |
+| Framework | `fastapi`, `starlette`, `django` |
+| Plugin ids | `api-key`, `stripe`, `sso` |
+| CLI action | `generate`, `migrate`, `info` |
+| Outcome | `success`, `no_changes`, `failed` |
+
+## Enable telemetry
+
+```python title="auth.py"
+from kernia.telemetry import telemetry
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    plugins=[
+        telemetry(enabled=True),
+    ],
+))
+```
+
+Or use an environment variable if your deployment standardizes runtime flags:
+
+```dotenv title=".env"
+KERNIA_TELEMETRY=1
+```
+
+## Disable explicitly
+
+```python title="auth.py"
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    telemetry=False,
+))
+```
+
+## Debug locally
+
+Debug mode should print the redacted telemetry payload without sending it:
+
+```dotenv title=".env"
+KERNIA_TELEMETRY_DEBUG=1
+```
+
+## Privacy rules
+
+Telemetry must not include:
+
+- Emails, names, usernames, phone numbers, or IP addresses.
+- OAuth client ids or client secrets.
+- Stripe keys, webhook secrets, SCIM tokens, or API keys.
+- Database URLs.
+- Cookie values, session tokens, JWTs, OTPs, or reset tokens.
+- Full auth configuration objects.
+
+## Test coverage
+
+Tests should verify telemetry is off by default, debug mode does not send events, CI/test environments do not send unless explicitly enabled, and redaction removes secret-like values from every event.

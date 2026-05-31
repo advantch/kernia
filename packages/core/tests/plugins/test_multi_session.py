@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from better_auth.cookies import sign, verify
-from better_auth.plugins.multi_session.routes import (
+from kernia.cookies import sign, verify
+from kernia.plugins.multi_session.routes import (
     SESSION_LIST_COOKIE,
     _decode_list,
     _encode_list,

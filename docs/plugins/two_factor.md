@@ -1,11 +1,13 @@
 # Two Factor
 
-> Module: `better_auth.plugins.two_factor`
-> Constructor: `TWO_FACTOR_ERROR_CODES`
+> Module: `kernia.plugins.two_factor`
+> Constructor: `two_factor`
 
 two_factor plugin — TOTP + OTP + backup codes + trusted devices.
 
-Port of `reference/packages/better-auth/src/plugins/two-factor/`.
+Port of `Better Auth reference: plugins/two-factor/`. Adds two tables
+(`twoFactorConfirmation`, `twoFactorBackupCode`) and extends `user` with
+`twoFactorEnabled` + `twoFactorSecret`.
 
 Schema:
   * adds a `twoFactor` table (secret, backupCodes, verified, userId) — the
@@ -37,29 +39,42 @@ Options are read from `BetterAuthOptions.advanced["two-factor"]`:
         }
     }
 
-Requires `pyotp` (declared under the `two-factor` extra of `better-auth`).
+Requires `pyotp` (declared under the `two-factor` extra of `Better Auth`).
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/two-factor/enable` |
+| `POST` | `/two-factor/verify-totp` |
+| `POST` | `/two-factor/disable` |
+| `POST` | `/two-factor/generate-backup-codes` |
+| `POST` | `/two-factor/verify-backup-code` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+**New tables:**
+
+- `twoFactorConfirmation` — fields: id, userId, expiresAt, createdAt
+- `twoFactorBackupCode` — fields: id, userId, codeHash, used, createdAt
+
+**Extends existing tables:**
+
+- `user` adds: twoFactorEnabled, twoFactorSecret
 
 ## Usage
 
 ```python
-from better_auth.plugins.two_factor import TWO_FACTOR_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.two_factor import two_factor
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[
-            TWO_FACTOR_ERROR_CODES(),
+            two_factor(),
         ],
     )
 )

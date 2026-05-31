@@ -6,16 +6,17 @@ from pathlib import Path
 
 import pytest
 
-FIXTURE_CONFIG = '''"""Fixture better-auth config for CLI tests."""
 
-from better_auth import BetterAuthOptions, BetterAuthPlugin, PluginSchema
-from better_auth.auth import init
-from better_auth_memory_adapter import memory_adapter
-from better_auth.plugins.email_password.plugin import email_and_password
-from better_auth.types.adapter import FieldDef, ModelDef
+FIXTURE_CONFIG = '''"""Fixture Kernia config for CLI tests."""
+
+from kernia import KerniaOptions, KerniaPlugin, PluginSchema
+from kernia.auth import init
+from kernia_memory_adapter import memory_adapter
+from kernia.plugins.email_password.plugin import email_and_password
+from kernia.types.adapter import FieldDef, ModelDef
 
 
-def _stub_plugin() -> BetterAuthPlugin:
+def _stub_plugin() -> KerniaPlugin:
     """A trivial plugin that adds a new `notes` table to exercise schema codegen."""
     from dataclasses import dataclass
 
@@ -49,7 +50,7 @@ def _stub_plugin() -> BetterAuthPlugin:
 
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=memory_adapter(),
         secret="test-secret-for-cli-fixture",
         base_url="http://localhost:3000",

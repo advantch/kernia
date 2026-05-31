@@ -1,0 +1,55 @@
+---
+title: "SQLite"
+description: "Run Kernia locally or in single-process deployments with SQLite through SQLAlchemy."
+---
+
+SQLite is best for local development, demos, tests, and small single-process deployments. Kernia uses the SQLAlchemy adapter with the `aiosqlite` driver.
+
+## Installation
+
+```bash
+uv add kernia kernia-sqlalchemy sqlalchemy aiosqlite alembic
+```
+
+## Configuration
+
+```python title="auth.py"
+from sqlalchemy.ext.asyncio import create_async_engine
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+engine = create_async_engine("sqlite+aiosqlite:///./kernia.db")
+adapter = sqlalchemy_adapter(engine)
+```
+
+For tests, use a temporary file per worker:
+
+```python
+engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/kernia.db")
+```
+
+## Migrations
+
+Generate Alembic migrations from the resolved Kernia schema, then apply them before starting the app.
+
+```bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+alembic upgrade head
+```
+
+## Limits
+
+SQLite does not behave like a production multi-writer database. Avoid using it for high-volume password, session, API key, or webhook traffic. Use PostgreSQL or another server database for SaaS production.
+
+## Concurrency notes
+
+SQLite serializes writes. Session creation, verification token consumption, API key usage updates, Stripe webhook processing, and admin config writes can contend under real traffic. Keep SQLite demos honest by documenting that they are local-only.
+
+## Test usage
+
+SQLite is useful for integration tests when you want SQL semantics without containers. Keep tests isolated with a temporary file per test worker and reset migrations between tests.
+
+## Troubleshooting
+
+- `database is locked`: reduce parallel writes or move the test to PostgreSQL.
+- Missing tables: run Alembic migrations before the app starts.
+- Production latency: use a server database for multi-user SaaS deployments.

@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.open_api import open_api
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.open_api import open_api
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 @pytest.fixture
 def driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="x" * 32,
             plugins=[email_and_password(), open_api()],

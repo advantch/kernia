@@ -18,20 +18,22 @@ pytest.importorskip("django")
 @pytest.fixture
 def django_setup():
     import django
-    from better_auth.auth import init
-    from better_auth.plugins.email_password import email_and_password
-    from better_auth.types.init_options import BetterAuthOptions
-    from better_auth_django import (
+    from django.conf import settings
+
+    from kernia.auth import init
+    from kernia.plugins.email_password import email_and_password
+    from kernia.types.init_options import KerniaOptions
+    from kernia_django import (
+        KerniaMiddleware,
         require_session,
     )
-    from better_auth_django import setup as ba_setup
-    from better_auth_memory_adapter import memory_adapter
-    from django.conf import settings
+    from kernia_django import setup as ba_setup
+    from kernia_memory_adapter import memory_adapter
     from django.http import JsonResponse
     from django.urls import path
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password()],
@@ -40,10 +42,10 @@ def django_setup():
 
     @require_session
     def me(request):  # type: ignore[no-untyped-def]
-        return JsonResponse({"user_id": request.better_auth_session.user_id})
+        return JsonResponse({"user_id": request.kernia_session.user_id})
 
     def maybe_me(request):  # type: ignore[no-untyped-def]
-        sess = getattr(request, "better_auth_session", None)
+        sess = getattr(request, "kernia_session", None)
         return JsonResponse({"signed_in": sess is not None})
 
     urlpatterns = [
@@ -53,7 +55,7 @@ def django_setup():
     ]
 
     # Synthesize a urlconf module for Django.
-    urlconf_name = "better_auth_django_test_urls"
+    urlconf_name = "kernia_django_test_urls"
     mod = types.ModuleType(urlconf_name)
     mod.urlpatterns = urlpatterns  # type: ignore[attr-defined]
     sys.modules[urlconf_name] = mod
@@ -68,18 +70,18 @@ def django_setup():
                     "NAME": ":memory:",
                 }
             },
-            INSTALLED_APPS=["better_auth_django"],
-            MIDDLEWARE=["better_auth_django.middleware.BetterAuthMiddleware"],
+            INSTALLED_APPS=["kernia_django"],
+            MIDDLEWARE=["kernia_django.middleware.KerniaMiddleware"],
             ROOT_URLCONF=urlconf_name,
             ALLOWED_HOSTS=["*"],
             USE_TZ=True,
-            BETTER_AUTH=auth,
+            KERNIA=auth,
         )
         django.setup()
     else:
-        settings.BETTER_AUTH = auth
+        settings.KERNIA = auth
         settings.ROOT_URLCONF = urlconf_name
-        settings.MIDDLEWARE = ["better_auth_django.middleware.BetterAuthMiddleware"]
+        settings.MIDDLEWARE = ["kernia_django.middleware.KerniaMiddleware"]
         # Reuse the existing urlconf module (already in sys.modules) but
         # rebind its urlpatterns so it points at the freshly-built auth.
         existing = sys.modules[urlconf_name]

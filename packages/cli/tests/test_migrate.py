@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import sqlalchemy as sa
-from better_auth_cli.commands.generate import generate
-from better_auth_cli.commands.migrate import migrate
 from click.testing import CliRunner
+
+from kernia_cli.commands.generate import generate
+from kernia_cli.commands.migrate import migrate
 
 
 def test_generate_then_migrate_creates_tables(

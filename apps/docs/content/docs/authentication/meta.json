@@ -1,0 +1,18 @@
+{
+  "title": "Authentication",
+  "pages": [
+    "apple",
+    "discord",
+    "email-password",
+    "facebook",
+    "github",
+    "gitlab",
+    "google",
+    "linkedin",
+    "microsoft",
+    "slack",
+    "spotify",
+    "twitter",
+    "other-social-providers"
+  ]
+}

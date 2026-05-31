@@ -1,0 +1,70 @@
+---
+title: "Facebook"
+description: "Configure Facebook Login for Kernia."
+---
+
+<ProviderHeading provider="Facebook" />
+
+Facebook Login requires an app in Meta for Developers and valid OAuth redirect URIs. Kernia handles the backend code exchange and stores the Facebook account id as a linked account.
+
+## Create the Meta app
+
+In Meta for Developers, create an app, enable Facebook Login, and add redirect URIs:
+
+```text
+http://localhost:8000/api/auth/callback/facebook
+https://api.example.com/api/auth/callback/facebook
+```
+
+Copy the app ID and app secret.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import facebook
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "facebook": facebook(
+            client_id=env.FACEBOOK_CLIENT_ID,
+            client_secret=env.FACEBOOK_CLIENT_SECRET,
+            scopes=("email", "public_profile"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts
+const response = await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "facebook", callback_url: appCallbackURL }),
+});
+```
+
+## App review
+
+Basic profile and email are commonly available. Additional permissions require Meta app review and should not be shown in the UI until the app is approved.
+
+## Troubleshooting
+
+- `URL Blocked`: add the exact callback URL in the Meta app settings.
+- Missing email: the user may not have a verified email or the email permission was not granted.
+- Development mode: only app roles can sign in until the Meta app is live.
+
+## Test coverage
+
+Test denied consent, missing email, verified email, account linking, and production callback URL configuration before enabling Facebook in the SaaS demo.

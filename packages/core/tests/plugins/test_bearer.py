@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from better_auth.cookies import sign
-from better_auth.plugins.bearer.plugin import BearerOptions, _make_on_request
+from kernia.cookies import sign
+from kernia.plugins.bearer.plugin import BearerOptions, _make_on_request
 
 
 def test_bearer_options_default_requires_signature() -> None:

@@ -10,30 +10,32 @@ import secrets
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.db.schema import CORE_MODELS
-from better_auth.plugins import email_and_password, username
-from better_auth.types.adapter import ModelDef
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver, docker_available
+
+from kernia.auth import init
+from kernia.db.schema import CORE_MODELS
+from kernia.plugins import email_and_password, username
+from kernia.types.adapter import ModelDef
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver, docker_available
 
 
 def _extended_user_model() -> ModelDef:
-    from better_auth.plugins.username import _USERNAME_USER_FIELDS  # type: ignore[attr-defined]
+    from kernia.plugins.username import _USERNAME_USER_FIELDS  # type: ignore[attr-defined]
 
     user = next(m for m in CORE_MODELS if m.name == "user")
     return ModelDef(name="user", fields=tuple(user.fields) + tuple(_USERNAME_USER_FIELDS))
 
 
 async def _memory_factory() -> Any:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     return memory_adapter()
 
 
 async def _sqlite_factory() -> Any:
-    from better_auth_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
+
+    from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -65,10 +67,10 @@ def _adapters() -> tuple[str, list[Any]]:
 
 async def _mongo_placeholder() -> Any:
     try:
-        from better_auth_mongo import mongo_adapter  # type: ignore[attr-defined]
+        from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
     except ImportError:
-        pytest.skip("better_auth_mongo.mongo_adapter is not implemented yet")
-    from better_auth_test_utils.containers import mongodb_container
+        pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
+    from kernia_test_utils.containers import mongodb_container
 
     with mongodb_container() as url:
         return await mongo_adapter(url=url)
@@ -76,7 +78,7 @@ async def _mongo_placeholder() -> Any:
 
 def _build(adapter: Any, username_plugin: Any = None) -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret-key",
             plugins=[email_and_password(), username_plugin or username()],
@@ -112,7 +114,7 @@ async def test_username_sign_up_then_case_insensitive_sign_in(
 
 
 async def test_duplicate_username_409() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     body = {"username": "bob", "password": "abcdefgh"}
@@ -124,7 +126,7 @@ async def test_duplicate_username_409() -> None:
 
 
 async def test_invalid_username_returns_422() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     r = await driver.request(
@@ -137,7 +139,7 @@ async def test_invalid_username_returns_422() -> None:
 
 
 async def test_short_username_returns_422() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     r = await driver.request(

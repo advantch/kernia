@@ -1,0 +1,101 @@
+---
+title: "API Keys"
+description: "Create, list, verify, and revoke hashed API keys."
+---
+
+The API key plugin issues long-lived service credentials for users or organizations. Keys are returned once, stored as password hashes, displayed later by prefix only, and can authenticate requests through `Authorization: ApiKey <key>`.
+
+## Installation
+
+```bash
+uv add kernia-api-key
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_api_key import ApiKeyOptions, api_key
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=(
+        api_key(ApiKeyOptions(default_scope={"documents": ["read"]})),
+    ),
+))
+```
+
+## Key format and storage
+
+Kernia keys use this wire format:
+
+```text
+ba_<8-character-prefix>_<32-character-secret>
+```
+
+Only the prefix and the Argon2 hash of the full key are stored. The plaintext key is returned once from `/api-key/create` and cannot be recovered later.
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/api-key/create">
+  Requires a session. Body: `{ "name": "Production", "organization_id": "org_123", "scope": { "documents": ["read"] }, "expires_in": 2592000 }`. Returns `{ "id", "key", "name", "keyPrefix", "expiresAt" }`.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/api-key/list">
+  Requires a session. Returns `{ "keys": [...] }` for the current user with `keyHash` removed.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/api-key/revoke">
+  Requires a session. Body: `{ "id": "api_key_id" }`. Only the owner can revoke the key. Returns `{ "success": true }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/api-key/verify">
+  Body: `{ "key": "ba_prefix_secret" }`. Returns `{ "valid": true, "userId": "user_123", "scope": {...} }` or `{ "valid": false }`.
+</APIMethod>
+
+## Authenticating service requests
+
+The plugin's request hook resolves API key headers into a synthetic session before route handlers run.
+
+```http
+Authorization: ApiKey ba_abcd1234_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+When the key is valid and not expired, downstream handlers see `ctx.session.user_id` as the key owner. In FastAPI routes that use `require_session`, API key requests can therefore pass the same dependency as browser sessions.
+
+## Schema changes
+
+<DatabaseTable
+  title="apiKey"
+  fields={[
+    { name: "id", type: "string", description: "Primary key.", isPrimaryKey: true },
+    { name: "name", type: "string", description: "Human label shown in settings.", isOptional: true },
+    { name: "userId", type: "string", description: "Owning user.", isForeignKey: true, references: { model: "user", field: "id" } },
+    { name: "organizationId", type: "string", description: "Optional organization owner.", isOptional: true },
+    { name: "keyPrefix", type: "string", description: "Display/search prefix from the plaintext key." },
+    { name: "keyHash", type: "string", description: "Hash of the full plaintext key." },
+    { name: "scope", type: "json", description: "Optional permission scope.", isOptional: true },
+    { name: "expiresAt", type: "number", description: "Unix timestamp expiry.", isOptional: true },
+    { name: "lastUsedAt", type: "number", description: "Updated when verification succeeds.", isOptional: true },
+    { name: "createdAt", type: "date", description: "Creation timestamp." },
+    { name: "updatedAt", type: "date", description: "Last update timestamp." },
+  ]}
+/>
+
+## Settings UI requirements
+
+A real SaaS settings page should support create, copy-once, list, show prefix, show last used, show expiry, and revoke. It should never render `keyHash`, never claim an old key can be copied again, and should require confirmation before revoke.
+
+## Troubleshooting
+
+- `API_KEY_INVALID`: the prefix parsed but no stored hash matched the full key.
+- `API_KEY_EXPIRED`: the key exists but `expiresAt` is in the past.
+- `API_KEY_NOT_FOUND`: revoke was attempted for a key outside the current user.
+- Browser session works but API key does not: verify the header uses `ApiKey`, not `Bearer`.

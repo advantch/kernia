@@ -22,19 +22,20 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.plugins.organization.schema import (
+
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.organization import organization
+from kernia.plugins.organization.schema import (
     MEMBER_MODEL,
     ORGANIZATION_MODEL,
     ORGANIZATION_ROLE_MODEL,
     TEAM_MEMBER_MODEL,
     TEAM_MODEL,
 )
-from better_auth.types.adapter import FieldDef, ModelDef, Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver, MockSMTP, SentEmail
+from kernia.types.adapter import FieldDef, ModelDef, Where
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver, MockSMTP, SentEmail
 
 # ---------------------------------------------------------------------------
 # Adapter factories that include the organization plugin's schema.
@@ -46,7 +47,7 @@ from better_auth_test_utils import ASGIDriver, MockSMTP, SentEmail
 
 
 async def _memory_adapter() -> Any:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     return memory_adapter()
 
@@ -102,12 +103,12 @@ def _org_extra_models(*, teams: bool, dynamic_ac: bool) -> tuple[ModelDef, ...]:
 
 async def _sqlite_adapter_with_org(teams: bool, dynamic_ac: bool) -> Any:
     """SQLAlchemy + SQLite, with the extended session + org tables registered."""
-    from better_auth.db.schema.core_tables import (
+    from kernia.db.schema.core_tables import (
         ACCOUNT_MODEL,
         USER_MODEL,
         VERIFICATION_MODEL,
     )
-    from better_auth_sqlalchemy.adapter import (
+    from kernia_sqlalchemy.adapter import (
         SQLAlchemyAdapter,
         build_metadata,
     )
@@ -133,7 +134,7 @@ def org_adapters_param() -> tuple[str, list[Any]]:
 
     Memory and SQLAlchemy/SQLite always run. Postgres/Mongo are gated on Docker.
     """
-    from better_auth_test_utils.containers import docker_available
+    from kernia_test_utils.containers import docker_available
 
     has_docker = docker_available()
 
@@ -183,7 +184,7 @@ async def _make_driver(
             )
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="org-test-secret",
             plugins=[

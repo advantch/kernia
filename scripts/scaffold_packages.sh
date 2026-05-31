@@ -8,12 +8,12 @@ cd "$ROOT"
 
 # Workspace packages: (path, dist-name, import-name, summary)
 WORKSPACE_PKGS=(
-    "packages/core|better-auth|better_auth|Python port of better-auth — framework-agnostic core"
-    "packages/memory_adapter|better-auth-memory-adapter|better_auth_memory_adapter|In-memory adapter for better-auth (tests + dev)"
-    "packages/sqlalchemy_adapter|better-auth-sqlalchemy|better_auth_sqlalchemy|SQLAlchemy 2.x async adapter for better-auth"
-    "packages/fastapi_integration|better-auth-fastapi|better_auth_fastapi|FastAPI integration for better-auth"
-    "packages/cli|better-auth-cli|better_auth_cli|CLI for better-auth (codegen, migrations)"
-    "packages/test_utils|better-auth-test-utils|better_auth_test_utils|Shared test utilities for better-auth"
+    "packages/core|kernia|kernia|Python implementation compatible with Better Auth — framework-agnostic core"
+    "packages/memory_adapter|kernia-memory-adapter|kernia_memory_adapter|In-memory adapter for Kernia (tests + dev)"
+    "packages/sqlalchemy_adapter|kernia-sqlalchemy|kernia_sqlalchemy|SQLAlchemy 2.x async adapter for Kernia"
+    "packages/fastapi_integration|kernia-fastapi|kernia_fastapi|FastAPI integration for Kernia"
+    "packages/cli|kernia-cli|kernia_cli|CLI for Kernia (codegen, migrations)"
+    "packages/test_utils|kernia-test-utils|kernia_test_utils|Shared test utilities for Kernia"
 )
 
 write_pyproject() {
@@ -62,11 +62,11 @@ for stub in "${STUBS[@]}"; do
     cat > "$dir/README.md" <<EOF
 # \`$stub\` (stub)
 
-Layout-locked stub for a future better-auth-python package.
+Layout-locked stub for a future kernia package.
 
 The directory name is committed so that when the feature is implemented, it lands here
 without architectural drift. See \`spec/file-mapping.md\` for the corresponding
-better-auth TypeScript path.
+Better Auth TypeScript path.
 
 Status: **not implemented**.
 EOF

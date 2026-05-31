@@ -1,0 +1,39 @@
+---
+title: "Invalid Code"
+description: "The provided authentication code is invalid, expired, or already consumed."
+---
+
+# Invalid Code
+
+`INVALID_CODE` occurs when Kernia receives a one-time code that cannot be verified. It can happen in OAuth callbacks, email OTP, phone OTP, device authorization, password reset, magic link, or two-factor flows.
+
+## Response shape
+
+```json
+{
+  "code": "INVALID_CODE",
+  "message": "The code is invalid or expired",
+  "status": 400
+}
+```
+
+## Common causes
+
+- The code expired before the user submitted it.
+- The code was already used once.
+- The frontend sent the wrong field name or stripped the value.
+- The user copied whitespace or only part of the code.
+- Secondary storage evicted the verification key.
+- Multiple app instances do not share the verification store.
+
+## How to fix
+
+- Restart the flow and generate a new code.
+- Confirm the frontend sends the expected JSON payload.
+- Confirm Redis or database-backed verification storage is shared across instances.
+- Check server time and expiration settings.
+- For email/SMS codes, verify the latest code is the one being submitted.
+
+## Tests
+
+Tests should cover valid code consumption, second-use rejection, expired code rejection, wrong-code rejection, and no secret leakage in error responses.

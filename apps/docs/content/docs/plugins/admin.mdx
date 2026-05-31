@@ -1,0 +1,149 @@
+---
+title: "Admin"
+description: "Manage users, roles, bans, sessions, and impersonation with Kernia's Admin plugin."
+---
+
+The Admin plugin adds a protected user-management surface to the auth router. It is for internal admin tools: listing users, creating users, changing roles, banning users, revoking sessions, impersonating users, setting passwords, deleting users, and checking permissions.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+The plugin ships with the core `kernia` package:
+
+```python
+from kernia.plugins.admin import AdminOptions, admin
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.admin import AdminOptions, admin
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=(
+        admin(AdminOptions(
+            default_role="user",
+            admin_roles=("admin",),
+            admin_user_ids=(os.environ["BOOTSTRAP_ADMIN_USER_ID"],),
+        )),
+    ),
+))
+```
+
+`admin_roles` are resolved from the `user.role` column. `admin_user_ids` is the bootstrap escape hatch for the first admin account or emergency access.
+
+## Options
+
+| Option | Default | Description |
+|---|---:|---|
+| `default_role` | `"user"` | Role assigned to new users. |
+| `admin_roles` | `("admin",)` | Roles allowed to call admin endpoints. |
+| `admin_user_ids` | `()` | User IDs treated as admins regardless of role. |
+| `roles` | default roles | Optional custom role map from the access-control primitive. |
+| `banned_user_message` | support message | Message returned when a banned user hits protected routes. |
+
+## API routes
+
+Every route is mounted under the auth base path. With the default FastAPI mount, `/admin/list-users` becomes `/api/auth/admin/list-users`.
+
+<APIMethod method="POST" path="/api/auth/admin/list-users">
+  Body: `{ "limit": 50, "offset": 0, "search_field": "email", "search_value": "@example.com" }`. Returns `{ "users": [...], "total": 12 }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/get-user">
+  Body: `{ "user_id": "user_123" }` or `{ "email": "user@example.com" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/create-user">
+  Body: `{ "email": "user@example.com", "password": "secure-password", "name": "Jane", "role": "user" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/update-user">
+  Body: `{ "user_id": "user_123", "name": "Jane", "email": "jane@example.com", "image": "https://..." }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/set-role">
+  Body: `{ "user_id": "user_123", "role": "admin" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/ban-user">
+  Body: `{ "user_id": "user_123", "reason": "abuse", "expires_in": 604800 }`. The plugin revokes all sessions for the banned user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/unban-user">
+  Body: `{ "user_id": "user_123" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/impersonate-user">
+  Body: `{ "user_id": "user_123" }`. Sets an admin impersonation cookie and creates a session for the target user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/stop-impersonating">
+  Stops the active impersonation session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/list-user-sessions">
+  Body: `{ "user_id": "user_123" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/revoke-user-session">
+  Body: `{ "session_id": "session_123" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/revoke-user-sessions">
+  Body: `{ "user_id": "user_123" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/set-user-password">
+  Body: `{ "user_id": "user_123", "new_password": "new-secure-password" }`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/remove-user">
+  Body: `{ "user_id": "user_123" }`. The plugin prevents an admin from removing their own account.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/has-permission">
+  Body: `{ "permissions": { "user": ["list"] }, "user_id": "user_123" }`.
+</APIMethod>
+
+## Schema changes
+
+<DatabaseTable
+  title="user extensions"
+  fields={[
+    { name: "role", type: "string", description: "Role name used by the admin gate.", isOptional: true },
+    { name: "banned", type: "boolean", description: "Whether sign-in and protected operations are blocked.", isOptional: true },
+    { name: "banReason", type: "string", description: "Admin-supplied ban reason.", isOptional: true },
+    { name: "banExpires", type: "number", description: "Unix timestamp when a temporary ban expires.", isOptional: true },
+  ]}
+/>
+
+<DatabaseTable
+  title="session extensions"
+  fields={[
+    { name: "impersonatedBy", type: "string", description: "Admin user ID that started an impersonation session.", isOptional: true },
+  ]}
+/>
+
+## Client/admin UI guidance
+
+Admin UI should show explicit permission failures, prevent self-ban and self-delete actions in the client before submitting, and label impersonation mode clearly while it is active. Do not expose these routes from an unprotected frontend bundle without server-side session checks.
+
+## Troubleshooting
+
+- `YOU_ARE_NOT_ALLOWED_TO_LIST_USERS`: the caller is authenticated but is not in `admin_roles` and is not listed in `admin_user_ids`.
+- `INVALID_ROLE_TYPE`: the requested role is not present in the configured role map.
+- `USER_BANNED`: the ban hook blocks the signed-in user before most handlers run.
+- Impersonation does not persist: verify the browser accepts the compatibility admin cookie `better-auth.admin_session` for the API origin.

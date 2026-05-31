@@ -1,0 +1,61 @@
+---
+title: "SvelteKit Example"
+description: "Use SvelteKit forms and server loads with Kernia."
+---
+
+The SvelteKit example keeps auth state in Kernia cookies and forwards cookies to the Python backend from server loads.
+
+## Commands
+
+```bash
+pnpm create svelte@latest kernia-svelte
+cd kernia-svelte
+pnpm install
+```
+
+## Environment
+
+```dotenv
+AUTH_BASE_URL=http://localhost:8000/api/auth
+PUBLIC_AUTH_BASE_URL=http://localhost:8000/api/auth
+```
+
+## Form action
+
+```ts title="src/routes/login/+page.server.ts"
+import { AUTH_BASE_URL } from "$env/static/private";
+
+export const actions = {
+  default: async ({ request, fetch }) => {
+    const form = await request.formData();
+    const response = await fetch(`${AUTH_BASE_URL}/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: form.get("email"),
+        password: form.get("password"),
+        remember_me: true,
+      }),
+    });
+    if (!response.ok) return { error: await response.json() };
+    return { ok: true };
+  },
+};
+```
+
+## Server load
+
+```ts title="src/routes/dashboard/+layout.server.ts"
+import { AUTH_BASE_URL } from "$env/static/private";
+
+export async function load({ request, fetch }) {
+  const response = await fetch(`${AUTH_BASE_URL}/get-session`, {
+    headers: { cookie: request.headers.get("cookie") ?? "" },
+  });
+  return { session: response.ok ? await response.json() : null };
+}
+```
+
+## Coverage
+
+Test form sign-in, server load session reads, sign-out, OAuth return URLs, protected API calls, and cookie behavior in production mode.

@@ -1,11 +1,12 @@
-"""Tests for `better-auth generate`."""
+"""Tests for `kernia generate`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from better_auth_cli.commands.generate import generate
 from click.testing import CliRunner
+
+from kernia_cli.commands.generate import generate
 
 
 def test_generate_emits_migration(tmp_path: Path, fixture_config_path: Path) -> None:
@@ -17,7 +18,7 @@ def test_generate_emits_migration(tmp_path: Path, fixture_config_path: Path) -> 
     assert result.exit_code == 0, result.output
 
     versions = tmp_path / "alembic" / "versions"
-    files = list(versions.glob("*_better_auth_schema.py"))
+    files = list(versions.glob("*_kernia_schema.py"))
     assert len(files) == 1
     body = files[0].read_text()
 

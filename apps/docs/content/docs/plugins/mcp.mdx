@@ -1,0 +1,67 @@
+---
+title: "MCP"
+description: "Issue resource-bound bearer tokens for MCP clients and servers."
+---
+
+The MCP plugin issues JWT access tokens with OAuth Resource Indicator semantics. It uses the OAuth client registry for client lookup and the JWT plugin signing keys for token issuance.
+
+## Installation
+
+~~~bash
+uv add kernia authlib
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.jwt import jwt
+from kernia.plugins.mcp import MCPOptions, mcp
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.jwt import jwt
+from kernia.plugins.mcp import MCPOptions, mcp
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        jwt(),
+        mcp(MCPOptions(issuer=os.environ["KERNIA_BASE_URL"])),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/mcp/authorize">
+  Issues a bearer token for a client, scope string, and optional resource audience.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/.well-known/oauth-authorization-server">
+  Returns MCP/OAuth discovery metadata including issuer, token endpoint, JWKS URI, scopes, and resource-indicator support.
+</APIMethod>
+
+## Schema impact
+
+No MCP-specific table. It reads OAuth clients and uses JWT signing keys.
+
+## Behavior and options
+
+- `MCPOptions.issuer` should match the public auth base URL.
+- Tokens include `sub`, `iss`, `aud`, `client_id`, `scope`, `jti`, and optional `resource`.
+- Downstream MCP servers should verify the token and expected resource with `introspect_mcp_token`.
+
+## Test and demo coverage
+
+Test unknown clients, unauthenticated requests, scope validation, resource audience, JWKS verification, discovery metadata, and downstream resource mismatch failures.

@@ -1,0 +1,83 @@
+---
+title: "OAuth"
+description: "Configure social providers, redirects, account linking, scopes, and token storage."
+---
+
+Kernia's social sign-in routes are shared by Google, GitHub, Apple, Microsoft, Discord, and every provider constructor exposed from `kernia.social_providers`. The browser starts `/sign-in/social`; the provider redirects back to `/callback/:provider`; Kernia exchanges the code, normalizes the profile, links or creates the user, and sets the session cookie.
+
+## Configure providers
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.social_providers import github, google
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    social_providers={
+        "google": google(
+            client_id=os.environ["GOOGLE_CLIENT_ID"],
+            client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        ),
+        "github": github(
+            client_id=os.environ["GITHUB_CLIENT_ID"],
+            client_secret=os.environ["GITHUB_CLIENT_SECRET"],
+        ),
+    },
+))
+~~~
+
+## Sign in
+
+~~~ts
+const response = await fetch("http://localhost:8000/api/auth/sign-in/social", {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    provider: "google",
+    callback_url: "http://localhost:5173/dashboard",
+  }),
+});
+const data = await response.json();
+if (data.redirect) window.location.href = data.url;
+~~~
+
+## Callback URLs
+
+The provider callback URL is `base_url + /callback/:provider`. If `base_url` is `https://api.example.com/api/auth`, Google should be configured with `https://api.example.com/api/auth/callback/google`.
+
+## Account linking
+
+OAuth accounts are stored in the `account` table with `providerId`, `accountId`, and optional tokens. Enable trusted-provider linking when a verified provider email should attach to an existing user.
+
+~~~python
+from kernia.types.init_options import AccountLinkingOptions, AccountOptions
+
+account=AccountOptions(
+    account_linking=AccountLinkingOptions(
+        enabled=True,
+        trusted_providers=("google", "github"),
+    ),
+)
+~~~
+
+## Scopes and provider options
+
+Provider constructors accept default scopes. Some providers expose provider-specific options such as Google hosted domain hints or Apple form-post behavior. Document only options present in the Python constructor for that provider.
+
+## Token storage
+
+Access, refresh, and ID tokens are stored on the `account` row when returned by the provider. Set `account.encrypt_oauth_tokens=True` when tokens should be encrypted before storage.
+
+## Providers without email
+
+Some OAuth providers may not return an email address. Kernia requires an email for the core user model; handle those providers with explicit profile mapping before enabling them in a production app.
+
+## Troubleshooting
+
+`PROVIDER_NOT_FOUND` means the provider key sent by the client is missing from `KerniaOptions.social_providers`. Redirect URI errors almost always mean `KERNIA_BASE_URL` and the provider console callback URL disagree.

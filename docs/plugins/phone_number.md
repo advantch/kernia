@@ -1,9 +1,9 @@
 # Phone Number
 
-> Module: `better_auth.plugins.phone_number`
-> Constructor: `PHONE_NUMBER_ERROR_CODES`
+> Module: `kernia.plugins.phone_number`
+> Constructor: `phone_number`
 
-phone_number — see reference/packages/better-auth/src/plugins/phone-number/.
+phone_number — see Better Auth reference: plugins/phone-number/.
 
 Adds `phoneNumber`/`phoneNumberVerified` to the user table and contributes
 endpoints for SMS-OTP sign-in, phone verification, and SMS-backed password
@@ -11,25 +11,34 @@ reset.
 
 ## Endpoints
 
-_(no HTTP endpoints — this plugin contributes hooks/schema only)_
+| Method | Path |
+| --- | --- |
+| `POST` | `/sign-in/phone-number` |
+| `POST` | `/phone-number/send-otp` |
+| `POST` | `/phone-number/verify` |
+| `POST` | `/phone-number/request-password-reset` |
+| `POST` | `/phone-number/reset-password` |
 
 ## Schema contributions
 
-_(no schema contributions)_
+
+**Extends existing tables:**
+
+- `user` adds: phoneNumber, phoneNumberVerified
 
 ## Usage
 
 ```python
-from better_auth.plugins.phone_number import PHONE_NUMBER_ERROR_CODES
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.phone_number import phone_number
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[
-            PHONE_NUMBER_ERROR_CODES(),
+            phone_number(),
         ],
     )
 )

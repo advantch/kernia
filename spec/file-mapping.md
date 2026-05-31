@@ -2,7 +2,7 @@
 
 Maps every directory under
 `reference/packages/better-auth/src/` to its planned Python counterpart
-under `packages/core/src/better_auth/`. Naming rules:
+under `packages/core/src/kernia/`. Naming rules:
 
 - Kebab-case directory names → snake_case (`social-providers` → `social_providers`).
 - Camel-case file basenames → snake_case (`internal-adapter.ts` →
@@ -14,7 +14,7 @@ under `packages/core/src/better_auth/`. Naming rules:
 The columns:
 
 - **TS source dir** — relative to `reference/packages/better-auth/src/`.
-- **Python target** — relative to `packages/core/src/better_auth/`.
+- **Python target** — relative to `packages/core/src/kernia/`.
 - **Notes** — special considerations.
 
 ## Top-level: `better-auth/src/`
@@ -94,7 +94,7 @@ The columns:
 | `client/`                | `client/`                                              | A typed Python HTTP client (httpx-based).          |
 | `client/react/`, `client/svelte/`, `client/vue/`, `client/solid/`, `client/lynx/` | n/a | Front-end framework integrations; not ported. |
 | `client/plugins/`        | `client/plugins/`                                      | Client-side plugin extensions (kept lean).         |
-| `client/vanilla.ts`      | `client/__init__.py` (top-level `BetterAuthClient`)    |                                                    |
+| `client/vanilla.ts`      | `client/__init__.py` (top-level `KerniaClient`)    |                                                    |
 | `client/query.ts`        | `client/query.py`                                      |                                                    |
 | `client/session-atom.ts` | n/a                                                    | Reactivity primitive; not relevant in Python.      |
 | `client/session-refresh.ts` | `client/session_refresh.py`                         |                                                    |
@@ -286,11 +286,11 @@ The columns:
 
 The TS monorepo also includes `reference/packages/core/`, which most of
 `better-auth` imports from. The Python port should merge the two into a
-single namespace package (`better_auth.core` or just under
-`better_auth`) since Python has no equivalent type-only sub-package
+single namespace package (`kernia.core` or just under
+`kernia`) since Python has no equivalent type-only sub-package
 need.
 
-| TS source (in `reference/packages/core/src/`)             | Python target (under `packages/core/src/better_auth/core/`) |
+| TS source (in `reference/packages/core/src/`)             | Python target (under `packages/core/src/kernia/core/`) |
 | --------------------------------------------------------- | ----------------------------------------------------------- |
 | `api/`                                                    | `core/api/`                                                 |
 | `async_hooks/`                                            | `core/async_hooks/`                                         |

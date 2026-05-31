@@ -1,0 +1,95 @@
+---
+title: "Dashboard"
+description: "Build an internal admin dashboard on top of Kernia admin APIs."
+---
+
+A Kernia dashboard is a self-hosted admin app. Better Auth's Dashboard plugin is tied to Better Auth Infrastructure; Kernia exposes the same operational areas through Python routes and application-owned tables.
+
+The dashboard must be backed by the backend. Provider status, billing setup, entitlements, sessions, users, and webhook state should come from Kernia APIs or your database, not from hard-coded frontend state.
+
+## Required screens
+
+| Screen | Data source | Expected actions |
+|---|---|---|
+| Users | Admin plugin | Search, view, ban, unban, delete, impersonate when enabled. |
+| Sessions | Session/admin routes | View current sessions, revoke one, revoke all. |
+| Auth methods | Admin config plugin | Toggle email/password, magic link, OTP, OAuth, SSO, passkey, phone, SIWE, anonymous, and one-tap. |
+| Email clients | Admin config plugin | Configure SMTP, Resend, and Postmark with redacted secrets on read. |
+| Stripe setup | `kernia-stripe` | Validate keys, sync products/prices, show webhook health. |
+| Products and prices | Billing catalog tables | Import from Stripe and map to Kernia plans/features. |
+| Entitlements | Billing layer | View balances, grants, limits, usage, and overage flags. |
+| API keys | API key plugin | Create, list, rotate, revoke, and inspect usage. |
+| SSO and SCIM | SSO/SCIM plugins | Configure providers, domains, directories, and tokens. |
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.plugins.admin import admin
+from kernia.plugins.admin_config import admin_config
+from kernia.plugins.api_key import api_key
+from kernia.plugins.organization import organization
+from kernia.plugins.scim import scim
+from kernia.plugins.sso import sso
+from kernia_stripe import stripe
+
+plugins = [
+    admin(),
+    admin_config(),
+    organization(),
+    api_key(),
+    sso(),
+    scim(),
+    stripe(),
+]
+```
+
+Mount the auth routes through FastAPI and expose app-specific admin summary routes beside them:
+
+```python title="main.py"
+from fastapi import FastAPI
+from kernia_fastapi import mount_kernia
+
+app = FastAPI()
+mount_kernia(app, auth)
+app.include_router(admin_dashboard_router, prefix="/api/admin")
+```
+
+## Frontend pattern
+
+The dashboard frontend should load public login configuration before rendering the login screen, then load admin-only data after the session has been proven to have admin privileges.
+
+```ts title="src/admin/api.ts"
+export async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api/admin${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...init?.headers,
+    },
+  });
+
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+```
+
+## Access control
+
+Use the admin plugin or explicit admin authorization checks on every dashboard route. The frontend can hide unavailable navigation, but the backend must still reject normal users.
+
+```python title="guards.py"
+async def require_admin_session(session):
+    if session is None:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED"})
+    if not await user_has_admin_role(session.user_id):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN"})
+```
+
+## Schema changes
+
+The dashboard itself usually adds no auth tables, but the features it displays do. Expect migrations for admin config, audit events, API keys, billing catalog, usage events, SCIM directories, and SSO providers.
+
+## Test and demo coverage
+
+Browser tests should cover a real admin login, auth-method toggling, email provider redaction, Stripe catalog sync, billing entitlement display, API key creation/revocation, session revocation, and forbidden access for non-admin users.

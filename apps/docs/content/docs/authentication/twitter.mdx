@@ -1,0 +1,70 @@
+---
+title: "Twitter"
+description: "Configure X/Twitter OAuth for Kernia."
+---
+
+<ProviderHeading provider="Twitter" />
+
+X/Twitter sign-in depends on the app access level and OAuth version configured in the developer portal. Kernia handles the backend exchange and stores the provider account id.
+
+## Create the developer app
+
+In the X Developer Portal, create an app, enable user authentication settings, and add callback URLs:
+
+```text
+http://localhost:8000/api/auth/callback/twitter
+https://api.example.com/api/auth/callback/twitter
+```
+
+Copy the client ID and client secret for OAuth 2.0 flows.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import twitter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "twitter": twitter(
+            client_id=env.TWITTER_CLIENT_ID,
+            client_secret=env.TWITTER_CLIENT_SECRET,
+            scopes=("users.read", "tweet.read", "offline.access"),
+        ),
+    },
+))
+```
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "twitter", callback_url: appCallbackURL }),
+});
+```
+
+## Email behavior
+
+X/Twitter does not reliably provide email for every app configuration. Do not require email-based linking unless your app has verified that the provider returns a trusted email claim.
+
+## Troubleshooting
+
+- Callback URL mismatch: update the developer portal with the exact Kernia backend URL.
+- App access error: confirm user auth is enabled and the requested scopes are allowed.
+- Missing email: use provider account id linking or ask for email in a separate verified flow.
+
+## Test coverage
+
+Test denied consent, missing email, provider account id linking, refresh-token behavior when `offline.access` is enabled, and unavailable-state UI when credentials are absent.

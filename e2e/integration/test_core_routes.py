@@ -7,17 +7,18 @@ Exercises the routes via the ASGI driver end-to-end against a memory adapter.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 @pytest.fixture
 def driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password()],
@@ -66,7 +67,7 @@ async def test_revoke_other_sessions(driver: ASGIDriver) -> None:
     await _sign_up(driver)
     # second sign-in with a fresh driver, but same auth — create another session
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password()],

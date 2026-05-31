@@ -12,21 +12,22 @@ from typing import Any
 
 import httpx
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import captcha, email_and_password
-from better_auth.plugins.captcha import (
+
+from kernia.auth import init
+from kernia.plugins import captcha, email_and_password
+from kernia.plugins.captcha import (
     hcaptcha,
     recaptcha_v2,
     recaptcha_v3,
     turnstile,
 )
-from better_auth.types.init_options import (
-    BetterAuthOptions,
+from kernia.types.init_options import (
+    KerniaOptions,
     EmailPasswordOptions,
     RateLimitOptions,
 )
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _mock_transport(success: bool, *, score: float = 0.9) -> httpx.MockTransport:
@@ -46,7 +47,7 @@ def _make_driver(provider_factory: Any, *, success: bool = True) -> ASGIDriver:
     transport = _mock_transport(success)
     provider = provider_factory("secret", transport=transport)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="captcha-secret",
             email_and_password=EmailPasswordOptions(enabled=True),

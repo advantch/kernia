@@ -1,0 +1,73 @@
+---
+title: "Microsoft"
+description: "Configure Microsoft Entra ID OAuth for Kernia."
+---
+
+<ProviderHeading provider="Microsoft" />
+
+Microsoft sign-in is backed by Microsoft Entra ID. Kernia can use it for consumer Microsoft accounts, work/school accounts, or tenant-specific enterprise sign-in depending on the app registration.
+
+## Create the app registration
+
+In the Azure Portal, create an **App registration** and add web redirect URIs:
+
+```text
+http://localhost:8000/api/auth/callback/microsoft
+https://api.example.com/api/auth/callback/microsoft
+```
+
+Create a client secret under **Certificates & secrets**.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Server configuration
+
+```python title="auth.py"
+from kernia.social_providers import microsoft
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    base_path="/api/auth",
+    social_providers={
+        "microsoft": microsoft(
+            client_id=env.MICROSOFT_CLIENT_ID,
+            client_secret=env.MICROSOFT_CLIENT_SECRET,
+            tenant=env.MICROSOFT_TENANT_ID,
+            scopes=("openid", "profile", "email", "User.Read"),
+        ),
+    },
+))
+```
+
+Use `common`, `organizations`, `consumers`, or a tenant id based on your sign-in policy.
+
+## Client usage
+
+```ts
+await fetch(`${authBaseURL}/sign-in/social`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider: "microsoft", callback_url: appCallbackURL }),
+});
+```
+
+## Tenant policy
+
+For B2B SaaS, prefer tenant allow-listing or SSO domain routing instead of accepting every Microsoft account. Enforce that policy after the provider returns verified identity claims.
+
+## Troubleshooting
+
+- `AADSTS50011`: redirect URI mismatch.
+- Missing email: use `preferred_username` only if your account-linking policy allows it.
+- Wrong tenant: confirm the configured tenant matches the app registration's supported account types.
+
+## Test coverage
+
+Test tenant-specific sign-in, common endpoint sign-in, denied consent, missing email, and account-linking policy.

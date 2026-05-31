@@ -14,12 +14,11 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
-import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password, last_login_method, magic_link, siwe
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_test_utils import ASGIDriver
-from better_auth_test_utils.adapter_fixtures import all_adapters_param
+from kernia.auth import init
+from kernia.plugins import email_and_password, last_login_method
+from kernia.types.init_options import KerniaOptions
+from kernia_test_utils import ASGIDriver
+from kernia_test_utils.adapter_fixtures import all_adapters_param
 
 COOKIE = "better-auth.last_used_login_method"
 
@@ -327,7 +326,7 @@ async def test_update_on_subsequent_logins() -> None:
 async def test_last_login_method_cookie_set(adapter_factory) -> None:
     adapter = await adapter_factory()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="s",
             plugins=[email_and_password(), last_login_method()],
@@ -347,7 +346,7 @@ async def test_last_login_method_cookie_set(adapter_factory) -> None:
 async def test_last_login_method_not_set_on_failed_signin(adapter_factory) -> None:
     adapter = await adapter_factory()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="s",
             plugins=[email_and_password(), last_login_method()],

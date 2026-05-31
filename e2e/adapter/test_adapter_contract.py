@@ -14,11 +14,12 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import pytest
-from better_auth.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
-from better_auth_memory_adapter import memory_adapter
-from better_auth_mongo import mongo_adapter
-from better_auth_sqlalchemy import sqlalchemy_adapter
-from better_auth_test_utils.containers import docker_available, mongodb_container
+
+from kernia.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
+from kernia_memory_adapter import memory_adapter
+from kernia_mongo import mongo_adapter
+from kernia_sqlalchemy import sqlalchemy_adapter
+from kernia_test_utils.containers import docker_available, mongodb_container
 
 
 async def _memory() -> AsyncIterator[CustomAdapter]:
@@ -36,7 +37,7 @@ async def _mongo() -> AsyncIterator[CustomAdapter]:
         # Each test gets its own random db so parametrize doesn't leak state.
         adapter = await mongo_adapter(
             url=url,
-            db_name=f"better_auth_test_{secrets.token_hex(4)}",
+            db_name=f"kernia_test_{secrets.token_hex(4)}",
         )
         yield adapter
 
@@ -286,7 +287,7 @@ async def test_sqlalchemy_uuid_pk_mode() -> None:
     """
     import uuid as uuid_mod
 
-    from better_auth.types.adapter import FieldDef, ModelDef
+    from kernia.types.adapter import FieldDef, ModelDef
 
     uuid_model = ModelDef(
         name="widget",

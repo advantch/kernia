@@ -1,0 +1,84 @@
+---
+title: "OAuth Provider"
+description: "Turn Kernia into an OAuth 2.0 and OpenID Connect issuer."
+---
+
+The OAuth provider package lets your application issue authorization codes, access tokens, refresh tokens, and ID tokens to registered clients. Use it when third-party apps need to sign in with your Kernia users.
+
+## Installation
+
+~~~bash
+uv add kernia-oauth-provider
+~~~
+
+## Import path
+
+~~~python
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        oauth_provider(OAuthProviderOptions(issuer=os.environ["KERNIA_BASE_URL"])),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/oauth2/authorize">
+  Validates client and consent context, then issues an authorization code.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/token">
+  Exchanges authorization codes or refresh tokens for token responses.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/oauth2/userinfo">
+  Returns OIDC userinfo for an access token.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/revoke">
+  Revokes a token.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/introspect">
+  Introspects token activity and metadata.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/.well-known/openid-configuration">
+  Publishes OIDC discovery metadata.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/register">
+  Registers an OAuth client when dynamic registration is enabled.
+</APIMethod>
+
+## Schema impact
+
+Adds OAuth client, authorization code, token, and consent related models from the standalone package. Generate migrations before enabling clients.
+
+## Behavior and options
+
+- Keep issuer, redirect URI validation, scopes, and client authentication strict.
+- Use HTTPS issuer URLs outside local tests.
+- Pair with the JWT/JWKS path for OIDC token verification.
+
+## Test and demo coverage
+
+Test code flow, invalid redirect URI, token exchange, refresh, revoke, introspection, userinfo, discovery, dynamic registration policy, and consent screens.

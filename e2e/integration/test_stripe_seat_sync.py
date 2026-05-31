@@ -17,21 +17,16 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_stripe import stripe
-from better_auth_stripe.client import StripeClient
-from better_auth_stripe.schema import (
-    OrganizationStripeOptions,
-    StripeOptions,
-    StripePlan,
-)
-from better_auth_test_utils import ASGIDriver, MockStripe
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.organization import organization
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_stripe import stripe
+from kernia_stripe.client import StripeClient
+from kernia_stripe.schema import StripeOptions, StripePlan
+from kernia_test_utils import ASGIDriver, MockStripe
 
 
 def _seat_plans(proration_behavior: str = "create_prorations") -> dict[str, StripePlan]:
@@ -65,7 +60,7 @@ async def _build_driver(
         authorize_reference=lambda *_a, **_k: True,
     )
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[email_and_password(), organization(), stripe(options)],
@@ -280,7 +275,7 @@ async def test_seat_sync_no_op_when_organization_integration_disabled() -> None:
         # No organization integration → seat-sync must not register.
     )
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), organization(), stripe(options)],
@@ -302,8 +297,8 @@ async def test_seat_sync_no_op_when_organization_integration_disabled() -> None:
             "createdAt": 0,
         },
     )
-
-    from better_auth.events import MemberEvent, get_bus
+    # Trigger an event manually via the bus to confirm no listener picks it up
+    from kernia.events import MemberEvent, get_bus
 
     await get_bus(auth.context).emit(
         "organization.member.added",

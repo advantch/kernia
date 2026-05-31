@@ -12,25 +12,14 @@ crypto verifier are exercised through the mock, identical to upstream.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_passkey import (
-    PasskeyOptions,
-    PasskeyRegistrationOptions,
-    passkey,
-    webauthn_server,
-)
-from better_auth_passkey.webauthn_server import (
-    AuthenticationInfo,
-    RegistrationInfo,
-    VerifiedAuthenticationResponse,
-    VerifiedCredential,
-    VerifiedRegistrationResponse,
-)
-from better_auth_test_utils import ASGIDriver
+
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_passkey import passkey
+from kernia_test_utils import ASGIDriver
 
 ORIGIN = "http://localhost:3000"
 
@@ -69,7 +58,7 @@ def _reset_webauthn_mocks():
 def _build(plugin=None) -> tuple[ASGIDriver, object, object]:
     adapter = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret-key",
             plugins=[email_and_password(), plugin or passkey()],
@@ -78,7 +67,20 @@ def _build(plugin=None) -> tuple[ASGIDriver, object, object]:
     return ASGIDriver(app=auth.router.mount()), adapter, auth
 
 
-async def _sign_up(driver: ASGIDriver, email: str = "test@test.com") -> str:
+def test_passkey_plugin_schema_registers_table() -> None:
+    from kernia_passkey import passkey as make
+
+    p = make(rp_id="localhost", rp_name="t", origin="http://localhost")
+    assert p.schema is not None
+    table_names = {m.name for m in p.schema.tables}
+    assert "passkey" in table_names
+    pass_model = next(m for m in p.schema.tables if m.name == "passkey")
+    field_names = {f.name for f in pass_model.fields}
+    assert {"credentialId", "publicKey", "counter", "userId"} <= field_names
+
+
+async def test_register_start_returns_options_and_persists_challenge() -> None:
+    driver, adapter = _build()
     r = await driver.request(
         "POST",
         "/sign-up/email",

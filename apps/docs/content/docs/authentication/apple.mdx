@@ -1,0 +1,168 @@
+---
+title: "Apple"
+description: "Configure Sign in with Apple for Kernia."
+---
+
+<ProviderHeading provider="Apple" />
+
+Apple's OAuth implementation has more setup than most providers: you need an App ID, a Services ID, a private key, and a JWT client secret. Kernia supports Apple's redirect flow, including the `form_post` callback mode Apple uses for web sign-in.
+
+## Get your Apple credentials
+
+<Steps>
+  <Step>
+    ### Create an App ID
+
+    In the Apple Developer Portal, open **Certificates, Identifiers & Profiles**, create an App ID, set a bundle identifier such as `com.example.app`, and enable **Sign In with Apple**.
+  </Step>
+
+  <Step>
+    ### Create a Services ID
+
+    Create a Services ID for the web login flow. This Services ID is the `client_id` you pass to Kernia.
+  </Step>
+
+  <Step>
+    ### Configure domains and return URLs
+
+    On the Services ID, configure your domain and add return URLs such as:
+
+    ```text
+    https://api.example.com/api/auth/callback/apple
+    ```
+
+    Apple does not accept `http://localhost` return URLs. Use a real HTTPS development domain or tunnel for local testing.
+  </Step>
+
+  <Step>
+    ### Create and download the key
+
+    Create a Sign in with Apple key, download the `.p8` private key, and record the Key ID and Team ID. Apple shows the private key only once.
+  </Step>
+
+  <Step>
+    ### Generate the client secret JWT
+
+    Apple uses an ES256 JWT as `client_secret`. The JWT issuer is your Team ID, the subject is the Services ID, the audience is `https://appleid.apple.com`, and the expiration must be no more than 180 days in the future.
+  </Step>
+</Steps>
+
+## Generate the client secret
+
+The exact JWT library is up to your application. This example uses PyJWT with crypto support:
+
+```bash
+uv add 'pyjwt[crypto]'
+```
+
+```python title="apple_secret.py"
+import time
+import jwt
+
+
+def generate_apple_client_secret(
+    *,
+    client_id: str,
+    team_id: str,
+    key_id: str,
+    private_key: str,
+) -> str:
+    now = int(time.time())
+    return jwt.encode(
+        {
+            "iss": team_id,
+            "iat": now,
+            "exp": now + 180 * 24 * 60 * 60,
+            "aud": "https://appleid.apple.com",
+            "sub": client_id,
+        },
+        private_key,
+        algorithm="ES256",
+        headers={"kid": key_id},
+    )
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.social_providers import apple
+
+from .apple_secret import generate_apple_client_secret
+from .db import adapter
+
+client_id = os.environ["APPLE_CLIENT_ID"]
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    trusted_origins=("https://appleid.apple.com",),
+    social_providers={
+        "apple": apple(
+            client_id=client_id,
+            client_secret=generate_apple_client_secret(
+                client_id=client_id,
+                team_id=os.environ["APPLE_TEAM_ID"],
+                key_id=os.environ["APPLE_KEY_ID"],
+                private_key=os.environ["APPLE_PRIVATE_KEY"],
+            ),
+            scopes=("name", "email"),
+        ),
+    },
+))
+```
+
+<Callout type="warn" title="Apple email behavior">
+  Apple only sends the `email` claim the first time a user authorizes your app. Persist it when the account is first created; do not assume later sign-ins can fetch it again from Apple.
+</Callout>
+
+<Callout type="warn" title="ES256 verification">
+  The current stdlib verifier handles RS256. Apple's current ID tokens use ES256, so production Apple deployments must include the optional JWT/authlib verification path before claiming Apple sign-in as live in the SaaS demo.
+</Callout>
+
+## Client usage
+
+```ts title="src/lib/apple.ts"
+export async function signInWithApple() {
+  const response = await fetch("https://api.example.com/api/auth/sign-in/social", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      provider: "apple",
+      callback_url: "https://app.example.com/dashboard",
+    }),
+  });
+
+  if (!response.ok) throw await response.json();
+  const data = await response.json();
+  if (data.redirect) window.location.href = data.url;
+  return data;
+}
+```
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Starts the Apple authorization request. Kernia's Apple provider sends `response_type=code id_token` and `response_mode=form_post`.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/callback/apple">
+  Handles Apple's form-post callback, exchanges the code, verifies the ID token, creates or links the user, and sets the session cookie.
+</APIMethod>
+
+## Unsupported client shortcuts
+
+The current Kernia Python route does not expose direct Apple ID-token sign-in. Use the redirect flow until that server route is implemented and tested.
+
+## Troubleshooting
+
+- Apple rejects the return URL: use HTTPS and match the exact `/api/auth/callback/apple` URL configured on the Services ID.
+- Apple returns a code but Kernia cannot verify the token: install and wire the optional ES256 JWT verification dependency path.
+- Email is missing after the first login: this is Apple behavior; persist the first email claim.
+- Native iOS bundle IDs and Services IDs are different identifiers. The current Kernia web provider expects the Services ID as `client_id`.

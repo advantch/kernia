@@ -1,0 +1,121 @@
+---
+title: "API"
+description: "Call Kernia endpoints from Python servers, browser clients, and tests."
+---
+
+Kernia exposes a mounted HTTP API. The route table is built by `kernia.auth.init`, then framework packages mount that router under `KerniaOptions.base_path`. Core routes and plugin routes share the same request parser, session resolver, error envelope, cookie writer, hooks, and rate limiter.
+
+The Better Auth API concept maps to Kernia in two places: Python code creates endpoint handlers with `create_auth_endpoint`, while applications call the mounted routes over HTTP.
+
+## Endpoint anatomy
+
+An endpoint has a path, method, optional Pydantic body model, optional query model, a session requirement, and an async handler.
+
+~~~python title="plugin.py"
+from pydantic import BaseModel
+
+from kernia.api import create_auth_endpoint
+from kernia.types.endpoint import EndpointOptions
+
+class RenameBody(BaseModel):
+    name: str
+
+async def rename_workspace(ctx):
+    body: RenameBody = ctx.body
+    return {"name": body.name, "actor": ctx.session.user_id}
+
+rename_endpoint = create_auth_endpoint(
+    "/workspace/rename",
+    EndpointOptions(method="POST", body=RenameBody, requires_session=True),
+    rename_workspace,
+)
+~~~
+
+Framework integrations do not reimplement this behavior. FastAPI, Starlette, and Django forward requests into the same ASGI router.
+
+## Calling API routes
+
+Browser applications should call the Python backend with credentials included. The auth backend owns cookies and session refresh.
+
+~~~ts title="src/lib/auth-api.ts"
+const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL ?? "http://localhost:8000/api/auth";
+
+export async function authAPI(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${authBaseURL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+
+export function getSession() {
+  return authAPI("/get-session");
+}
+~~~
+
+<Callout type="warn">
+  Do not authorize sensitive actions from a frontend route guard alone. Route guards improve navigation; Python backend dependencies and Kernia endpoint session checks enforce access.
+</Callout>
+
+## Body, query, headers, cookies
+
+Kernia parses JSON request bodies into Pydantic models when `EndpointOptions.body` is set. Query parameters are available on `ctx.request.query`, headers on `ctx.request.headers`, and cookies on `ctx.request.cookies`.
+
+~~~python
+async def handler(ctx):
+    origin = ctx.request.headers.get("origin")
+    next_url = ctx.request.query.get("callback_url")
+    session_cookie = ctx.request.cookies.get("better-auth.session_token")
+    return {"origin": origin, "next": next_url, "hasSessionCookie": bool(session_cookie)}
+~~~
+
+The public route includes the framework mount prefix. If `base_path="/api/auth"`, an endpoint declared as `/sign-in/email` is available at `/api/auth/sign-in/email`.
+
+## Error handling
+
+Handlers raise `APIError` for typed client errors. Kernia serializes the error into a stable JSON envelope and uses the configured HTTP status.
+
+~~~python
+from kernia.error import APIError
+
+raise APIError(403, "FORBIDDEN", "Only workspace owners can invite users.")
+~~~
+
+Client code should branch on the machine-readable `code`, not on the display message.
+
+~~~ts
+try {
+  await authAPI("/workspace/invite", { method: "POST", body: JSON.stringify(payload) });
+} catch (error) {
+  if (error.code === "FORBIDDEN") showPermissionMessage();
+  else throw error;
+}
+~~~
+
+## Route examples
+
+<APIMethod method="GET" path="/api/auth/ok">
+  Health check route used by mounted-router tests and local smoke checks.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/email">
+  Parses email/password credentials, verifies the password hash, writes a session row, and sets cookies.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/get-session">
+  Resolves the session cookie and returns the current user and session payload.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-session">
+  Revokes a specific session for the active user.
+</APIMethod>
+
+## Server-side tests
+
+Use `kernia_test_utils.ASGIDriver` or a framework test client against the mounted app. Tests that call handler functions directly do not prove cookie rendering, CORS headers, mount path stripping, session resolution, or response serialization.

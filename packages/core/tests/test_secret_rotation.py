@@ -1,9 +1,10 @@
-"""Unit tests for better_auth.crypto.secret_rotation."""
+"""Unit tests for kernia.crypto.secret_rotation."""
 
 from __future__ import annotations
 
 import pytest
-from better_auth.crypto.secret_rotation import (
+
+from kernia.crypto.secret_rotation import (
     normalize_secrets,
     sign_with,
     verify_with_any,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.magic_link import MAGIC_LINK_ERROR_CODES, magic_link
-from better_auth.plugins.magic_link.routes import (
+from kernia.plugins.magic_link import MAGIC_LINK_ERROR_CODES, magic_link
+from kernia.plugins.magic_link.routes import (
     MagicLinkVerifyQuery,
     SignInMagicLinkBody,
 )

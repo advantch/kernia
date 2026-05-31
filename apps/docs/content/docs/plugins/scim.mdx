@@ -1,0 +1,92 @@
+---
+title: "SCIM"
+description: "Expose SCIM 2.0 user and group provisioning endpoints."
+---
+
+The SCIM package exposes standard SCIM 2.0 routes for identity provider directory sync. It can authorize requests through an admin session or an API key with SCIM scope, depending on configuration.
+
+## Installation
+
+~~~bash
+uv add kernia-scim
+~~~
+
+## Import path
+
+~~~python
+from kernia_scim import SCIMOptions, scim
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_scim import SCIMOptions, scim
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        scim(SCIMOptions()),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/scim/v2/Users">
+  Lists users in SCIM ListResponse format.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/scim/v2/Users">
+  Creates a user from SCIM payload data.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/scim/v2/Users/:id">
+  Returns a SCIM user.
+</APIMethod>
+
+<APIMethod method="PUT" path="/api/auth/scim/v2/Users/:id">
+  Replaces user fields from a SCIM payload.
+</APIMethod>
+
+<APIMethod method="PATCH" path="/api/auth/scim/v2/Users/:id">
+  Applies SCIM patch operations.
+</APIMethod>
+
+<APIMethod method="DELETE" path="/api/auth/scim/v2/Users/:id">
+  Deprovisions or deletes a user according to configuration.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/scim/v2/ServiceProviderConfig">
+  Returns supported SCIM capabilities.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/scim/v2/ResourceTypes">
+  Returns supported resource types.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/scim/v2/Schemas">
+  Returns supported SCIM schemas.
+</APIMethod>
+
+## Schema impact
+
+Uses core user data and SCIM package state. Generate migrations when provider ownership or token tables are enabled in your package version.
+
+## Behavior and options
+
+- Map IdP attributes to Kernia user fields deliberately.
+- Decide whether delete means hard delete, soft deprovision, or app-specific disable.
+- Use API keys with narrow SCIM scope for directory sync integrations.
+
+## Test and demo coverage
+
+Test list, get, create, replace, patch, delete, service provider config, resource types, schemas, authorization, invalid filters, and IdP ownership behavior.

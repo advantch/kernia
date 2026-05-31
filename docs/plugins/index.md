@@ -1,10 +1,11 @@
 # Plugins
 
-Each page below documents a single built-in plugin.
+Each page below documents a built-in plugin or standalone package.
 
 - [Access](access.md)
 - [Additional Fields](additional_fields.md)
 - [Admin](admin.md)
+- [Admin Config](admin_config.md)
 - [Anonymous](anonymous.md)
 - [Bearer](bearer.md)
 - [Captcha](captcha.md)
@@ -29,3 +30,11 @@ Each page below documents a single built-in plugin.
 - [Siwe](siwe.md)
 - [Two Factor](two_factor.md)
 - [Username](username.md)
+- [Stripe](stripe.md)
+- [API keys](api_key.md)
+- [Passkeys](passkey.md)
+- [SSO](sso.md)
+- [SCIM](scim.md)
+- [OAuth provider](oauth_provider.md)
+- [Redis storage](redis_storage.md)
+- [Adapters](adapters.md)

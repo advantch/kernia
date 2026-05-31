@@ -1,0 +1,9 @@
+{
+  "title": "Infrastructure Plugins",
+  "pages": [
+    "audit-logs",
+    "dash",
+    "dashboard",
+    "sentinel"
+  ]
+}

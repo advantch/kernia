@@ -1,0 +1,76 @@
+---
+title: "Device Authorization"
+description: "Support OAuth device-code login for TVs, CLIs, and limited-input clients."
+---
+
+The device authorization plugin implements the device-code pattern. A device asks for a code, the user approves or denies it on another screen, and the device polls until it receives a token or an error.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.device_authorization import device_authorization
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.device_authorization import device_authorization
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        device_authorization(verification_uri="https://app.example.com/device"),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/device/code">
+  Issues a device code, user code, expiration, polling interval, and verification URI.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/device/token">
+  Lets the device poll for approval and receive the final token response.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/device">
+  Renders or returns the verification landing state for the user code flow.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/device/approve">
+  Approves a pending device code from an authenticated user session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/device/deny">
+  Denies a pending device code.
+</APIMethod>
+
+## Schema impact
+
+Uses verification-style persisted state for device codes and approvals. Generate migrations when the plugin contributes a model in your package version.
+
+## Behavior and options
+
+- Configure code length, expiration, polling interval, and verification URI.
+- The polling route should return pending, slow-down, expired, denied, or approved states according to the stored device state.
+- Device clients must respect the returned interval.
+
+## Test and demo coverage
+
+Test device code issue, invalid user code, approval, denial, polling before approval, polling after approval, expiration, and interval enforcement.

@@ -1,11 +1,13 @@
 # Oauth Proxy
 
-> Module: `better_auth.plugins.oauth_proxy`
+> Module: `kernia.plugins.oauth_proxy`
 > Constructor: `oauth_proxy`
 
 OAuth Proxy plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/oauth-proxy/`.
+Mirrors `Better Auth reference: plugins/oauth-proxy/` for a simpler
+use case: an SPA can't safely hold an OAuth client_secret, so the server proxies
+the entire flow.
 
 Endpoints:
   * GET  /oauth-proxy-callback — upstream passthrough receiver: decrypt an
@@ -30,12 +32,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.oauth_proxy import oauth_proxy
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.oauth_proxy import oauth_proxy
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

@@ -1,11 +1,12 @@
-"""Tests for `better-auth init`."""
+"""Tests for `kernia init`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from better_auth_cli.commands.init_cmd import init
 from click.testing import CliRunner
+
+from kernia_cli.commands.init_cmd import init
 
 
 def test_init_writes_files(tmp_path: Path) -> None:
@@ -20,12 +21,12 @@ def test_init_writes_files(tmp_path: Path) -> None:
     assert env_example.exists()
 
     body = auth_py.read_text()
-    assert "from better_auth_memory_adapter import memory_adapter" in body
+    assert "from kernia_memory_adapter import memory_adapter" in body
     assert "init(" in body
     assert "email_and_password" in body
 
     env_body = env_example.read_text()
-    assert "BETTER_AUTH_SECRET=" in env_body
+    assert "KERNIA_SECRET=" in env_body
     assert "DATABASE_URL=" in env_body
 
 
@@ -45,7 +46,7 @@ def test_init_force_overwrites(tmp_path: Path) -> None:
     (tmp_path / "auth.py").write_text("# tampered\n")
     result = runner.invoke(init, ["--cwd", str(tmp_path), "--force"])
     assert result.exit_code == 0
-    assert "from better_auth" in (tmp_path / "auth.py").read_text()
+    assert "from kernia" in (tmp_path / "auth.py").read_text()
 
 
 def test_init_framework_snippet_fastapi(tmp_path: Path) -> None:
