@@ -18,9 +18,9 @@ from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from better_auth.types.context import EndpointContext
+    from kernia.types.context import EndpointContext
 
-    from better_auth_scim.types import SCIMOptions
+    from kernia_scim.types import SCIMOptions
 
 
 def _b64url_no_pad(raw: bytes) -> str:

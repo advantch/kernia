@@ -1,4 +1,4 @@
-"""Kernia API key plugin.
+"""better-auth API key plugin.
 
 Behavioral-parity port of ``reference/packages/api-key``. Issues SHA-256-hashed
 API keys and exposes create/verify/get/update/delete/list/delete-all-expired

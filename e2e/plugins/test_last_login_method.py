@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+import pytest
 from kernia.auth import init
-from kernia.plugins import email_and_password, last_login_method
+from kernia.plugins import email_and_password, last_login_method, magic_link, siwe
 from kernia.types.init_options import KerniaOptions
 from kernia_test_utils import ASGIDriver
 from kernia_test_utils.adapter_fixtures import all_adapters_param
@@ -24,7 +25,7 @@ COOKIE = "better-auth.last_used_login_method"
 
 
 def _memory():
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     return memory_adapter()
 
@@ -72,7 +73,7 @@ async def _siwe_sign_in(driver: ASGIDriver):
 
 async def test_should_set_cookie_email() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[email_and_password(), last_login_method()],
@@ -96,7 +97,7 @@ async def test_should_set_cookie_email() -> None:
 
 async def test_should_set_cookie_for_siwe() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="test-secret-key",
             plugins=[last_login_method(), siwe()],
@@ -108,7 +109,7 @@ async def test_should_set_cookie_for_siwe() -> None:
 
 
 async def test_should_set_cookie_for_magic_link() -> None:
-    from better_auth_test_utils import MockSMTP, SentEmail
+    from kernia_test_utils import MockSMTP, SentEmail
 
     smtp = MockSMTP()
 
@@ -116,7 +117,7 @@ async def test_should_set_cookie_for_magic_link() -> None:
         await smtp.send(SentEmail(to=email, subject="m", body=url, meta={"token": token}))
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             base_url="http://localhost:3000",
@@ -143,7 +144,7 @@ async def test_should_set_cookie_for_magic_link() -> None:
 
 async def test_store_in_database_email() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[email_and_password(), last_login_method(store_in_database=True)],
@@ -162,7 +163,7 @@ async def test_store_in_database_email() -> None:
 
 async def test_store_in_database_siwe() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="test-secret-key",
             plugins=[
@@ -180,7 +181,7 @@ async def test_store_in_database_siwe() -> None:
 
 
 async def test_store_in_database_magic_link() -> None:
-    from better_auth_test_utils import MockSMTP, SentEmail
+    from kernia_test_utils import MockSMTP, SentEmail
 
     smtp = MockSMTP()
 
@@ -188,7 +189,7 @@ async def test_store_in_database_magic_link() -> None:
         await smtp.send(SentEmail(to=email, subject="m", body=url, meta={"token": token}))
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             base_url="http://localhost:3000",
@@ -221,7 +222,7 @@ async def test_store_in_database_magic_link() -> None:
 
 async def test_not_set_on_failed_authentication() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[email_and_password(), last_login_method()],
@@ -239,7 +240,7 @@ async def test_not_set_on_failed_authentication() -> None:
 
 async def test_not_set_on_failed_oauth_callback() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[email_and_password(), last_login_method()],
@@ -265,7 +266,7 @@ async def test_custom_resolve_method() -> None:
         return "custom" if ctx.request.path == "/sign-in/email" else None
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[
@@ -291,7 +292,7 @@ async def test_custom_resolve_method() -> None:
 
 async def test_update_on_subsequent_logins() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="s",
             plugins=[email_and_password(), last_login_method(store_in_database=True)],

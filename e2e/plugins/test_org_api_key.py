@@ -13,13 +13,13 @@ allowed for ``references="user"`` configs.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_api_key import ApiKeyConfigurationOptions, api_key
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.organization import organization
+from kernia.types.init_options import KerniaOptions
+from kernia_api_key import ApiKeyConfigurationOptions, api_key
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 # --------------------------------------------------------------------------- helpers
 
@@ -46,7 +46,7 @@ async def _org_driver(
         plugins.append(organization())
     plugins.append(api_key(list(configs if configs is not None else _USER_ORG_CONFIGS)))
     auth = init(
-        BetterAuthOptions(database=db, secret="test-secret-key", plugins=plugins)
+        KerniaOptions(database=db, secret="test-secret-key", plugins=plugins)
     )
     driver = ASGIDriver(app=auth.router.mount())
     r = await driver.request(

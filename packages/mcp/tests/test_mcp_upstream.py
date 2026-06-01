@@ -40,14 +40,14 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.plugins.jwt.plugin import issue_jwt
-from better_auth.plugins.mcp.plugin import MCPOptions, mcp
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_mcp import mcp_auth
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.plugins.jwt.plugin import issue_jwt
+from kernia.plugins.mcp.plugin import MCPOptions, mcp
+from kernia.types.init_options import KerniaOptions
+from kernia_mcp import mcp_auth
+from kernia_memory_adapter import memory_adapter
 from fastmcp import FastMCP
 from starlette.testclient import TestClient
 
@@ -57,7 +57,7 @@ ISSUER = "https://issuer.test"
 
 def _make_auth():
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[

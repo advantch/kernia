@@ -6,8 +6,8 @@ import base64
 import re
 
 import pytest
-from better_auth.error import APIError
-from better_auth_sso.saml_assertions import count_assertions, validate_single_assertion
+from kernia.error import APIError
+from kernia_sso.saml_assertions import count_assertions, validate_single_assertion
 
 
 def _encode(xml: str) -> str:

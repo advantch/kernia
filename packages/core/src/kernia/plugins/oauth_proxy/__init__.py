@@ -11,6 +11,11 @@ Endpoints:
     session.
 """
 
-from kernia.plugins.oauth_proxy.plugin import OAuthProxyOptions, oauth_proxy
+from kernia.plugins.oauth_proxy.plugin import (
+    OAuthProxyOptions,
+    oauth_proxy,
+    symmetric_decrypt,
+    symmetric_encrypt,
+)
 
 __all__ = ["oauth_proxy", "OAuthProxyOptions", "symmetric_encrypt", "symmetric_decrypt"]

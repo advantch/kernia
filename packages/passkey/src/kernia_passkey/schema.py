@@ -7,7 +7,7 @@ included verbatim).
 
 from __future__ import annotations
 
-from better_auth.types.adapter import FieldDef, ModelDef
+from kernia.types.adapter import FieldDef, ModelDef
 
 PASSKEY_MODEL = ModelDef(
     name="passkey",

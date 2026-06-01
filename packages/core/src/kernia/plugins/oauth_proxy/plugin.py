@@ -41,12 +41,13 @@ from typing import Any
 from pydantic import BaseModel
 
 from kernia.api.endpoint import create_auth_endpoint
+from kernia.api.request import RedirectResponse
 from kernia.context import create_session
 from kernia.error import APIError
 from kernia.oauth2 import pkce_verifier
 from kernia.oauth2.link_account import handle_oauth_user_info
 from kernia.oauth2.state import generate_state, parse_state
-from kernia.social_providers._base import OAuthProvider
+from kernia.social_providers._base import OAuthProvider, OAuthUserProfile
 from kernia.types.context import AuthContext, EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
@@ -333,7 +334,7 @@ class _OAuthProxyPlugin:
     init: None = None
 
 
-def oauth_proxy(options: OAuthProxyOptions) -> KerniaPlugin:
+def oauth_proxy(options: OAuthProxyOptions | None = None) -> KerniaPlugin:
     """Construct the OAuth proxy plugin."""
     return _OAuthProxyPlugin(opts=options or OAuthProxyOptions())  # type: ignore[return-value]
 

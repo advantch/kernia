@@ -11,7 +11,7 @@ import platform
 import sys
 from pathlib import Path
 
-import better_auth
+import kernia
 import click
 
 import kernia

@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import time
 
+import pyotp
 from kernia.auth import init
 from kernia.plugins import email_and_password, two_factor
+from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver
@@ -108,7 +110,7 @@ def _build_with_adapter(
     adapter = memory_adapter()
     auth = init(
         KerniaOptions(
-            database=memory_adapter(),
+            database=adapter,
             secret="test-secret-key",
             plugins=[email_and_password(), two_factor()],
             advanced={"two-factor": tf_opts},
@@ -869,7 +871,7 @@ async def test_no_2fa_challenge_on_magic_link_sign_in() -> None:
     """
     from urllib.parse import parse_qs, urlencode, urlparse
 
-    from better_auth.plugins import magic_link
+    from kernia.plugins import magic_link
 
     captured: dict[str, str] = {}
 
@@ -878,7 +880,7 @@ async def test_no_2fa_challenge_on_magic_link_sign_in() -> None:
 
     sink = _OTPSink()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[
@@ -1279,7 +1281,7 @@ def _build_passwordless(*, skip_verification_on_enable: bool = False):
         store_otp=None,
     )
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), two_factor()],
@@ -1295,7 +1297,7 @@ async def _credentialless_session(auth, driver: ASGIDriver) -> str:
     Mirrors upstream's social/passwordless user: there is no credential row, so
     the password gate must be skipped when ``allowPasswordless`` is set.
     """
-    from better_auth.context import create_session
+    from kernia.context import create_session
 
     now = int(time.time())
     user = await auth.context.adapter.create(
@@ -1370,7 +1372,7 @@ def _decode_stored_plain(raw: str) -> list[str]:
 def _decode_stored_encrypted(raw: str) -> list[str]:
     import json
 
-    from better_auth.plugins.two_factor.routes import _symmetric_decrypt
+    from kernia.plugins.two_factor.routes import _symmetric_decrypt
 
     return json.loads(_symmetric_decrypt("test-secret-key", raw))
 

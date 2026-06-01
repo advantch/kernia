@@ -15,16 +15,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
-from better_auth.db.schema import CORE_MODELS
-from better_auth.types.adapter import (
-    CustomAdapter,
-    FieldDef,
-    JoinConfig,
-    ModelDef,
-    Record,
-    SortBy,
-    Where,
-)
 from sqlalchemy import (
     JSON,
     Boolean,

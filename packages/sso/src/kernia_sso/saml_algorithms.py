@@ -14,11 +14,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from better_auth.error import APIError
+from kernia.error import APIError
 
-from better_auth_sso.saml_parser import find_node, parse_xml
+from kernia_sso.saml_parser import find_node, parse_xml
 
-logger = logging.getLogger("better_auth.sso.saml")
+logger = logging.getLogger("kernia.sso.saml")
 
 
 class SignatureAlgorithm:

@@ -7,8 +7,6 @@ an access token, then verifies the token via the plugin's `introspect_mcp_token`
 from __future__ import annotations
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
 from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.plugins.jwt import jwt

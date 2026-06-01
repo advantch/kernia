@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins.email_otp import email_otp
 from kernia.plugins.email_password import email_and_password
@@ -196,7 +195,7 @@ async def test_email_otp_password_reset_round_trip(adapter_factory) -> None:
 
 async def test_too_many_attempts() -> None:
     """After `allowed_attempts` wrong codes, verify returns TOO_MANY_ATTEMPTS."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, allowed_attempts=2)
@@ -221,7 +220,7 @@ async def test_too_many_attempts() -> None:
 
 
 async def test_custom_generate_otp() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     def generate(_data: Any, _ctx: Any = None) -> str:
         return "135790"
@@ -242,9 +241,9 @@ async def test_custom_generate_otp() -> None:
 
 async def test_store_otp_hashed_round_trip() -> None:
     """With store_otp='hashed' the raw code still verifies but is not stored plain."""
-    from better_auth.plugins.email_otp.routes import default_key_hasher
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.plugins.email_otp.routes import default_key_hasher
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -274,7 +273,7 @@ async def test_store_otp_hashed_round_trip() -> None:
 
 async def test_resend_reuse_returns_same_otp() -> None:
     """resend_strategy='reuse' resends the same plain OTP while it is valid."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, resend_strategy="reuse")
@@ -291,8 +290,8 @@ async def test_resend_reuse_returns_same_otp() -> None:
 
 async def test_resend_rotate_returns_new_otp() -> None:
     """Default rotate strategy issues a fresh OTP each time (almost always different)."""
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -318,7 +317,7 @@ async def test_resend_rotate_returns_new_otp() -> None:
 
 async def test_verify_email_round_trip() -> None:
     """An authenticated user verifies their own email via OTP."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp)
@@ -361,7 +360,7 @@ async def test_reject_change_email_type_on_send_verification() -> None:
 
     Ported from "should reject change-email type".
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_driver(memory_adapter(), MockSMTP())
     r = await driver.request(
@@ -375,7 +374,7 @@ async def test_reject_change_email_type_on_send_verification() -> None:
 
 async def test_send_verification_invalid_email() -> None:
     """Ported from "should fail on invalid email"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_driver(memory_adapter(), MockSMTP())
     r = await driver.request(
@@ -393,7 +392,7 @@ async def test_no_otp_email_for_nonexistent_user_when_disable_sign_up() -> None:
     Ported from "should not send OTP email for non-existent users when
     disableSignUp is enabled" + "should prevent user enumeration".
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, disable_sign_up=True)
@@ -414,7 +413,7 @@ async def test_create_and_get_verification_otp_server() -> None:
     Ported from "should create verification otp on server" + "should get
     verification otp on server".
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_driver(memory_adapter(), MockSMTP())
     r = await driver.request(
@@ -441,7 +440,7 @@ async def test_get_verification_otp_hashed_rejected() -> None:
 
     Ported from "should not be allowed to get otp if storeOTP is hashed".
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_driver(memory_adapter(), MockSMTP(), store_otp="hashed")
     await driver.request(
@@ -463,8 +462,8 @@ async def test_store_otp_encrypted_round_trip() -> None:
 
     Ported from the "encrypted" storeOTP describe block.
     """
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -502,7 +501,7 @@ async def test_store_otp_encrypted_round_trip() -> None:
 
 async def test_check_verification_otp_non_consuming() -> None:
     """check-verification-otp validates without consuming the OTP."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp)
@@ -551,7 +550,7 @@ async def test_change_email_round_trip() -> None:
 
     Ported from change email "request" + "change" describes.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -591,7 +590,7 @@ async def test_change_email_round_trip() -> None:
     assert r.json()["success"] is True
 
     # User's email is updated.
-    from better_auth.types.adapter import Where
+    from kernia.types.adapter import Where
 
     user = await adapter.find_one(
         model="user", where=(Where(field="email", value="new@example.com"),)
@@ -602,7 +601,7 @@ async def test_change_email_round_trip() -> None:
 async def test_change_email_no_session() -> None:
     """Ported from "should not send otp for change email request if session
     does not exist"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_change_email_driver(memory_adapter(), MockSMTP())
     r = await driver.request(
@@ -616,7 +615,7 @@ async def test_change_email_no_session() -> None:
 async def test_change_email_disabled() -> None:
     """Ported from "should not send otp ... when change email with OTP is
     disabled"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp)  # changeEmail not enabled
@@ -638,7 +637,7 @@ async def test_change_email_disabled() -> None:
 
 async def test_change_email_same_as_current() -> None:
     """Ported from "should not send otp ... if email is same as old email"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_change_email_driver(memory_adapter(), smtp)
@@ -666,7 +665,7 @@ async def test_request_password_reset_alias() -> None:
     Ported from "should reset password using new emailOtp.requestPasswordReset
     endpoint".
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -712,7 +711,7 @@ async def test_request_password_reset_alias() -> None:
 async def test_on_password_reset_callback() -> None:
     """Ported from "should call onPasswordReset callback when resetting
     password"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     called: list[dict] = []
 
@@ -752,8 +751,8 @@ async def test_store_otp_custom_encryptor_round_trip() -> None:
 
     Ported from the "custom encryptor" describe (create / get / sign-in).
     """
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     async def encrypt(otp: str) -> str:
         return otp + "encrypted"
@@ -809,8 +808,8 @@ async def test_store_otp_custom_hasher_round_trip() -> None:
 
     Ported from the "custom hasher" describe (create / get-rejected / sign-in).
     """
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     async def _hash(otp: str) -> str:
         return otp + "hashed"
@@ -860,7 +859,7 @@ async def test_verify_email_with_last_otp() -> None:
     Ported from "should verify email with last otp" (made assertive: only the
     most-recently-issued OTP verifies; earlier ones are INVALID_OTP).
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp)
@@ -911,8 +910,8 @@ async def test_verify_email_with_last_otp() -> None:
 
 async def test_delete_otp_after_successful_sign_in() -> None:
     """Ported from race-condition "should delete OTP after successful sign-in"."""
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -945,8 +944,8 @@ async def test_delete_otp_after_successful_sign_in() -> None:
 
 async def test_delete_otp_after_successful_email_verification() -> None:
     """Ported from "should delete OTP after successful email verification"."""
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -995,8 +994,8 @@ async def test_delete_otp_after_successful_email_verification() -> None:
 
 async def test_delete_otp_after_successful_password_reset() -> None:
     """Ported from "should delete OTP after successful password reset"."""
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()
@@ -1051,7 +1050,7 @@ async def test_delete_otp_after_successful_password_reset() -> None:
 async def test_reuse_but_hashed_generates_new_otp() -> None:
     """Ported from "should generate new OTP when resendStrategy is reuse but
     storeOTP is hashed" — hashed OTPs cannot be retrieved so a fresh one issues."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(
@@ -1075,7 +1074,7 @@ async def test_reuse_but_hashed_generates_new_otp() -> None:
 async def test_reuse_but_custom_hash_generates_new_otp() -> None:
     """Ported from "should generate new OTP when resendStrategy is reuse but
     storeOTP is custom hash"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     async def _hash(otp: str) -> str:
         return f"hashed-{otp}"
@@ -1101,7 +1100,7 @@ async def test_reuse_but_custom_hash_generates_new_otp() -> None:
 
 async def test_reuse_generates_fresh_otp_when_attempts_exhausted() -> None:
     """Ported from "should generate fresh OTP when attempts are exhausted"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
     driver, _ = _build_driver(
@@ -1148,7 +1147,7 @@ async def test_reuse_generates_fresh_otp_when_attempts_exhausted() -> None:
 async def test_block_reset_password_after_too_many_attempts() -> None:
     """Ported from "should block reset password after exceeding allowed
     attempts"."""
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     smtp = MockSMTP()

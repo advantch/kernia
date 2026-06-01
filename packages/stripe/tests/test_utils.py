@@ -6,8 +6,8 @@ upstream `escapeStripeSearchValue` / `resolvePlanItem` describe blocks.
 
 from __future__ import annotations
 
-from better_auth_stripe.schema import StripeOptions, StripePlan
-from better_auth_stripe.utils import escape_stripe_search_value, resolve_plan_item
+from kernia_stripe.schema import StripeOptions, StripePlan
+from kernia_stripe.utils import escape_stripe_search_value, resolve_plan_item
 
 
 def _options(plans: dict[str, StripePlan]) -> StripeOptions:

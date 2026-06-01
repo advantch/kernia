@@ -10,7 +10,14 @@ Endpoints:
   * POST /jwks/rotate   — rotate the active signing key (admin)
 """
 
-from kernia.plugins.jwt.plugin import JwtOptions, jwt
+from kernia.plugins.jwt.plugin import (
+    JwtOptions,
+    issue_jwt,
+    jwt,
+    sign_jwt,
+    to_exp_jwt,
+    verify_local_jwt,
+)
 
 __all__ = [
     "jwt",

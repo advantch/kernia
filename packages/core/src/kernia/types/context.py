@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from kernia.api.router import Router
-    from kernia.types.adapter import CustomAdapter
+    from kernia.db.with_hooks import WithHooks
+    from kernia.types.adapter import CustomAdapter, ModelDef
+    from kernia.types.db_hooks import DatabaseHooksEntry
     from kernia.types.init_options import KerniaOptions
 
 
@@ -62,9 +64,9 @@ class AuthContext:
 
         Runs the block under the adapter's transaction and drains database
         ``after`` hooks only after a clean commit (discarding them on rollback).
-        See :func:`better_auth.db.transaction.transaction`.
+        See :func:`kernia.db.transaction.transaction`.
         """
-        from better_auth.db.transaction import transaction
+        from kernia.db.transaction import transaction
 
         return transaction(self.adapter)
 
@@ -73,7 +75,7 @@ class AuthContext:
 
         Mirrors better-auth's lazily-resolved `$context`: a plugin's `init` may
         mutate this context directly and/or return an
-        :class:`~better_auth.types.plugin.InitResult` whose ``options_patch`` /
+        :class:`~kernia.types.plugin.InitResult` whose ``options_patch`` /
         ``context_patch`` are merged here. Idempotent and concurrency-safe — the
         first caller runs the inits; racers await the same completion.
         """

@@ -14,11 +14,11 @@ from __future__ import annotations
 import time
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_api_key import (
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_api_key import (
     ApiKeyConfigurationOptions,
     ApiKeyOptions,
     KeyExpirationOptions,
@@ -27,8 +27,8 @@ from better_auth_api_key import (
     StartingCharactersConfig,
     api_key,
 )
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 # --------------------------------------------------------------------------- helpers
 
@@ -41,7 +41,7 @@ async def _signed_in_driver(
 ) -> tuple[ASGIDriver, object]:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key(options)],
@@ -70,7 +70,7 @@ async def _create(driver: ASGIDriver, **body: object) -> dict:
 async def test_should_fail_to_create_api_keys_without_session() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -254,7 +254,7 @@ async def test_should_create_with_remaining_when_signed_out_server_path() -> Non
     # Server-path create (no session): allowed to set server-only props + userId.
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -424,7 +424,7 @@ async def test_verify_decrements_remaining() -> None:
     # remaining is a server-only prop; create via server path.
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -448,7 +448,7 @@ async def test_verify_decrements_remaining() -> None:
 async def test_verify_fails_when_no_remaining() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -474,7 +474,7 @@ async def test_verify_fails_when_no_remaining() -> None:
 async def test_verify_fails_when_expired() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -675,7 +675,7 @@ async def test_delete_nonexistent_fails() -> None:
 async def test_list_without_session_fails() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -907,7 +907,7 @@ async def test_verify_required_permissions_but_key_has_none() -> None:
 async def test_refill_after_interval() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -946,7 +946,7 @@ async def test_refill_after_interval() -> None:
 async def test_no_refill_before_interval() -> None:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -1043,7 +1043,7 @@ _MULTI_CONFIGS = [
 async def _multi_config_driver() -> tuple[ASGIDriver, object]:
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key(list(_MULTI_CONFIGS))],
@@ -1269,7 +1269,7 @@ async def test_defer_remaining_count_updates() -> None:
     deferred: list = []
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             plugins=[email_and_password(), api_key(ApiKeyOptions(defer_updates=True))],

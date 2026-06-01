@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from kernia.social_providers._base import OAuthProvider
-    from kernia.types.adapter import CustomAdapter
+    from kernia.types.adapter import CustomAdapter, FieldDef
+    from kernia.types.db_hooks import DatabaseHooks
     from kernia.types.plugin import KerniaPlugin
 
 

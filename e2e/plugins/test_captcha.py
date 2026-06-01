@@ -12,7 +12,6 @@ from typing import Any
 
 import httpx
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import captcha, email_and_password
 from kernia.plugins.captcha import (
@@ -116,7 +115,7 @@ def _make_driver_with_transport(
 ) -> ASGIDriver:
     provider = provider_factory("secret", transport=transport, **provider_kwargs)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="captcha-secret",
             email_and_password=EmailPasswordOptions(enabled=True),
@@ -148,7 +147,7 @@ async def test_missing_secret_returns_500() -> None:
     transport = _mock_transport(True)
     provider = turnstile("", transport=transport)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="captcha-secret",
             email_and_password=EmailPasswordOptions(enabled=True),

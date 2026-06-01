@@ -18,8 +18,8 @@ Port divergences (kept behaviour-identical, asserted 1:1 where it matters):
 from __future__ import annotations
 
 import pytest
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 from .conftest import (
     REDIRECT_URI,

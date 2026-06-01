@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 
 import pytest
-from better_auth.error import APIError
-from better_auth_sso import saml_algorithms as alg
+from kernia.error import APIError
+from kernia_sso import saml_algorithms as alg
 
 ENCRYPTED_ASSERTION_XML = """
 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -72,7 +72,7 @@ class TestValidateSAMLAlgorithmsSignature:
     def test_warn_by_default_for_deprecated_signature(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_saml_algorithms(
                 {"sigAlg": alg.SignatureAlgorithm.RSA_SHA1, "samlContent": PLAIN_ASSERTION_XML}
             )
@@ -88,7 +88,7 @@ class TestValidateSAMLAlgorithmsSignature:
     def test_silently_allow_deprecated_with_allow(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_saml_algorithms(
                 {"sigAlg": alg.SignatureAlgorithm.RSA_SHA1, "samlContent": PLAIN_ASSERTION_XML},
                 {"onDeprecated": "allow"},
@@ -124,7 +124,7 @@ class TestValidateSAMLAlgorithmsEncryption:
     def test_warn_by_default_for_deprecated_encryption(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_saml_algorithms(
                 {
                     "sigAlg": alg.SignatureAlgorithm.RSA_SHA256,
@@ -190,7 +190,7 @@ class TestValidateConfigAlgorithmsSignature:
     def test_warn_by_default_for_deprecated_signature(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1}
             )
@@ -206,7 +206,7 @@ class TestValidateConfigAlgorithmsSignature:
     def test_silently_allow_deprecated_with_allow(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1},
                 {"onDeprecated": "allow"},
@@ -242,7 +242,7 @@ class TestValidateConfigAlgorithmsSignature:
     def test_warn_for_deprecated_short_form_signature(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms({"signatureAlgorithm": "rsa-sha1"})
         assert _security_warnings(caplog)
 
@@ -263,7 +263,7 @@ class TestValidateConfigAlgorithmsDigest:
     def test_warn_by_default_for_deprecated_digest(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms({"digestAlgorithm": alg.DigestAlgorithm.SHA1})
         assert _security_warnings(caplog)
 
@@ -297,7 +297,7 @@ class TestValidateConfigAlgorithmsDigest:
     def test_warn_for_deprecated_short_form_digest(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        with caplog.at_level(logging.WARNING, logger="better_auth.sso.saml"):
+        with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms({"digestAlgorithm": "sha1"})
         assert _security_warnings(caplog)
 

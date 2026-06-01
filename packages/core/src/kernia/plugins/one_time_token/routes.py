@@ -22,9 +22,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from kernia.api.endpoint import create_auth_endpoint
+from kernia.cookies import sign
 from kernia.error import APIError
 from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext
+from kernia.types.cookie import SESSION_TOKEN_COOKIE, CookieAttributes
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 
 _DEFAULT_EXPIRES_IN_MIN = 3  # minutes — matches the reference default

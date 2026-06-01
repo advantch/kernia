@@ -32,11 +32,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.crypto import hash_password, verify_password
 from kernia.error import APIError
+from kernia.plugins.access import role
 from kernia.types.adapter import FieldDef, ModelDef, Where
 from kernia.types.context import EndpointContext, Session
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
+from kernia.types.hooks import BeforeHook, PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema
 
 # --------------------------------------------------------------------------- errors
@@ -731,8 +732,8 @@ async def _check_org_permission(
     Mirrors upstream ``checkOrgApiKeyPermission``: owners get full access; other
     members must have the ``apiKey`` permission for ``action`` in their role.
     """
-    from better_auth.plugins.organization import has_permission as _org_has_permission
-    from better_auth.plugins.organization.access_control import (
+    from kernia.plugins.organization import has_permission as _org_has_permission
+    from kernia.plugins.organization.access_control import (
         DEFAULT_ROLES,
         merge_dynamic_roles,
     )
@@ -741,8 +742,15 @@ async def _check_org_permission(
     if org_opts is None:
         raise APIError(500, "ORGANIZATION_PLUGIN_REQUIRED")
 
-def api_key(options: ApiKeyOptions | None = None) -> KerniaPlugin:
-    opts = options or ApiKeyOptions()
+    member = await ctx.auth.adapter.find_one(
+        model="member",
+        where=(
+            Where(field="userId", value=user_id),
+            Where(field="organizationId", value=organization_id),
+        ),
+    )
+    if not member:
+        raise APIError(403, "USER_NOT_MEMBER_OF_ORGANIZATION")
 
     member_role = member.get("role") or "member"
     creator_role = org_opts.get("creator_role") or "owner"
@@ -781,7 +789,7 @@ def api_key(
     | ApiKeyConfigurationOptions
     | list[ApiKeyConfigurationOptions]
     | None = None,
-) -> BetterAuthPlugin:
+) -> KerniaPlugin:
     # ----------------------------------------------------- resolve configs
     resolved: list[_ResolvedConfig]
     if isinstance(configurations, list):

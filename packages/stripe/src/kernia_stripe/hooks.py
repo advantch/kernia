@@ -11,13 +11,13 @@ import logging
 import time
 from typing import Any
 
-from better_auth.types.adapter import Where
-from better_auth.types.context import EndpointContext
-from better_auth.types.db_hooks import DatabaseHooks, HookOp, ModelHooks
+from kernia.types.adapter import Where
+from kernia.types.context import EndpointContext
+from kernia.types.db_hooks import DatabaseHooks, HookOp, ModelHooks
 
-from better_auth_stripe.metadata import customer_metadata, subscription_metadata
-from better_auth_stripe.schema import StripeOptions
-from better_auth_stripe.utils import (
+from kernia_stripe.metadata import customer_metadata, subscription_metadata
+from kernia_stripe.schema import StripeOptions
+from kernia_stripe.utils import (
     escape_stripe_search_value,
     is_active_or_trialing,
     is_pending_cancel,
@@ -26,7 +26,7 @@ from better_auth_stripe.utils import (
     resolve_quantity,
 )
 
-_log = logging.getLogger("better_auth.stripe.hooks")
+_log = logging.getLogger("kernia.stripe.hooks")
 
 
 async def _maybe_await(value: Any) -> None:

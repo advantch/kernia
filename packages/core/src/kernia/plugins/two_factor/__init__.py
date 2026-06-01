@@ -18,7 +18,7 @@ Sign-in gating: an after-hook on `/sign-in/email`, `/sign-in/username`, and
 `{twoFactorRedirect: True, twoFactorMethods: [...]}` instead of a full session.
 A valid trust-device cookie short-circuits the gate (and is rotated).
 
-Options are read from `BetterAuthOptions.advanced["two-factor"]`:
+Options are read from `KerniaOptions.advanced["two-factor"]`:
 
     advanced={
         "two-factor": {
@@ -40,9 +40,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from kernia.cookies import sign, verify
 from kernia.plugins.two_factor import routes
 from kernia.types.adapter import FieldDef, ModelDef, Where
 from kernia.types.context import EndpointContext
+from kernia.types.cookie import (
+    DONT_REMEMBER_COOKIE,
+    SESSION_DATA_COOKIE,
+    SESSION_TOKEN_COOKIE,
+    CookieAttributes,
+)
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import AfterHook, PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule

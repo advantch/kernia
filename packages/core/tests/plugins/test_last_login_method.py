@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from kernia.plugins.last_login_method.plugin import (
     DEFAULT_COOKIE_NAME,
     DEFAULT_MAX_AGE,

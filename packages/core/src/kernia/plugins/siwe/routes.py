@@ -284,9 +284,7 @@ async def _verify(ctx: EndpointContext) -> dict[str, object]:
                 model="user", where=(Where(field="id", value=any_wallet["userId"]),)
             )
 
-    # Optional ENS reverse-lookup (best-effort; never blocks sign-in on failure).
-    from kernia.plugins.siwe import _resolver_for
-
+    # ENS / name lookup (best-effort; never blocks sign-in).
     ens_name: str | None = None
     avatar: str | None = None
     lookup = opts.ens_lookup or _ens_resolver_adapter()
@@ -383,7 +381,7 @@ def _ens_resolver_adapter() -> ENSLookup | None:
     """Bridge the legacy ``ENSResolver`` registry into the upstream ``ensLookup``
     shape, so the existing ENS tests (which register a `(address) -> name`
     resolver) keep working."""
-    from better_auth.plugins.siwe import _resolver_for
+    from kernia.plugins.siwe import _resolver_for
 
     resolver = _resolver_for("siwe")
     if resolver is None:

@@ -15,6 +15,7 @@ from typing import Any
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.context import create_session
 from kernia.error import APIError
+from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 
@@ -57,13 +58,6 @@ async def _sign_in_anonymous(ctx: EndpointContext) -> dict[str, object]:
     opts = _opts(ctx)
     # Reject if the caller already has an anonymous session.
     if ctx.session is not None:
-        existing_user = await ctx.auth.adapter.find_one(
-            model="user",
-            where=(),
-        )
-        # We cannot easily query by id without `Where`; use a direct lookup.
-        from kernia.types.adapter import Where
-
         existing_user = await ctx.auth.adapter.find_one(
             model="user",
             where=(Where(field="id", value=ctx.session.user_id),),

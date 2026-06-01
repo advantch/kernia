@@ -1,10 +1,10 @@
 """Seat-sync: keep the seat line-item quantity == organization member count.
 
-When the Kernia Stripe plugin is configured with ``subscription_for="organization"``
-and the active plan declares ``seats=True``, this module's ``register`` hooks the
-in-process event bus (``kernia.events``) and updates the Stripe subscription
-quantity whenever the organization plugin emits a member-added or member-removed
-event.
+When the better-auth Stripe plugin is configured with an enabled organization
+integration and a plan declares ``seat_price_id``, this module's
+``register_seat_sync`` hooks the in-process event bus (``kernia.events``)
+and updates the seat line item on the Stripe subscription whenever the
+organization plugin emits a member-added or member-removed event.
 
 Faithful port of ``syncSeatsAfterMemberChange`` in
 ``reference/packages/stripe/src/index.ts`` (lines ~176-254): gate on the
@@ -22,7 +22,9 @@ import logging
 from kernia.events import MemberEvent, get_bus
 from kernia.types.adapter import Where
 from kernia.types.context import AuthContext
-from kernia_stripe.schema import StripeOptions
+
+from kernia_stripe.schema import StripeOptions, StripePlan
+from kernia_stripe.utils import is_active_or_trialing
 
 _log = logging.getLogger("kernia.stripe.seat_sync")
 

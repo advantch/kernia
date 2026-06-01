@@ -9,9 +9,17 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from kernia.cookies import verify as _verify_cookie
 from kernia.plugins.one_time_token import routes
+from kernia.plugins.one_time_token.routes import (
+    OneTimeTokenOptions,
+    generate_token_for_session,
+)
+from kernia.types.adapter import Where
+from kernia.types.context import EndpointContext
+from kernia.types.cookie import SESSION_TOKEN_COOKIE
 from kernia.types.endpoint import AuthEndpoint
-from kernia.types.hooks import PluginHooks
+from kernia.types.hooks import AfterHook, PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
 
 ONE_TIME_TOKEN_ERROR_CODES: Mapping[str, str] = {
@@ -85,7 +93,15 @@ class _OneTimeTokenPlugin:
     init: None = None
 
 
-def one_time_token() -> KerniaPlugin:
+def one_time_token(
+    *,
+    expires_in: int = 3,
+    disable_client_request: bool = False,
+    generate_token: Callable[..., Awaitable[str]] | None = None,
+    disable_set_session_cookie: bool = False,
+    store_token: Any = "plain",
+    set_ott_header_on_new_session: bool = False,
+) -> KerniaPlugin:
     """Construct the one-time-token plugin."""
     opts = OneTimeTokenOptions(
         expires_in=expires_in,

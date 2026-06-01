@@ -10,7 +10,7 @@ are dropped and that internal fields win — the behavioral intent upstream.
 
 from __future__ import annotations
 
-from better_auth_stripe.metadata import customer_metadata, subscription_metadata
+from kernia_stripe.metadata import customer_metadata, subscription_metadata
 
 ROOT_PROBE_KEY = "polluted"
 

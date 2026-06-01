@@ -25,8 +25,6 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
-from pydantic import BaseModel
-
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.error import APIError
 from kernia.oauth2 import pkce_challenge
@@ -35,7 +33,7 @@ from kernia.types.adapter import FieldDef, ModelDef, Where
 from kernia.types.context import AuthContext, EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
-
+from pydantic import BaseModel
 
 # ----- schema -----
 
@@ -1432,6 +1430,38 @@ class _OAuthProviderPlugin:
     rate_limit: tuple[RateLimitRule, ...] = ()
     error_codes: Mapping[str, str] = field(default_factory=lambda: {})
     init: None = None
+
+
+# Default per-endpoint rate limits, mirroring upstream `defaultRateLimits`.
+# Order is significant for parity with upstream's `rateLimit` array.
+_DEFAULT_RATE_LIMITS: tuple[tuple[str, str, int, int], ...] = (
+    ("token", "/oauth2/token", 60, 20),
+    ("authorize", "/oauth2/authorize", 60, 30),
+    ("introspect", "/oauth2/introspect", 60, 100),
+    ("revoke", "/oauth2/revoke", 60, 30),
+    ("register", "/oauth2/register", 60, 5),
+    ("userinfo", "/oauth2/userinfo", 60, 60),
+)
+
+
+def _build_rate_limits(opts: OAuthProviderOptions) -> tuple[RateLimitRule, ...]:
+    """Resolve the plugin's rate-limit rules from defaults + user overrides.
+
+    Mirrors upstream: each endpoint has a default `{window, max}`; an override
+    of `{window, max}` replaces it, and an override of `False` removes the rule
+    from the advertised array entirely.
+    """
+    overrides = opts.rate_limit or {}
+    rules: list[RateLimitRule] = []
+    for name, path, window, max_ in _DEFAULT_RATE_LIMITS:
+        override = overrides.get(name)
+        if override is False:
+            continue
+        if isinstance(override, Mapping):
+            window = int(override.get("window", window))
+            max_ = int(override.get("max", max_))
+        rules.append(RateLimitRule(path=path, window=window, max=max_))
+    return tuple(rules)
 
 
 def oauth_provider(options: OAuthProviderOptions) -> KerniaPlugin:

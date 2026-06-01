@@ -19,15 +19,15 @@ Implementation notes for the Python port:
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.error import APIError
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.error import APIError
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 from .conftest import (
     authorize_code,
@@ -299,7 +299,7 @@ def _build_for_metadata(*, pairwise: bool):
     if pairwise:
         opts["pairwise_secret"] = "test-pairwise-metadata-secret!!!!"
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-32-characters-long!!!",
             plugins=[

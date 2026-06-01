@@ -1,6 +1,6 @@
 """P0.4 — transaction boundary + after-hook ordering.
 
-Locks the contract from `better_auth.db.transaction.transaction`:
+Locks the contract from `kernia.db.transaction.transaction`:
 
   * after-hooks run only after a clean commit;
   * after-hooks are discarded on rollback;
@@ -11,13 +11,13 @@ Locks the contract from `better_auth.db.transaction.transaction`:
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.db.transaction import transaction
-from better_auth.db.with_hooks import get_with_hooks
-from better_auth.types.adapter import Where
-from better_auth.types.db_hooks import DatabaseHooksEntry, HookOp, ModelHooks
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.db.transaction import transaction
+from kernia.db.with_hooks import get_with_hooks
+from kernia.types.adapter import Where
+from kernia.types.db_hooks import DatabaseHooksEntry, HookOp, ModelHooks
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 def _user_row(**over):
@@ -35,7 +35,7 @@ def _user_row(**over):
 
 def _auth():
     raw = memory_adapter()
-    return raw, init(BetterAuthOptions(database=raw, secret="x" * 32)).context
+    return raw, init(KerniaOptions(database=raw, secret="x" * 32)).context
 
 
 @pytest.mark.asyncio
@@ -103,7 +103,7 @@ async def test_nested_transactions_drain_once_at_outermost():
 
 @pytest.mark.asyncio
 async def test_real_sqlalchemy_rollback_is_atomic():
-    sa = pytest.importorskip("better_auth_sqlalchemy")
+    sa = pytest.importorskip("kernia_sqlalchemy")
     adapter = await sa.sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
     try:
         with pytest.raises(RuntimeError):
@@ -120,7 +120,7 @@ async def test_real_sqlalchemy_rollback_is_atomic():
 
 @pytest.mark.asyncio
 async def test_real_sqlalchemy_commit_persists():
-    sa = pytest.importorskip("better_auth_sqlalchemy")
+    sa = pytest.importorskip("kernia_sqlalchemy")
     adapter = await sa.sqlalchemy_adapter(url="sqlite+aiosqlite:///:memory:")
     try:
         async with transaction(adapter):

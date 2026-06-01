@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
 from kernia.plugins.one_tap import OneTapOptions, one_tap
 from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
@@ -34,7 +34,7 @@ def idp() -> MockIdP:
 
 def _auth(idp: MockIdP, *, plugins, **advanced):
     client = httpx.AsyncClient(transport=idp.mock_transport())
-    auth = init(
+    return init(
         KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
@@ -98,18 +98,14 @@ async def test_one_tap_verify_alias_still_works(driver: ASGIDriver, idp: MockIdP
 
 
 async def test_one_tap_rejects_bad_audience(idp: MockIdP) -> None:
-    client = httpx.AsyncClient(transport=idp.mock_transport())
-    auth = init(
-        KerniaOptions(
-            database=memory_adapter(),
-            secret="s",
-            plugins=[
-                one_tap(
-                    OneTapOptions(
-                        client_id="DIFFERENT",
-                        jwks_url="https://test-idp/.well-known/jwks.json",
-                        issuer="https://test-idp",
-                    )
+    auth = _auth(
+        idp,
+        plugins=[
+            one_tap(
+                OneTapOptions(
+                    client_id="DIFFERENT",
+                    jwks_url="https://test-idp/.well-known/jwks.json",
+                    issuer="https://test-idp",
                 )
             )
         ],
@@ -121,24 +117,7 @@ async def test_one_tap_rejects_bad_audience(idp: MockIdP) -> None:
 
 
 async def test_one_tap_disable_sign_up(idp: MockIdP) -> None:
-    client = httpx.AsyncClient(transport=idp.mock_transport())
-    auth = init(
-        KerniaOptions(
-            database=memory_adapter(),
-            secret="s",
-            plugins=[
-                one_tap(
-                    OneTapOptions(
-                        client_id="client-A",
-                        jwks_url="https://test-idp/.well-known/jwks.json",
-                        issuer="https://test-idp",
-                        disable_sign_up=True,
-                    )
-                )
-            ],
-            advanced={"http_client": client, "disable_csrf_check": True},
-        )
-    )
+    auth = _auth(idp, plugins=[_one_tap(idp, disable_sign_up=True)])
     d = ASGIDriver(app=auth.router.mount())
     token = idp.id_token_for("user-z", email="z@example.com", email_verified=True)
     r = await d.request("POST", "/one-tap/callback", json_body={"idToken": token})

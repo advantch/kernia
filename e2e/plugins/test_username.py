@@ -10,7 +10,6 @@ import secrets
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
 from kernia.db.schema import CORE_MODELS
 from kernia.plugins import email_and_password, username
@@ -33,9 +32,8 @@ async def _memory_factory() -> Any:
 
 
 async def _sqlite_factory() -> Any:
-    from sqlalchemy.ext.asyncio import create_async_engine
-
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -157,7 +155,7 @@ async def test_empty_username_returns_422() -> None:
     An empty string is shorter than the minimum length, so it trips
     USERNAME_TOO_SHORT rather than being accepted.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     r = await driver.request(
@@ -176,7 +174,7 @@ async def test_default_does_not_normalize_display_username() -> None:
     mixed-case displayUsername is preserved verbatim while the stored
     `username` is lower-cased.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     r = await driver.request(
@@ -209,7 +207,7 @@ async def _signed_up(driver: ASGIDriver, username: str, password: str) -> None:
 
 async def test_sign_in_redirects_to_callback_url() -> None:
     # @see https://github.com/better-auth/better-auth/issues/9469
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up(driver, "new_username", "new-password")
@@ -230,7 +228,7 @@ async def test_sign_in_redirects_to_callback_url() -> None:
 
 
 async def test_sign_in_no_redirect_without_callback_url() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up(driver, "new_username", "new-password")
@@ -246,7 +244,7 @@ async def test_sign_in_no_redirect_without_callback_url() -> None:
 
 
 async def test_sign_in_normalizes_username() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up(driver, "Custom_User", "test-password")
@@ -261,7 +259,7 @@ async def test_sign_in_normalizes_username() -> None:
 
 
 async def test_custom_normalization() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(
         min_username_length=4,
@@ -289,7 +287,7 @@ async def test_custom_normalization() -> None:
 
 
 async def test_display_username_normalization() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(display_username_normalization=lambda d: d.lower())
     driver = _build(memory_adapter(), plugin)
@@ -310,7 +308,7 @@ async def test_display_username_normalization() -> None:
 async def test_display_username_validator_rejects() -> None:
     import re
 
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(
         display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
@@ -341,7 +339,7 @@ async def test_display_username_validator_rejects() -> None:
 
 
 async def test_post_normalization_sets_display_to_original() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(
         username_validation_order="post-normalization",
@@ -360,7 +358,7 @@ async def test_post_normalization_sets_display_to_original() -> None:
 
 
 async def test_is_username_available_true_false_and_normalized() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up(driver, "priority_user", "test-password")
@@ -382,7 +380,7 @@ async def test_is_username_available_true_false_and_normalized() -> None:
 
 
 async def test_is_username_available_validation_errors() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     invalid = await driver.request(
@@ -405,7 +403,7 @@ async def test_is_username_available_validation_errors() -> None:
 
 
 async def test_is_username_available_custom_validator() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(username_validator=lambda u: u.startswith("user_"))
     driver = _build(memory_adapter(), plugin)
@@ -421,7 +419,7 @@ async def test_is_username_available_custom_validator() -> None:
 
 
 async def test_custom_validator_rejects_sign_in() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(username_validator=lambda u: u.startswith("user_"))
     driver = _build(memory_adapter(), plugin)
@@ -454,7 +452,7 @@ async def _session_user(driver: ASGIDriver) -> dict[str, Any]:
 
 
 async def test_update_username() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "new_username", "new-password")
@@ -468,7 +466,7 @@ async def test_update_username() -> None:
 
 async def test_update_user_duplicate_different_user_400() -> None:
     # @see https://github.com/better-auth/better-auth/issues/8689
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "duplicate_user", "new_password1")
@@ -483,7 +481,7 @@ async def test_update_user_duplicate_different_user_400() -> None:
 
 async def test_update_user_duplicate_different_casing_400() -> None:
     # @see https://github.com/better-auth/better-auth/issues/8689
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "casetestuser", "new_password1")
@@ -497,7 +495,7 @@ async def test_update_user_duplicate_different_casing_400() -> None:
 
 
 async def test_update_user_duplicate_same_user_succeeds() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "new_username_2.1", "new-password")
@@ -511,7 +509,7 @@ async def test_update_user_duplicate_same_user_succeeds() -> None:
 
 
 async def test_update_user_preserves_both_username_and_display() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "start_user", "new-password")
@@ -532,7 +530,7 @@ async def test_update_user_preserves_both_username_and_display() -> None:
 async def test_update_display_username_valid() -> None:
     import re
 
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(
         display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
@@ -552,7 +550,7 @@ async def test_update_display_username_valid() -> None:
 async def test_update_display_username_invalid_rejected() -> None:
     import re
 
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     plugin = username(
         display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
@@ -567,10 +565,10 @@ async def test_update_display_username_invalid_rejected() -> None:
 
 
 def _build_verify(adapter: Any) -> ASGIDriver:
-    from better_auth.types.init_options import EmailPasswordOptions
+    from kernia.types.init_options import EmailPasswordOptions
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret-key",
             email_and_password=EmailPasswordOptions(
@@ -583,7 +581,7 @@ def _build_verify(adapter: Any) -> ASGIDriver:
 
 
 async def test_email_verification_no_info_leak() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver = _build_verify(memory_adapter())
     r = await driver.request(

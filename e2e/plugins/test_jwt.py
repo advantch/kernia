@@ -11,8 +11,8 @@ import base64
 import json
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.plugins.jwt import JwtOptions, jwt
@@ -119,7 +119,7 @@ async def test_token_requires_session() -> None:
 
 def _build(opts: JwtOptions):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             base_url="http://localhost:3000",

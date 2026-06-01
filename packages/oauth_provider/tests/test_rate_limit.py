@@ -12,14 +12,14 @@ than upstream's `pathMatcher` closures, so rules are matched by `rule.path`.
 
 from __future__ import annotations
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.types.init_options import BetterAuthOptions, RateLimitOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.types.init_options import KerniaOptions, RateLimitOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 from .conftest import ISSUER, signup
 
@@ -91,7 +91,7 @@ def test_disable_rate_limit_for_specific_endpoints() -> None:
 
 def _build_enforcing(rate_limit):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-32-characters-long!!!",
             plugins=[

@@ -12,8 +12,8 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from better_auth_sso import oidc_discovery as disc
-from better_auth_sso.oidc_discovery import (
+from kernia_sso import oidc_discovery as disc
+from kernia_sso.oidc_discovery import (
     DiscoveryError,
     FetchResult,
     compute_discovery_url,

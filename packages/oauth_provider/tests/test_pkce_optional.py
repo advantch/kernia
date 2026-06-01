@@ -10,9 +10,9 @@ logic (`_pkce_required`) and the token-side consistency checks mirror upstream
 from __future__ import annotations
 
 import pytest
-from better_auth.oauth2 import pkce_challenge, pkce_verifier
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.oauth2 import pkce_challenge, pkce_verifier
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 from .conftest import REDIRECT_URI, SCOPES, exchange_code, make_auth, signup
 

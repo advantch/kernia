@@ -22,7 +22,6 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization

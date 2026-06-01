@@ -11,7 +11,7 @@ reuse detection) is ported.
 from __future__ import annotations
 
 import pytest
-from better_auth.types.adapter import Where
+from kernia.types.adapter import Where
 
 from .conftest import (
     authorize_code,

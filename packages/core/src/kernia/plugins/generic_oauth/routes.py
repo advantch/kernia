@@ -22,12 +22,11 @@ from kernia.api.endpoint import create_auth_endpoint
 from kernia.api.request import RedirectResponse
 from kernia.context import create_session
 from kernia.error import APIError
-from kernia.oauth2 import exchange_code, fetch_userinfo, pkce_verifier, random_state
+from kernia.oauth2 import exchange_code, fetch_userinfo, pkce_verifier
 from kernia.oauth2.link_account import handle_oauth_user_info
 from kernia.oauth2.state import generate_state, parse_state
 from kernia.plugins.generic_oauth.config import GenericOAuthConfig
 from kernia.social_providers._base import OAuthUserProfile
-from kernia.social_providers._helpers import _default_profile_mapper
 from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 
@@ -70,7 +69,7 @@ def _generate_state_with_signup(
     import secrets as _secrets
     import time as _time
 
-    from better_auth.cookies import sign as _sign
+    from kernia.cookies import sign as _sign
 
     payload: dict[str, Any] = {
         "v": 1,
@@ -490,7 +489,7 @@ async def _is_new_registration(
     row already exists for ``(provider_id, account_id)`` *and* no user already
     exists with the resolved email (which would otherwise be linked/returned).
     """
-    from better_auth.types.adapter import Where
+    from kernia.types.adapter import Where
 
     existing_account = await ctx.auth.adapter.find_one(
         model="account",

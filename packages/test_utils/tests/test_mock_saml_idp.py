@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import xml.etree.ElementTree as ET
 
-from better_auth_test_utils import MockSAMLIdP
+from kernia_test_utils import MockSAMLIdP
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 

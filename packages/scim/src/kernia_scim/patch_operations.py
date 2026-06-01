@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from better_auth_scim.mappings import get_user_full_name
+from kernia_scim.mappings import get_user_full_name
 
 # A mapping describes how a normalized path maps onto a target column.
 # Each entry: {"resource": "user"|"account", "target": str, "map": fn}

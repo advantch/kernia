@@ -28,14 +28,14 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from better_auth import cookies as cookie_utils
-from better_auth.api.endpoint import create_auth_endpoint
-from better_auth.context import create_session
-from better_auth.error import APIError
-from better_auth.types.adapter import Where
-from better_auth.types.context import EndpointContext
-from better_auth.types.cookie import CookieAttributes
-from better_auth.types.endpoint import AuthEndpoint, EndpointOptions
+from kernia import cookies as cookie_utils
+from kernia.api.endpoint import create_auth_endpoint
+from kernia.context import create_session
+from kernia.error import APIError
+from kernia.types.adapter import Where
+from kernia.types.context import EndpointContext
+from kernia.types.cookie import CookieAttributes
+from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 
 from . import webauthn_server as _wa
 from .error_codes import PASSKEY_ERROR_CODES

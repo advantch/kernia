@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from urllib.parse import unquote
 
+import pytest
 from kernia.auth import init
 from kernia.plugins import bearer, email_and_password
 from kernia.types.init_options import KerniaOptions
@@ -99,10 +100,10 @@ async def test_bearer_invalid_signature_rejected(adapter_factory) -> None:
 
 @pytest.fixture
 async def bearer_instance():
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="bearer-secret",
             plugins=[email_and_password(), bearer()],

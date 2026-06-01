@@ -10,7 +10,6 @@ import secrets
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
 from kernia.db.schema import CORE_MODELS
 from kernia.plugins import anonymous, email_and_password
@@ -33,9 +32,8 @@ async def _memory_factory() -> Any:
 
 
 async def _sqlite_factory() -> Any:
-    from sqlalchemy.ext.asyncio import create_async_engine
-
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -158,7 +156,7 @@ async def test_double_anonymous_sign_in_rejected() -> None:
 
 
 async def test_delete_anonymous_user() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     driver, _ = _build(adapter)
@@ -177,7 +175,7 @@ async def test_delete_anonymous_user() -> None:
 
 
 async def test_delete_anonymous_user_disabled() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build(memory_adapter(), disable_delete_anonymous_user=True)
     await driver.request("POST", "/sign-in/anonymous", json_body={})
@@ -187,7 +185,7 @@ async def test_delete_anonymous_user_disabled() -> None:
 
 
 async def test_delete_rejects_non_anonymous_user() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build(memory_adapter())
     r = await driver.request(
@@ -202,7 +200,7 @@ async def test_delete_rejects_non_anonymous_user() -> None:
 
 
 async def test_custom_email_domain_name() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build(memory_adapter(), email_domain_name="my-app.com")
     r = await driver.request("POST", "/sign-in/anonymous", json_body={})
@@ -211,7 +209,7 @@ async def test_custom_email_domain_name() -> None:
 
 
 async def test_generate_random_email_invalid_format() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build(
         memory_adapter(), generate_random_email=lambda: "not-an-email"
@@ -222,7 +220,7 @@ async def test_generate_random_email_invalid_format() -> None:
 
 
 async def test_generate_name() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build(memory_adapter(), generate_name=lambda _ctx: "Custom Name")
     r = await driver.request("POST", "/sign-in/anonymous", json_body={})

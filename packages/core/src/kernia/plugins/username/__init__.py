@@ -11,9 +11,11 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from kernia.plugins.username import routes
+from kernia.plugins.username.routes import UsernameOptions
 from kernia.types.adapter import FieldDef
+from kernia.types.context import AuthContext
 from kernia.types.endpoint import AuthEndpoint
-from kernia.types.hooks import PluginHooks
+from kernia.types.hooks import BeforeHook, PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
 
 _UPDATE_USER_HOOKS = PluginHooks(
@@ -70,9 +72,33 @@ class _UsernamePlugin:
         ctx.plugin_state["username"] = self.options
 
 
-def username() -> KerniaPlugin:
-    """Construct the username plugin."""
-    return _UsernamePlugin()  # type: ignore[return-value]
+def username(
+    *,
+    min_username_length: int = 3,
+    max_username_length: int = 30,
+    username_validator: Callable[[str], bool] | None = None,
+    display_username_validator: Callable[[str], bool] | None = None,
+    username_normalization: Callable[[str], str] | bool | None = None,
+    display_username_normalization: Callable[[str], str] | bool | None = None,
+    username_validation_order: str = "pre-normalization",
+    display_username_validation_order: str = "pre-normalization",
+) -> KerniaPlugin:
+    """Construct the username plugin.
+
+    Args mirror upstream `UsernameOptions`. ``username_normalization=False``
+    disables lower-casing; a callable supplies a custom normalizer.
+    """
+    options = UsernameOptions(
+        min_username_length=min_username_length,
+        max_username_length=max_username_length,
+        username_validator=username_validator,
+        display_username_validator=display_username_validator,
+        username_normalization=username_normalization,
+        display_username_normalization=display_username_normalization,
+        username_validation_order=username_validation_order,
+        display_username_validation_order=display_username_validation_order,
+    )
+    return _UsernamePlugin(options=options)  # type: ignore[return-value]
 
 
 __all__ = ["USERNAME_ERROR_CODES", "username"]

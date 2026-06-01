@@ -17,13 +17,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.context import create_session, revoke_session
-from kernia.cookies import sign
+from kernia.context import create_session
+from kernia.cookies import sign, verify
 from kernia.crypto import hash_password
 from kernia.error import APIError
-from kernia.plugins.access import Role
-from kernia.types.adapter import Where
-from kernia.types.context import EndpointContext, Session
+from kernia.plugins.access import Role, default_roles
+from kernia.types.adapter import SortBy, Where
+from kernia.types.context import EndpointContext
 from kernia.types.cookie import (
     DONT_REMEMBER_COOKIE,
     SESSION_TOKEN_COOKIE,
@@ -565,8 +565,6 @@ def build_endpoints(opts: AdminOptions, roles_map: dict[str, Role]) -> tuple[Aut
         }
 
     async def stop_impersonating(ctx: EndpointContext) -> dict[str, Any]:
-        from kernia.cookies import verify
-
         if ctx.session is None:
             raise APIError(401, "UNAUTHORIZED")
         session_row = await ctx.auth.adapter.find_one(

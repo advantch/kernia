@@ -29,8 +29,6 @@ import time
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
-
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.api.request import RedirectResponse
 from kernia.context import create_session
@@ -38,15 +36,15 @@ from kernia.error import APIError
 from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
+from pydantic import BaseModel, Field
 
 from kernia_sso import oidc as oidc_helpers
 from kernia_sso import saml as saml_helpers
 from kernia_sso.domain import (
-    email_domain,
     make_verification_token,
 )
-from better_auth_sso.linking import assign_organization_from_provider
-from better_auth_sso.utils import mask_client_id, parse_certificate
+from kernia_sso.linking import assign_organization_from_provider
+from kernia_sso.utils import mask_client_id, parse_certificate
 
 _OPTS_KEY = "sso"
 

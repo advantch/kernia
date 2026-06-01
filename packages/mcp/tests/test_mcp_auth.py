@@ -9,20 +9,20 @@ forged / wrong-resource / insufficient-scope tokens.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.plugins.mcp.plugin import MCPOptions, mcp
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_mcp import BetterAuthTokenVerifier, mcp_auth
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.plugins.mcp.plugin import MCPOptions, mcp
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_mcp import BetterAuthTokenVerifier, mcp_auth
+from kernia_memory_adapter import memory_adapter
 
 
 @pytest.fixture
 async def setup():
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -63,7 +63,7 @@ async def setup():
 
 
 async def _mint(auth, *, scope: str, resource: str | None) -> str:
-    from better_auth.plugins.jwt.plugin import issue_jwt
+    from kernia.plugins.jwt.plugin import issue_jwt
 
     payload = {
         "sub": "user-1",

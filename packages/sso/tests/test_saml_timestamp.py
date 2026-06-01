@@ -13,9 +13,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from better_auth.error import APIError
-from better_auth_sso import saml_timestamp
-from better_auth_sso.saml_timestamp import (
+from kernia.error import APIError
+from kernia_sso import saml_timestamp
+from kernia_sso.saml_timestamp import (
     DEFAULT_CLOCK_SKEW_MS,
     SAMLConditions,
     TimestampValidationOptions,

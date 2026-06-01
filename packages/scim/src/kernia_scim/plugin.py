@@ -31,14 +31,28 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.crypto import hash_password
 from kernia.error import APIError
-from kernia.types.adapter import Where
+from kernia.types.adapter import FieldDef, ModelDef, Where
 from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 from kernia.types.plugin import KerniaPlugin, PluginSchema
 
-from kernia_scim.patch import apply_patch_ops
+from kernia_scim.mappings import (
+    get_account_id,
+    get_resource_url,
+    get_user_full_name,
+    get_user_primary_email,
+)
+from kernia_scim.patch_operations import build_user_patch
+from kernia_scim.schemas import (
+    SCIM_USER_RESOURCE_SCHEMA,
+    SCIM_USER_RESOURCE_TYPE,
+)
+from kernia_scim.scim_error import SCIMAPIError
+from kernia_scim.scim_filters import SCIMParseError, parse_scim_user_filter
+from kernia_scim.scim_resources import create_user_resource
+from kernia_scim.scim_tokens import store_scim_token, verify_scim_token
+from kernia_scim.types import SCIMOptions, SCIMProvider
 
 LIST_RESPONSE_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
 PATCH_OP_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
@@ -155,44 +169,19 @@ def _normalize_scim_provider(provider: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _scim_to_user_updates(payload: Mapping[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    if "userName" in payload:
-        out["email"] = payload["userName"]
-    emails = payload.get("emails")
-    if isinstance(emails, list) and emails:
-        primary = next((e for e in emails if e.get("primary")), emails[0])
-        if isinstance(primary, dict) and primary.get("value"):
-            out["email"] = primary["value"]
-    name = payload.get("name")
-    if isinstance(name, Mapping):
-        formatted = name.get("formatted") or " ".join(
-            [s for s in (name.get("givenName"), name.get("familyName")) if s]
-        ).strip()
-        if formatted:
-            out["name"] = formatted
-    elif "displayName" in payload:
-        out["name"] = payload["displayName"]
-    if "active" in payload:
-        out["banned"] = not bool(payload["active"])
-    return out
-
-
-async def _is_scim_authorized(ctx: EndpointContext, opts: SCIMOptions) -> bool:
-    # 1. API key scope.scim == true. If the request was authenticated via an
-    # ApiKey header we never fall back to a cookie-based admin check — the key
-    # acts as the sole credential and must carry the scim scope explicitly.
-    auth_header = ctx.request.headers.get("authorization", "")
-    if auth_header.lower().startswith("apikey "):
-        raw = auth_header.split(" ", 1)[1].strip()
-        from kernia_api_key import parse_api_key
-        from kernia.crypto import verify_password
-
-        prefix = parse_api_key(raw)
-        if prefix:
-            rows = await ctx.auth.adapter.find_many(
-                model="apiKey",
-                where=(Where(field="keyPrefix", value=prefix),),
+async def _assert_scim_provider_access(
+    ctx: EndpointContext,
+    user_id: str,
+    provider: Mapping[str, Any],
+    required_role: list[str],
+) -> None:
+    organization_id = provider.get("organizationId")
+    if organization_id:
+        if not _has_plugin(ctx, "organization"):
+            raise APIError(
+                403,
+                "FORBIDDEN",
+                message="Organization plugin is required to access this SCIM provider",
             )
         member = await _find_organization_member(ctx, user_id, organization_id)
         if not member:

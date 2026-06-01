@@ -13,15 +13,15 @@ import base64
 import json
 
 import pytest
-from better_auth.auth import init
-from better_auth.oauth2 import pkce_challenge, pkce_verifier
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.oauth2 import pkce_challenge, pkce_verifier
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 ISSUER = "https://issuer.test"
 REDIRECT_URI = "https://client.test/cb"
@@ -44,7 +44,7 @@ def make_auth(**oauth_kwargs):
     opts = {"issuer": ISSUER, "enable_dynamic_registration": True}
     opts.update(oauth_kwargs)
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-32-characters-long!!!",
             plugins=[

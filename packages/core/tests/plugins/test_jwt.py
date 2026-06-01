@@ -10,10 +10,11 @@ import json
 from datetime import UTC
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 from kernia.auth import init
 from kernia.plugins.jwt import jwt as jwt_plugin
+from kernia.plugins.jwt import plugin as jwt_mod
 from kernia.plugins.jwt.plugin import (
     JwtOptions,
     _create_key,
@@ -371,7 +372,7 @@ async def test_rotation_grace_period(monkeypatch) -> None:
 
 
 async def _get_jwks_via_handler(auth, fake_now) -> dict:
-    from better_auth.plugins.jwt.plugin import _get_jwks
+    from kernia.plugins.jwt.plugin import _get_jwks
 
     class _Ctx:
         def __init__(self, a):

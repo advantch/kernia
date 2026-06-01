@@ -2,7 +2,7 @@
 
 Mirrors `betterAuth()` in `reference/packages/better-auth/src/auth.ts`. Accepts a
 `KerniaOptions`, composes the registered plugins, materializes the schema, and
-returns a `Kernia` handle that exposes the ASGI router and helpers.
+returns a `BetterAuth` handle that exposes the ASGI router and helpers.
 """
 
 from __future__ import annotations
@@ -11,15 +11,18 @@ import asyncio
 from dataclasses import dataclass
 
 from kernia.api.router import Router
-from kernia.db.schema import CORE_MODELS
+from kernia.db.adapter.transform_adapter import TransformAdapter
+from kernia.db.schema.resolve import resolve_tables
+from kernia.db.with_hooks import get_with_hooks
 from kernia.error import ErrorRegistry
 from kernia.types.context import AuthContext
+from kernia.types.db_hooks import DatabaseHooksEntry
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.init_options import KerniaOptions
 
 
 @dataclass
-class Kernia:
+class BetterAuth:
     """The handle returned by `init()`.
 
     - `router` is the ASGI-aware route table.
@@ -32,8 +35,8 @@ class Kernia:
     errors: ErrorRegistry
 
 
-def init(options: KerniaOptions) -> Kernia:
-    """Build a `Kernia` handle from options.
+def init(options: KerniaOptions) -> BetterAuth:
+    """Build a `BetterAuth` handle from options.
 
     Steps:
       1. Validate required options.
@@ -137,7 +140,9 @@ def init(options: KerniaOptions) -> Kernia:
     except RuntimeError:
         asyncio.run(ctx.ensure_initialized())
 
-    return Kernia(context=ctx, router=router, errors=errors)
+    # The resolved table set lives on `ctx.tables`; migration codegen reuses the
+    # same merge via `db.schema.resolve.resolve_tables`.
+    return BetterAuth(context=ctx, router=router, errors=errors)
 
 
 def _stamp(ep: AuthEndpoint, *, owner: str) -> AuthEndpoint:

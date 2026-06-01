@@ -17,7 +17,6 @@ import secrets
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
 from kernia.db.schema import CORE_MODELS
 from kernia.plugins.phone_number import phone_number, phone_number_schema
@@ -47,10 +46,8 @@ async def _memory_factory() -> Any:
 
 async def _sqlite_factory() -> Any:
     """SQLAlchemy on shared-cache in-memory SQLite, with the extended user table."""
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    from kernia.types.adapter import ModelDef
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(url, future=True)
@@ -118,7 +115,7 @@ def _build_driver(adapter: Any, sms: MockSMS, *, disable_sign_up: bool = False):
 def _build_driver_opts(adapter: Any, sms: MockSMS, **opts: Any):
     phone_opts: dict[str, Any] = {"send_sms": sms.send, "expires_in": 60, **opts}
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             plugins=[phone_number()],
@@ -256,7 +253,7 @@ async def test_phone_number_signup_disabled(adapter_factory) -> None:
 
 
 async def test_verify_otp_not_found() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     driver, _ = _build_driver(memory_adapter(), MockSMS())
     # No send-otp first, so the verification row doesn't exist.
@@ -270,7 +267,7 @@ async def test_verify_otp_not_found() -> None:
 
 
 async def test_verify_accepts_code_alias() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver(memory_adapter(), sms)
@@ -288,7 +285,7 @@ async def test_verify_accepts_code_alias() -> None:
 
 
 async def test_verify_disable_session() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver(memory_adapter(), sms)
@@ -313,7 +310,7 @@ async def test_verify_disable_session() -> None:
 
 
 async def test_too_many_attempts() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver_opts(memory_adapter(), sms, allowed_attempts=2)
@@ -341,8 +338,8 @@ async def test_too_many_attempts() -> None:
 async def test_sign_in_requires_verification() -> None:
     import time
 
-    from better_auth.crypto import hash_password
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.crypto import hash_password
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     sms = MockSMS()
@@ -392,7 +389,7 @@ async def test_verify_expired_code() -> None:
     """
     import time
 
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     adapter = memory_adapter()
     driver, _ = _build_driver(adapter, MockSMS())
@@ -423,7 +420,7 @@ async def test_verify_last_code_invalidates_previous() -> None:
     Requesting a second OTP supersedes the first: the stale code no longer
     verifies, but the freshly issued one does.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver(memory_adapter(), sms)
@@ -464,7 +461,7 @@ async def test_request_password_reset_unknown_user_succeeds() -> None:
 
     An unknown phone returns success with no SMS dispatched.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver(memory_adapter(), sms)
@@ -484,7 +481,7 @@ async def test_reset_password_creates_credential_account() -> None:
     A phone-only user (verified via OTP, no password) gains a credential
     account through the reset flow, after which phone+password sign-in works.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver(memory_adapter(), sms)
@@ -535,7 +532,7 @@ async def test_reset_password_too_many_attempts() -> None:
     Wrong reset codes increment the attempt counter; exceeding the limit trips
     ``TOO_MANY_ATTEMPTS`` on the reset-password endpoint too.
     """
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     sms = MockSMS()
     driver, _ = _build_driver_opts(memory_adapter(), sms, allowed_attempts=2)

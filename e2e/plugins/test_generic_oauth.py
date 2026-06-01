@@ -18,7 +18,6 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
@@ -183,7 +182,7 @@ def _state_from_url(url: str) -> str:
 
 def _make_auth(adapter, *configs):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             base_url="http://localhost",
@@ -846,7 +845,7 @@ async def test_lenient_issuer_validation_allows_missing_iss(patched_httpx, idp: 
 
 
 def test_okta_helper_config() -> None:
-    from better_auth.plugins.generic_oauth import okta
+    from kernia.plugins.generic_oauth import okta
 
     cfg = okta(
         client_id="okta-client-id", client_secret="okta-client-secret",
@@ -861,7 +860,7 @@ def test_okta_helper_config() -> None:
 
 
 def test_okta_helper_trailing_slash() -> None:
-    from better_auth.plugins.generic_oauth import okta
+    from kernia.plugins.generic_oauth import okta
 
     cfg = okta(
         client_id="x", client_secret="y",
@@ -873,7 +872,7 @@ def test_okta_helper_trailing_slash() -> None:
 
 
 def test_auth0_helper_config() -> None:
-    from better_auth.plugins.generic_oauth import auth0
+    from kernia.plugins.generic_oauth import auth0
 
     cfg = auth0(
         client_id="auth0-client-id", client_secret="auth0-client-secret",
@@ -886,7 +885,7 @@ def test_auth0_helper_config() -> None:
 
 
 def test_auth0_helper_protocol_prefix() -> None:
-    from better_auth.plugins.generic_oauth import auth0
+    from kernia.plugins.generic_oauth import auth0
 
     cfg = auth0(
         client_id="x", client_secret="y", domain="https://dev-xxx.eu.auth0.com",
@@ -895,7 +894,7 @@ def test_auth0_helper_protocol_prefix() -> None:
 
 
 def test_microsoft_entra_id_helper_config() -> None:
-    from better_auth.plugins.generic_oauth import microsoft_entra_id
+    from kernia.plugins.generic_oauth import microsoft_entra_id
 
     cfg = microsoft_entra_id(
         client_id="ms-client-id", client_secret="ms-client-secret", tenant_id="common",
@@ -913,7 +912,7 @@ def test_microsoft_entra_id_helper_config() -> None:
 
 
 def test_microsoft_entra_id_helper_guid_tenant() -> None:
-    from better_auth.plugins.generic_oauth import microsoft_entra_id
+    from kernia.plugins.generic_oauth import microsoft_entra_id
 
     tenant = "12345678-1234-1234-1234-123456789012"
     cfg = microsoft_entra_id(
@@ -925,7 +924,7 @@ def test_microsoft_entra_id_helper_guid_tenant() -> None:
 
 
 def test_slack_helper_config() -> None:
-    from better_auth.plugins.generic_oauth import slack_generic
+    from kernia.plugins.generic_oauth import slack_generic
 
     cfg = slack_generic(client_id="slack-client-id", client_secret="slack-client-secret")
     assert cfg.provider_id == "slack"
@@ -937,7 +936,7 @@ def test_slack_helper_config() -> None:
 
 
 def test_keycloak_helper_config() -> None:
-    from better_auth.plugins.generic_oauth import keycloak
+    from kernia.plugins.generic_oauth import keycloak
 
     cfg = keycloak(
         client_id="keycloak-client-id", client_secret="keycloak-client-secret",
@@ -952,7 +951,7 @@ def test_keycloak_helper_config() -> None:
 
 
 def test_keycloak_helper_trailing_slash() -> None:
-    from better_auth.plugins.generic_oauth import keycloak
+    from kernia.plugins.generic_oauth import keycloak
 
     cfg = keycloak(
         client_id="x", client_secret="y",
@@ -964,7 +963,7 @@ def test_keycloak_helper_trailing_slash() -> None:
 
 
 def test_helper_overrides_scopes_and_options() -> None:
-    from better_auth.plugins.generic_oauth import keycloak, okta
+    from kernia.plugins.generic_oauth import keycloak, okta
 
     o = okta(
         client_id="x", client_secret="y",
@@ -984,7 +983,7 @@ def test_helper_overrides_scopes_and_options() -> None:
 
 
 def test_helpers_integrate_with_generic_oauth() -> None:
-    from better_auth.plugins.generic_oauth import (
+    from kernia.plugins.generic_oauth import (
         auth0,
         keycloak,
         microsoft_entra_id,

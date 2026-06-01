@@ -20,19 +20,19 @@ the provider row.
 
 from __future__ import annotations
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_sso import sso
-from better_auth_test_utils import ASGIDriver, MockSAMLIdP
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_sso import sso
+from kernia_test_utils import ASGIDriver, MockSAMLIdP
 
 _SESSION_COOKIE = "better-auth.session_token"
 
 
 def _build() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             base_url="http://localhost:3000",

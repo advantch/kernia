@@ -27,10 +27,10 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from better_auth.types.adapter import Where
-from better_auth.types.context import AuthContext
+from kernia.types.adapter import Where
+from kernia.types.context import AuthContext
 
-from better_auth_sso.domain import email_domain
+from kernia_sso.domain import email_domain
 
 # A provisioning options bag (snake_case or camelCase keys both accepted):
 #   disabled: bool

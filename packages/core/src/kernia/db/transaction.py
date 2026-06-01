@@ -1,7 +1,7 @@
 """Core transaction boundary.
 
 Ties an adapter's :meth:`transaction` to the database after-hook queue so the
-``after`` half of :class:`~better_auth.types.db_hooks.DatabaseHooks` observes the
+``after`` half of :class:`~kernia.types.db_hooks.DatabaseHooks` observes the
 same atomicity as the writes:
 
   * on clean commit the queued after-hooks run **after** the adapter transaction
@@ -25,10 +25,10 @@ import contextlib
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
-from better_auth.db.hook_queue import collect_after_hooks, current_after_hook_queue
+from kernia.db.hook_queue import collect_after_hooks, current_after_hook_queue
 
 if TYPE_CHECKING:
-    from better_auth.types.adapter import CustomAdapter
+    from kernia.types.adapter import CustomAdapter
 
 
 @contextlib.asynccontextmanager

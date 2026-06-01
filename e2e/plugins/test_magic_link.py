@@ -12,7 +12,6 @@ from typing import Any
 from urllib.parse import urlencode
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins.magic_link import magic_link
 from kernia.types.init_options import KerniaOptions
@@ -56,7 +55,7 @@ def _build_driver(adapter: Any, smtp: MockSMTP, *, disable_sign_up: bool = False
 
 def _build_with(adapter: Any, magic_opts: dict[str, Any]):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=adapter,
             secret="test-secret",
             base_url="http://localhost:3000",
@@ -155,7 +154,7 @@ def _captured() -> tuple[list[dict[str, Any]], Any]:
 
 
 async def test_send_magic_link_url_and_no_metadata() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
@@ -170,7 +169,7 @@ async def test_send_magic_link_url_and_no_metadata() -> None:
 
 
 async def test_metadata_forwarded() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
@@ -184,7 +183,7 @@ async def test_metadata_forwarded() -> None:
 
 
 async def test_custom_generate_token() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     driver, _ = _build_with(
@@ -199,7 +198,7 @@ async def test_custom_generate_token() -> None:
 
 
 async def test_sign_up_with_name() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
@@ -220,8 +219,8 @@ async def test_sign_up_with_name() -> None:
 
 
 async def test_store_token_hashed() -> None:
-    from better_auth.plugins.magic_link.routes import default_key_hasher
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.plugins.magic_link.routes import default_key_hasher
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     adapter = memory_adapter()
@@ -233,7 +232,7 @@ async def test_store_token_hashed() -> None:
     )
     token = captured[0]["token"]
     # Stored under the hashed identifier; verifying with the plaintext token works.
-    from better_auth.types.adapter import Where
+    from kernia.types.adapter import Where
 
     hashed = default_key_hasher(token)
     rec = await adapter.find_one(
@@ -247,8 +246,8 @@ async def test_store_token_hashed() -> None:
 
 
 async def test_store_token_custom_hasher() -> None:
-    from better_auth.types.adapter import Where
-    from better_auth_memory_adapter import memory_adapter
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     adapter = memory_adapter()
@@ -278,7 +277,7 @@ async def test_store_token_custom_hasher() -> None:
 
 
 async def test_verify_last_magic_link() -> None:
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})

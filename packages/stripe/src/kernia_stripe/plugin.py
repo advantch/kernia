@@ -16,8 +16,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from kernia.types.context import AuthContext
+from kernia.types.db_hooks import DatabaseHooks
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.plugin import KerniaPlugin, PluginSchema
+
+from kernia_stripe.hooks import build_customer_database_hooks
 from kernia_stripe.routes import build_endpoints
 from kernia_stripe.schema import StripeOptions, get_schema
 from kernia_stripe.seat_sync import register_seat_sync
@@ -86,7 +89,7 @@ class _StripePlugin:
 
 
 def stripe(options: StripeOptions) -> KerniaPlugin:
-    """Construct the Kernia Stripe plugin.
+    """Construct the better-auth Stripe plugin.
 
     All API calls go through `options.stripe_client` which must implement the
     duck-typed surface in `kernia_stripe.client.StripeClient`. Tests can

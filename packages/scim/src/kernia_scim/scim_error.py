@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from better_auth.error import APIError
+from kernia.error import APIError
 
 SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error"
 

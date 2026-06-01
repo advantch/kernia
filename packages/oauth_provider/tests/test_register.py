@@ -10,7 +10,7 @@ public/confidential type consistency, secret/id overwrite) are ported.
 from __future__ import annotations
 
 import pytest
-from better_auth_test_utils import ASGIDriver
+from kernia_test_utils import ASGIDriver
 
 from .conftest import REDIRECT_URI, make_auth
 

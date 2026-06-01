@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from better_auth_scim.mappings import get_resource_url
-from better_auth_scim.schemas import SCIM_USER_RESOURCE_SCHEMA
+from kernia_scim.mappings import get_resource_url
+from kernia_scim.schemas import SCIM_USER_RESOURCE_SCHEMA
 
 
 def create_user_resource(

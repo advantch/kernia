@@ -25,14 +25,14 @@ from __future__ import annotations
 import base64
 from urllib.parse import quote
 
+import pytest
 from kernia.auth import init
-from kernia.plugins.admin import admin
 from kernia.plugins.email_password import email_and_password
+from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
-from kernia_api_key import api_key
 from kernia_memory_adapter import memory_adapter
-from kernia_scim import apply_patch_ops, scim
+from kernia_scim import SCIMOptions, SCIMProvider, scim
 from kernia_test_utils import ASGIDriver
 
 USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
@@ -46,33 +46,20 @@ PATCH_OP = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 # ---------------------------------------------------------------------------
 
 
-def test_apply_patch_nested_path() -> None:
-    doc: dict = {}
-    apply_patch_ops(doc, [{"op": "Add", "path": "name.formatted", "value": "X"}])
-    assert doc == {"name": {"formatted": "X"}}
-
-
-def test_apply_patch_bulk_replace_without_path() -> None:
-    doc: dict = {"a": 1}
-    apply_patch_ops(doc, [{"op": "Replace", "value": {"a": 2, "b": 3}}])
-    assert doc == {"a": 2, "b": 3}
-
-
-def test_apply_patch_unknown_op_raises() -> None:
-    with pytest.raises(ValueError):
-        apply_patch_ops({}, [{"op": "Mutate", "value": 1}])
-
-
-# ----- Integration --------------------------------------------------------
-
-
-async def _admin_driver() -> tuple[ASGIDriver, object]:
-    db = memory_adapter()
-    auth = init(
-        KerniaOptions(
-            database=db,
-            secret="test-secret-key",
-            plugins=[email_and_password(), admin(), api_key(), scim()],
+class Harness:
+    def __init__(self, scim_options: SCIMOptions | None = None) -> None:
+        self.db = memory_adapter()
+        self.auth = init(
+            KerniaOptions(
+                database=self.db,
+                secret="test-secret-key",
+                base_url="http://localhost:3000",
+                plugins=[
+                    email_and_password(),
+                    scim(scim_options),
+                    organization(),
+                ],
+            )
         )
         self.app = self.auth.router.mount()
         self._default_driver: ASGIDriver | None = None
@@ -933,11 +920,11 @@ async def test_rejects_provider_ids_colliding_with_builtin_account_providers() -
 
 
 async def test_rejects_provider_ids_colliding_with_social_providers() -> None:
-    from better_auth.social_providers import google
+    from kernia.social_providers import google
 
     db = memory_adapter()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=db,
             secret="test-secret-key",
             base_url="http://localhost:3000",
@@ -1053,7 +1040,7 @@ async def test_should_execute_hooks_before_scim_token_generation() -> None:
                 "You do not have enough privileges to generate a SCIM token"
             )
 
-    from better_auth.error import APIError
+    from kernia.error import APIError
 
     class _Forbidden(APIError):
         def __init__(self, message: str) -> None:
@@ -1534,7 +1521,7 @@ async def test_should_filter_org_providers_by_role_in_list_endpoint() -> None:
 
 
 def _ownership_on():
-    from better_auth_scim.types import ProviderOwnership
+    from kernia_scim.types import ProviderOwnership
 
     return ProviderOwnership(enabled=True)
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.plugins.organization import organization
@@ -25,7 +26,11 @@ from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_stripe import stripe
 from kernia_stripe.client import StripeClient
-from kernia_stripe.schema import StripeOptions, StripePlan
+from kernia_stripe.schema import (
+    OrganizationStripeOptions,
+    StripeOptions,
+    StripePlan,
+)
 from kernia_test_utils import ASGIDriver, MockStripe
 
 
@@ -297,7 +302,7 @@ async def test_seat_sync_no_op_when_organization_integration_disabled() -> None:
             "createdAt": 0,
         },
     )
-    # Trigger an event manually via the bus to confirm no listener picks it up
+
     from kernia.events import MemberEvent, get_bus
 
     await get_bus(auth.context).emit(

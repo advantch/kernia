@@ -36,7 +36,7 @@ async def _sqlite_factory() -> Any:
     # several tests run concurrently because the URL contains a fresh secret.
     import secrets
 
-    from better_auth_sqlalchemy import sqlalchemy_adapter
+    from kernia_sqlalchemy import sqlalchemy_adapter
 
     url = f"sqlite+aiosqlite:///file:{secrets.token_hex(8)}?mode=memory&cache=shared&uri=true"
     return await sqlalchemy_adapter(url=url)

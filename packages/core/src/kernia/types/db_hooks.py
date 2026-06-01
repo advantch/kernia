@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from better_auth.types.context import AuthContext
+    from kernia.types.context import AuthContext
 
 Record = dict[str, Any]
 

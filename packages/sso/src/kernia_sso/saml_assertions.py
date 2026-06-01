@@ -14,7 +14,7 @@ import binascii
 import re
 from dataclasses import dataclass
 
-from better_auth.error import APIError
+from kernia.error import APIError
 
 from .saml_parser import count_all_nodes, parse_xml
 

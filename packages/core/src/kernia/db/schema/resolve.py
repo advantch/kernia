@@ -21,9 +21,9 @@ import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from better_auth.db.schema.core_tables import CORE_MODELS
-from better_auth.types.adapter import FieldDef, ModelDef
-from better_auth.types.plugin import BetterAuthPlugin
+from kernia.db.schema.core_tables import CORE_MODELS
+from kernia.types.adapter import FieldDef, ModelDef
+from kernia.types.plugin import KerniaPlugin
 
 
 def _rate_limit_model() -> ModelDef:
@@ -102,7 +102,7 @@ def _apply_model_override(model: ModelDef, override: Any) -> ModelDef:
 
 
 def resolve_tables(
-    plugins: Iterable[BetterAuthPlugin] = (),
+    plugins: Iterable[KerniaPlugin] = (),
     *,
     core_models: Sequence[ModelDef] = CORE_MODELS,
     additional_fields: Mapping[str, Sequence[FieldDef]] | None = None,

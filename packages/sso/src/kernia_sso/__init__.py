@@ -9,6 +9,10 @@ See `plugin.sso()` for the entry point.
 
 from kernia_sso import domain, oidc, saml
 from kernia_sso.errors import SSO_ERROR_CODES
+from kernia_sso.linking import (
+    assign_organization_by_domain,
+    assign_organization_from_provider,
+)
 from kernia_sso.plugin import sso
 from kernia_sso.schema import SSO_DOMAIN_MODEL, SSO_MODELS, SSO_PROVIDER_MODEL
 

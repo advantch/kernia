@@ -15,9 +15,9 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from kernia.types.context import AuthContext
+from kernia.types.context import AuthContext, EndpointContext
 from kernia.types.endpoint import AuthEndpoint
-from kernia.types.hooks import PluginHooks
+from kernia.types.hooks import AfterHook, PluginHooks
 from kernia.types.plugin import (
     KerniaPlugin,
     InitResult,
@@ -100,7 +100,7 @@ def custom_session(
     fn: CustomSessionFn,
     *,
     should_mutate_list_device_sessions: bool = False,
-) -> BetterAuthPlugin:
+) -> KerniaPlugin:
     """Override the ``/get-session`` response with a custom shape.
 
     Mirrors upstream ``customSession(fn, options?, config?)``: ``fn`` receives the

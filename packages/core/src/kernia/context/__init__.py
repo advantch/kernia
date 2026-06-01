@@ -10,7 +10,7 @@ import json
 import time
 from typing import Any
 
-from kernia.cookies import new_token, sign
+from kernia.cookies import _b64url, new_token, sign
 from kernia.types.adapter import Where
 from kernia.types.context import AuthContext, Session
 from kernia.types.cookie import (

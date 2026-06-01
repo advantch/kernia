@@ -22,19 +22,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import (
-    BetterAuthOptions,
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.organization import organization
+from kernia.types.adapter import Where
+from kernia.types.init_options import (
+    KerniaOptions,
     EmailPasswordOptions,
     RateLimitOptions,
 )
-from better_auth_memory_adapter import memory_adapter
-from better_auth_stripe import StripeClient, StripeOptions, StripePlan, stripe
-from better_auth_stripe.schema import OrganizationStripeOptions
-from better_auth_test_utils import ASGIDriver, MockStripe
+from kernia_memory_adapter import memory_adapter
+from kernia_stripe import StripeClient, StripeOptions, StripePlan, stripe
+from kernia_stripe.schema import OrganizationStripeOptions
+from kernia_test_utils import ASGIDriver, MockStripe
 
 WEBHOOK_SECRET = "whsec_test_secret"
 
@@ -71,7 +71,7 @@ def _build(
         plugins.append(organization())
     plugins.append(plugin)
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="stripe-secret",
             email_and_password=EmailPasswordOptions(enabled=True),

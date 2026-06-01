@@ -6,8 +6,6 @@ client-side, then posts it to `/siwe/verify` and asserts a session is issued.
 
 from __future__ import annotations
 
-import pytest
-
 from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.plugins.siwe import siwe
@@ -158,7 +156,7 @@ async def test_siwe_replay_nonce_rejected() -> None:
 
 import re  # noqa: E402
 
-from better_auth.types.adapter import Where  # noqa: E402
+from kernia.types.adapter import Where  # noqa: E402
 
 WALLET = "0x000000000000000000000000000000000000dEaD"
 DOMAIN = "example.com"
@@ -174,7 +172,7 @@ async def _stub_verify(args) -> bool:
 
 def _stub_auth(**siwe_kwargs):
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[

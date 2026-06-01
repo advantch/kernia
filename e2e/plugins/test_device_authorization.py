@@ -18,8 +18,11 @@ from __future__ import annotations
 
 import time
 
+import pytest
 from kernia.auth import init
 from kernia.plugins import device_authorization, email_and_password
+from kernia.plugins.device_authorization.routes import parse_ms
+from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_test_utils import ASGIDriver
 from kernia_test_utils.adapter_fixtures import all_adapters_param
@@ -28,7 +31,7 @@ GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 
 
 def _memory():
-    from better_auth_memory_adapter import memory_adapter
+    from kernia_memory_adapter import memory_adapter
 
     return memory_adapter()
 
@@ -49,7 +52,7 @@ def _build(*da_kwargs_plugins) -> ASGIDriver:
     fetch it (for direct adapter assertions) via ``_auth_of(driver)``.
     """
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=_memory(),
             secret="device-secret",
             plugins=[email_and_password(), *da_kwargs_plugins],
@@ -646,7 +649,7 @@ async def test_does_not_overwrite_a_device_code_claimed_after_verify_reads_it() 
     base.update = racing_update  # type: ignore[method-assign]
 
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=base,
             secret="device-secret",
             plugins=[email_and_password(), _flow_plugin()],

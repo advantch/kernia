@@ -29,6 +29,7 @@ from kernia.types.adapter import (
     Where,
 )
 
+
 # ---------------------------------------------------------------------------
 # WhereOp -> BSON filter translator (pure function — heavily unit-tested)
 # ---------------------------------------------------------------------------

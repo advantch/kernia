@@ -37,11 +37,16 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 import pytest
-
 from kernia.auth import init
 from kernia.oauth2 import exchange_code, fetch_userinfo, verify_id_token
-from kernia.plugins.oauth_proxy import OAuthProxyOptions, oauth_proxy
-from kernia.social_providers._base import OAuthProvider, OAuthUserProfile
+from kernia.plugins.oauth_proxy import (
+    OAuthProxyOptions,
+    oauth_proxy,
+    symmetric_decrypt,
+    symmetric_encrypt,
+)
+from kernia.social_providers._base import OAuthUserProfile
+from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver
@@ -92,7 +97,7 @@ def _make_payload(
 def _passthrough_auth(**proxy_kwargs):
     secret = "test-secret"
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret=secret,
             base_url="http://preview.example.com",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from better_auth_stripe.schema import StripeOptions, StripePlan
+from kernia_stripe.schema import StripeOptions, StripePlan
 
 
 def get_plans(options: StripeOptions) -> list[StripePlan]:

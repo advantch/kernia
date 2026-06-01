@@ -83,7 +83,23 @@ def device_authorization(
     user_code_length: int = 8,
     device_code_length: int = 40,
     verification_uri: str | None = None,
+    generate_device_code: Callable[[], str | Awaitable[str]] | None = None,
+    generate_user_code: Callable[[], str | Awaitable[str]] | None = None,
+    validate_client: Callable[[str], bool | Awaitable[bool]] | None = None,
+    on_device_auth_request: (
+        Callable[[str, str | None], None | Awaitable[None]] | None
+    ) = None,
 ) -> KerniaPlugin:
+    """Construct the device-authorization plugin (RFC 8628).
+
+    Upstream-parity options:
+      * ``expires_in`` / ``interval`` — time strings ('30m', '5s', '1h') or ms ints.
+      * ``user_code_length`` / ``device_code_length`` — default code lengths.
+      * ``verification_uri`` — absolute URL or relative path (default ``/device``).
+      * ``generate_device_code`` / ``generate_user_code`` — custom code generators.
+      * ``validate_client`` — ``(client_id) -> bool`` gate on /device/code + /token.
+      * ``on_device_auth_request`` — ``(client_id, scope) -> None`` side effect.
+    """
     routes.configure(
         routes.DeviceAuthorizationOptions(
             expires_in=expires_in,

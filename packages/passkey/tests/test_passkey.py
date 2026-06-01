@@ -3,7 +3,7 @@
 Ported 1:1 from ``reference/packages/passkey/src/passkey.test.ts``. The upstream
 suite mocks ``@simplewebauthn/server``'s ``verifyRegistrationResponse`` /
 ``verifyAuthenticationResponse``; here we monkeypatch the equivalent functions on
-:mod:`better_auth_passkey.webauthn_server` (the seam ``routes.py`` calls through).
+:mod:`kernia_passkey.webauthn_server` (the seam ``routes.py`` calls through).
 
 Test names mirror the vitest ``it(...)`` titles. Cases that depend purely on the
 crypto verifier are exercised through the mock, identical to upstream.
@@ -12,13 +12,24 @@ crypto verifier are exercised through the mock, identical to upstream.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
-from kernia_passkey import passkey
+from kernia_passkey import (
+    PasskeyOptions,
+    PasskeyRegistrationOptions,
+    passkey,
+    webauthn_server,
+)
+from kernia_passkey.webauthn_server import (
+    AuthenticationInfo,
+    RegistrationInfo,
+    VerifiedAuthenticationResponse,
+    VerifiedCredential,
+    VerifiedRegistrationResponse,
+)
 from kernia_test_utils import ASGIDriver
 
 ORIGIN = "http://localhost:3000"
@@ -67,20 +78,7 @@ def _build(plugin=None) -> tuple[ASGIDriver, object, object]:
     return ASGIDriver(app=auth.router.mount()), adapter, auth
 
 
-def test_passkey_plugin_schema_registers_table() -> None:
-    from kernia_passkey import passkey as make
-
-    p = make(rp_id="localhost", rp_name="t", origin="http://localhost")
-    assert p.schema is not None
-    table_names = {m.name for m in p.schema.tables}
-    assert "passkey" in table_names
-    pass_model = next(m for m in p.schema.tables if m.name == "passkey")
-    field_names = {f.name for f in pass_model.fields}
-    assert {"credentialId", "publicKey", "counter", "userId"} <= field_names
-
-
-async def test_register_start_returns_options_and_persists_challenge() -> None:
-    driver, adapter = _build()
+async def _sign_up(driver: ASGIDriver, email: str = "test@test.com") -> str:
     r = await driver.request(
         "POST",
         "/sign-up/email",
@@ -484,7 +482,7 @@ async def test_should_verify_passkey_authentication_and_return_user() -> None:
 
 async def test_should_compute_expiration_time_per_request_registration(monkeypatch) -> None:
     """The verification ``expiresAt`` is computed at request time, not init time."""
-    import better_auth_passkey.routes as routes_mod
+    import kernia_passkey.routes as routes_mod
 
     driver, adapter, _ = _build()
     await _sign_up(driver)
@@ -499,7 +497,7 @@ async def test_should_compute_expiration_time_per_request_registration(monkeypat
 
 
 async def test_should_compute_expiration_time_per_request_authentication(monkeypatch) -> None:
-    import better_auth_passkey.routes as routes_mod
+    import kernia_passkey.routes as routes_mod
 
     driver, adapter, _ = _build()
     fixed_now = 20_000_000

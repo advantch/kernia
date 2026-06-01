@@ -19,9 +19,9 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from better_auth.oauth2 import pkce_challenge, pkce_verifier
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.oauth2 import pkce_challenge, pkce_verifier
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 from .conftest import ISSUER, REDIRECT_URI, SCOPES, make_auth, signup
 

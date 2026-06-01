@@ -143,7 +143,14 @@ class _AnonymousPlugin:
         ctx.plugin_state["anonymous"] = dict(self.options)
 
 
-def anonymous(on_link: OnLinkCallback | None = None) -> KerniaPlugin:
+def anonymous(
+    on_link: OnLinkCallback | None = None,
+    *,
+    email_domain_name: str | None = None,
+    generate_random_email: Callable[[], Any] | None = None,
+    generate_name: Callable[[EndpointContext], Any] | None = None,
+    disable_delete_anonymous_user: bool = False,
+) -> KerniaPlugin:
     """Construct the anonymous plugin.
 
     Pass `on_link` to migrate domain data from the anonymous user into the new

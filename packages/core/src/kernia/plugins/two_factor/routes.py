@@ -36,12 +36,17 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from kernia import cookies as cookie_utils
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.context import create_session
-from kernia.crypto import hash_password, verify_password
+from kernia.crypto import verify_password
 from kernia.error import APIError
 from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext
+from kernia.types.cookie import (
+    DONT_REMEMBER_COOKIE,
+    CookieAttributes,
+)
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 
 # ----- constants -------------------------------------------------------------

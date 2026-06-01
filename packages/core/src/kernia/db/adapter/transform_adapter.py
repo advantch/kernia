@@ -2,9 +2,9 @@
 
 Mirrors the input/output transform layer in
 `reference/packages/better-auth/src/db/adapter/index.ts`. It wraps a raw
-:class:`~better_auth.types.adapter.CustomAdapter` and, using the *resolved* table
+:class:`~kernia.types.adapter.CustomAdapter` and, using the *resolved* table
 set, applies — transparently and on every call — the per-field semantics declared
-on :class:`~better_auth.types.adapter.FieldDef`:
+on :class:`~kernia.types.adapter.FieldDef`:
 
   * **defaults** — on ``create``, fill any absent field whose ``default`` is set
     (a callable default is invoked at write time);
@@ -20,7 +20,7 @@ so unknown/dynamic models keep working unchanged. With the stock core schema (no
 field declares ``transform``, ``on_update``, or a custom ``field_name``, and every
 default is already supplied by callers) this wrapper is behaviour-neutral.
 
-Database *hooks* are a separate layer — see :mod:`better_auth.db.with_hooks`.
+Database *hooks* are a separate layer — see :mod:`kernia.db.with_hooks`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import inspect
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from better_auth.types.adapter import (
+from kernia.types.adapter import (
     FieldDef,
     JoinConfig,
     ModelDef,
@@ -39,7 +39,7 @@ from better_auth.types.adapter import (
 )
 
 if TYPE_CHECKING:
-    from better_auth.types.adapter import CustomAdapter
+    from kernia.types.adapter import CustomAdapter
 
 
 async def _maybe_await(value: Any) -> Any:

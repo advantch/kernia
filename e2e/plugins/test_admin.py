@@ -9,13 +9,13 @@ core router maps camelCase JSON keys onto the snake_case dataclass fields.
 
 from __future__ import annotations
 
-import pytest
-
 from kernia.auth import init
+from kernia.plugins.access import create_access_control
 from kernia.plugins.admin import admin
+from kernia.plugins.admin.plugin import AdminOptions
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
-from kernia.types.init_options import KerniaOptions
+from kernia.types.init_options import KerniaOptions, EmailPasswordOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver
 

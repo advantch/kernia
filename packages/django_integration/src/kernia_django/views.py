@@ -18,8 +18,8 @@ from http.cookies import SimpleCookie
 from typing import Any, ClassVar
 
 from asgiref.sync import async_to_sync
-from better_auth.auth import BetterAuth
-from better_auth.integrations.session import strip_base_path
+from kernia.auth import BetterAuth
+from kernia.integrations.session import strip_base_path
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from django.views import View

@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from better_auth.error import APIError
+from kernia.error import APIError
 
-logger = logging.getLogger("better_auth.sso.saml")
+logger = logging.getLogger("kernia.sso.saml")
 
 # Mirror of constants.DEFAULT_CLOCK_SKEW_MS (5 minutes, in milliseconds).
 DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000

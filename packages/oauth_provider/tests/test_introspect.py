@@ -11,7 +11,7 @@ session-liveness check.
 
 from __future__ import annotations
 
-from better_auth.types.adapter import Where
+from kernia.types.adapter import Where
 
 from .conftest import authorize_code, exchange_code, get_tokens
 

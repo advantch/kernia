@@ -14,11 +14,12 @@ from __future__ import annotations
 import base64
 
 import pytest
-
 from kernia.auth import init
+from kernia.error import APIError
 from kernia.oauth2 import pkce_challenge, pkce_verifier
 from kernia.plugins.email_password import email_and_password
 from kernia.plugins.jwt import jwt
+from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
@@ -448,7 +449,7 @@ PAIRWISE_SECRET = "test-pairwise-secret-key-32chars!!"
 @pytest.fixture
 async def pairwise_setup():
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -643,7 +644,7 @@ def _pairwise_auth(*, secret: str | None):
         opts_kwargs["pairwise_secret"] = secret
     plugins.append(oauth_provider(OAuthProviderOptions(**opts_kwargs)))
     return init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=plugins,

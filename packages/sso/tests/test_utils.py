@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import pytest
-from better_auth_sso.utils import (
+from kernia_sso.utils import (
     get_hostname_from_domain,
     safe_json_parse,
     validate_email_domain,

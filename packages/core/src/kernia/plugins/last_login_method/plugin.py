@@ -14,8 +14,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from kernia.types.cookie import SESSION_TOKEN_COOKIE, CookieAttributes
+from kernia.cookies import verify as _verify_cookie
+from kernia.types.adapter import FieldDef, Where
 from kernia.types.context import EndpointContext
+from kernia.types.cookie import SESSION_TOKEN_COOKIE, CookieAttributes
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
@@ -130,6 +132,21 @@ def last_login_method(
     *,
     cookie_name: str = DEFAULT_COOKIE_NAME,
     max_age: int = DEFAULT_MAX_AGE,
+    custom_resolve_method: CustomResolveMethod | None = None,
+    store_in_database: bool = False,
 ) -> KerniaPlugin:
-    opts = LastLoginMethodOptions(cookie_name=cookie_name, max_age=max_age)
-    return _LastLoginMethodPlugin(on_response=_make_on_response(opts))  # type: ignore[return-value]
+    opts = LastLoginMethodOptions(
+        cookie_name=cookie_name,
+        max_age=max_age,
+        custom_resolve_method=custom_resolve_method,
+        store_in_database=store_in_database,
+    )
+    schema = (
+        PluginSchema(extend={"user": _LAST_LOGIN_USER_FIELDS})
+        if store_in_database
+        else None
+    )
+    return _LastLoginMethodPlugin(
+        on_response=_make_on_response(opts),
+        schema=schema,
+    )  # type: ignore[return-value]

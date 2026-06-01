@@ -25,8 +25,7 @@ from kernia.api.endpoint import create_auth_endpoint
 from kernia.context import create_session
 from kernia.error import APIError
 from kernia.oauth2 import verify_id_token
-from kernia.oauth2.link_account import handle_oauth_user_info
-from kernia.social_providers._base import OAuthUserProfile
+from kernia.types.adapter import Where
 from kernia.types.context import AuthContext, EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule
@@ -231,7 +230,7 @@ class _OneTapPlugin:
     init: None = None
 
 
-def one_tap(options: OneTapOptions) -> KerniaPlugin:
+def one_tap(options: OneTapOptions | None = None) -> KerniaPlugin:
     """Construct the Google One Tap plugin."""
     opts = options or OneTapOptions()
     callback = _make_callback(opts)

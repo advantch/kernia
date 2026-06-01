@@ -12,7 +12,7 @@ table and the upstream endpoint surface:
   * ``POST /passkey/update-passkey``
 
 WebAuthn option-generation and attestation/assertion verification are delegated to
-the ``webauthn`` PyPI library (via :mod:`better_auth_passkey.webauthn_server`,
+the ``webauthn`` PyPI library (via :mod:`kernia_passkey.webauthn_server`,
 which mirrors ``@simplewebauthn/server`` so the two verify functions can be
 monkeypatched in tests).
 """

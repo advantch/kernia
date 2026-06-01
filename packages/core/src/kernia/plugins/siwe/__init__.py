@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 
 from kernia.plugins.siwe import routes
 from kernia.plugins.siwe.ens import ENSResolver, web3_ens_resolver
-from kernia.types.adapter import FieldDef
+from kernia.plugins.siwe.routes import ENSLookup, GetNonce, SIWEOptions, VerifyMessage
+from kernia.types.adapter import FieldDef, ModelDef
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import PluginHooks
 from kernia.types.plugin import KerniaPlugin, PluginSchema, RateLimitRule

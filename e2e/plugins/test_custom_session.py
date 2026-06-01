@@ -20,10 +20,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from kernia.auth import init
-from kernia.plugins import email_and_password, with_custom_session
-from kernia.types.init_options import KerniaOptions
+from kernia.plugins import (
+    custom_session,
+    email_and_password,
+    multi_session,
+    with_custom_session,
+)
+from kernia.types.init_options import KerniaOptions, SessionOptions
+from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver
 from kernia_test_utils.adapter_fixtures import all_adapters_param
 
@@ -95,7 +100,6 @@ async def test_custom_session_provider_is_used(adapter_factory) -> None:
     assert provider.create_calls == 1
     assert len(provider.store) == 1
     # The default adapter has no session row.
-    from kernia.types.adapter import Where
 
     assert await adapter.count(model="session") == 0  # type: ignore[arg-type]
 
@@ -130,7 +134,7 @@ async def _transform(data: dict[str, Any], _ctx: Any) -> dict[str, Any]:
 async def test_get_session_returns_custom_shape() -> None:
     """Upstream: 'should return the session' — newData merged into get-session."""
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), custom_session(_transform)],
@@ -162,7 +166,7 @@ async def test_get_session_returns_custom_shape() -> None:
 async def test_get_session_transform_returns_null_when_unauthenticated() -> None:
     """Upstream: transform is only applied to a real session; null stays null."""
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), custom_session(_transform)],
@@ -181,7 +185,7 @@ async def test_get_session_accepts_disable_refresh_query() -> None:
     @see https://github.com/better-auth/better-auth/issues/9195
     """
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), custom_session(_transform)],
@@ -211,7 +215,7 @@ async def test_get_session_accepts_disable_refresh_query() -> None:
 async def test_list_device_sessions_custom_shape() -> None:
     """Upstream: 'should return the custom session for multi-session'."""
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[
@@ -269,7 +273,7 @@ async def _cookie_cache_driver(
     *, expires_in: int = 86400, cache_max_age: int = 300
 ) -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key-cookie-cache!!",
             session=SessionOptions(
@@ -363,7 +367,7 @@ async def test_get_session_preserves_partitioned_cookie_attributes() -> None:
     @see https://github.com/better-auth/better-auth/issues/9231
     """
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key-partitioned!!!",
             session=SessionOptions(update_age=0),

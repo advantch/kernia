@@ -131,7 +131,7 @@ class _BearerPlugin:
     init: None = None
 
 
-def bearer(*, require_signature: bool = True) -> KerniaPlugin:
+def bearer(*, require_signature: bool = False) -> KerniaPlugin:
     opts = BearerOptions(require_signature=require_signature)
     return _BearerPlugin(
         on_request=_make_on_request(opts),

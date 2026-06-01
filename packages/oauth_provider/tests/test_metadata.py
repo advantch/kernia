@@ -10,8 +10,8 @@ ported.
 from __future__ import annotations
 
 import pytest
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_test_utils import ASGIDriver
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_test_utils import ASGIDriver
 
 from .conftest import ISSUER, make_auth
 

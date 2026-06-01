@@ -2,7 +2,7 @@
 `reference/packages/better-auth/src/db/with-hooks.ts`.
 
 :func:`get_with_hooks` returns a :class:`WithHooks` bundle that wraps adapter writes
-in the registered :class:`~better_auth.types.db_hooks.DatabaseHooks` lifecycle:
+in the registered :class:`~kernia.types.db_hooks.DatabaseHooks` lifecycle:
 
   * ``create`` / ``update`` / ``update_many`` run each registered ``before`` hook
     (abort on ``False``, shallow-merge a returned ``{"data": ...}`` patch), perform
@@ -17,9 +17,9 @@ are an explicit layer that the internal-adapter / plugins call when they want ho
 semantics. A ``before`` hook returning ``False`` makes the helper return ``None``
 without writing.
 
-The active :class:`~better_auth.types.context.AuthContext` is passed to every hook;
+The active :class:`~kernia.types.context.AuthContext` is passed to every hook;
 ``after`` hooks are deferred via
-:func:`better_auth.db.hook_queue.queue_after_transaction_hook`.
+:func:`kernia.db.hook_queue.queue_after_transaction_hook`.
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from better_auth.db.adapter.transform_adapter import _maybe_await
-from better_auth.db.hook_queue import queue_after_transaction_hook
-from better_auth.types.adapter import Record, Where
-from better_auth.types.db_hooks import (
+from kernia.db.adapter.transform_adapter import _maybe_await
+from kernia.db.hook_queue import queue_after_transaction_hook
+from kernia.types.adapter import Record, Where
+from kernia.types.db_hooks import (
     DatabaseHooksEntry,
     HookData,
     HookOp,
@@ -38,8 +38,8 @@ from better_auth.types.db_hooks import (
 )
 
 if TYPE_CHECKING:
-    from better_auth.types.adapter import CustomAdapter
-    from better_auth.types.context import AuthContext
+    from kernia.types.adapter import CustomAdapter
+    from kernia.types.context import AuthContext
 
 
 def _patch_from_result(result: Any) -> Record | None:
