@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.context import create_session, revoke_session, should_refresh_session
+from kernia.context import create_session, refresh_session_cookies, revoke_session, should_refresh_session
 from kernia.crypto import hash_password, verify_password
 from kernia.error import APIError
 from kernia.types.adapter import Where

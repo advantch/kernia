@@ -57,33 +57,33 @@ async def test_full_passkey_register_and_authenticate() -> None:
     authenticator = SoftAuthenticator()
 
     # ---- registration ----
-    r = await driver.request("GET", "/passkey/generate-register-options")
+    r = await driver.request("POST", "/passkey/register/start", json_body={})
     assert r.status == 200, r.json()
-    options = r.json()
+    options = r.json().get("options", r.json())
     challenge = base64url_to_bytes(options["challenge"])
 
     attestation = authenticator.register(
         challenge=challenge, origin=ORIGIN, rp_id=RP_ID
     )
     r = await driver.request(
-        "POST", "/passkey/verify-registration", json_body={"response": attestation}
+        "POST", "/passkey/register/finish", json_body={"response": attestation}
     )
     assert r.status == 200, r.json()
-    cred_id_b64 = r.json()["credentialID"]
+    cred_id_b64 = r.json()["credentialId"]
     assert cred_id_b64
 
     # The passkey row landed in the DB.
     rows = await auth.context.adapter.find_many(model="passkey", where=())
     assert len(rows) == 1
-    assert rows[0]["credentialID"] == cred_id_b64
+    assert rows[0]["credentialId"] == cred_id_b64
 
     # ---- authentication ----
     # Fresh ASGIDriver so we don't carry the email-password session
     # (usernameless/discoverable-credential flow).
     auth_driver = ASGIDriver(app=auth.router.mount())
-    r = await auth_driver.request("GET", "/passkey/generate-authenticate-options")
+    r = await auth_driver.request("POST", "/passkey/authenticate/start", json_body={})
     assert r.status == 200, r.json()
-    auth_options = r.json()
+    auth_options = r.json().get("options", r.json())
     auth_challenge = base64url_to_bytes(auth_options["challenge"])
 
     assertion = authenticator.authenticate(
@@ -93,7 +93,7 @@ async def test_full_passkey_register_and_authenticate() -> None:
         credential_id=cred_id_b64,
     )
     r = await auth_driver.request(
-        "POST", "/passkey/verify-authentication", json_body={"response": assertion}
+        "POST", "/passkey/authenticate/finish", json_body={"response": assertion}
     )
     assert r.status == 200, r.json()
 
@@ -115,14 +115,14 @@ async def test_authenticate_rejects_wrong_signature() -> None:
     registered = SoftAuthenticator()
 
     # Register the real one
-    r = await driver.request("GET", "/passkey/generate-register-options")
-    challenge = base64url_to_bytes(r.json()["challenge"])
+    r = await driver.request("POST", "/passkey/register/start", json_body={})
+    challenge = base64url_to_bytes(r.json()["options"]["challenge"])
     attestation = registered.register(challenge=challenge, origin=ORIGIN, rp_id=RP_ID)
     r = await driver.request(
-        "POST", "/passkey/verify-registration", json_body={"response": attestation}
+        "POST", "/passkey/register/finish", json_body={"response": attestation}
     )
     assert r.status == 200, r.json()
-    cred_id_b64 = r.json()["credentialID"]
+    cred_id_b64 = r.json()["credentialId"]
 
     # Build a DIFFERENT authenticator with its own keypair — its signature
     # won't verify against the stored public key.
@@ -130,8 +130,8 @@ async def test_authenticate_rejects_wrong_signature() -> None:
     impostor.register(challenge=b"x" * 32, origin=ORIGIN, rp_id=RP_ID)
 
     auth_driver = ASGIDriver(app=auth.router.mount())
-    r = await auth_driver.request("GET", "/passkey/generate-authenticate-options")
-    auth_challenge = base64url_to_bytes(r.json()["challenge"])
+    r = await auth_driver.request("POST", "/passkey/authenticate/start", json_body={})
+    auth_challenge = base64url_to_bytes(r.json()["options"]["challenge"])
 
     assertion = impostor.authenticate(
         challenge=auth_challenge, origin=ORIGIN, rp_id=RP_ID
@@ -142,7 +142,7 @@ async def test_authenticate_rejects_wrong_signature() -> None:
     assertion["rawId"] = cred_id_b64
 
     r = await auth_driver.request(
-        "POST", "/passkey/verify-authentication", json_body={"response": assertion}
+        "POST", "/passkey/authenticate/finish", json_body={"response": assertion}
     )
     assert r.status >= 400
     # Server should not have set a session cookie.
@@ -157,14 +157,14 @@ async def test_register_rejects_tampered_challenge() -> None:
     authenticator = SoftAuthenticator()
 
     # Get the real challenge, then sign a DIFFERENT challenge instead.
-    r = await driver.request("GET", "/passkey/generate-register-options")
+    r = await driver.request("POST", "/passkey/register/start", json_body={})
     assert r.status == 200
 
     fake_attestation = authenticator.register(
         challenge=b"\x00" * 32, origin=ORIGIN, rp_id=RP_ID
     )
     r = await driver.request(
-        "POST", "/passkey/verify-registration", json_body={"response": fake_attestation}
+        "POST", "/passkey/register/finish", json_body={"response": fake_attestation}
     )
     assert r.status == 400
-    assert r.json()["code"] == "FAILED_TO_VERIFY_REGISTRATION"
+    assert r.json()["code"] == "INVALID_PASSKEY_ATTESTATION"

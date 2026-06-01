@@ -22,7 +22,7 @@ from kernia.types.init_options import KerniaOptions
 
 
 @dataclass
-class BetterAuth:
+class Kernia:
     """The handle returned by `init()`.
 
     - `router` is the ASGI-aware route table.
@@ -35,7 +35,7 @@ class BetterAuth:
     errors: ErrorRegistry
 
 
-def init(options: KerniaOptions) -> BetterAuth:
+def init(options: KerniaOptions) -> Kernia:
     """Build a `BetterAuth` handle from options.
 
     Steps:
@@ -142,7 +142,7 @@ def init(options: KerniaOptions) -> BetterAuth:
 
     # The resolved table set lives on `ctx.tables`; migration codegen reuses the
     # same merge via `db.schema.resolve.resolve_tables`.
-    return BetterAuth(context=ctx, router=router, errors=errors)
+    return Kernia(context=ctx, router=router, errors=errors)
 
 
 def _stamp(ep: AuthEndpoint, *, owner: str) -> AuthEndpoint:
