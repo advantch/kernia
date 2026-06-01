@@ -9,6 +9,7 @@
     "cookies",
     "database",
     "email",
+    "events",
     "hooks",
     "oauth",
     "plugins",

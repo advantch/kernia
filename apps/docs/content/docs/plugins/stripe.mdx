@@ -124,8 +124,39 @@ auth = init(KerniaOptions(
 | Boolean | Represented by an entitlement with `unlimited=True` or an included grant. |
 | Metered consumable | `billingUsageEvent` rows increase `billingEntitlement.used`. |
 | Quantity | `included` grants a non-consumable allowance. |
-| Seat-style | `StripePlan(seats=True)` lets organization seat sync update Stripe quantity when wired with the organization plugin. |
+| Seat-style | `StripePlan(seats=True)` lets organization seat-sync update Stripe quantity when wired with the organization plugin. |
 | Overage | `overageAllowed=True` lets `billing/check` allow usage beyond included balance. |
+
+## Organization seat-sync
+
+When the plugin runs with `subscription_for="organization"` and any plan declares
+`seats=True`, it subscribes to the in-process [event bus](/docs/concepts/events)
+on init. Every time the organization plugin emits
+`organization.member.added` or `organization.member.removed`, the Stripe
+subscription quantity is updated to match the new member count and the local
+`subscription.seats` field is rewritten. No cron, no polling — the change lands
+in the same request that mutated membership.
+
+If no plan declares `seats=True`, or the plugin is in user-billing mode, the
+listener is not registered and there is zero per-request overhead.
+
+~~~python title="auth.py" hl_lines="6-13"
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    plugins=(
+        organization(),
+        stripe(StripeOptions(
+            stripe_client=stripe_client,
+            webhook_secret=os.environ["STRIPE_WEBHOOK_SECRET"],
+            subscription_for="organization",
+            plans={
+                "team": StripePlan(name="team", price_id="price_team", seats=True),
+            },
+        )),
+    ),
+))
+~~~
 
 ## Schema changes
 

@@ -51,14 +51,48 @@ auth = init(KerniaOptions(
 
 ## Schema impact
 
-Extends user data with wallet-oriented fields such as address and optional ENS name.
+Extends the `user` table with two optional fields:
+
+- `walletAddress` — checksummed EIP-55 address (unique). Populated on the
+  first successful verify.
+- `ensName` — last resolved ENS name, if ENS resolution is enabled. Refreshed
+  on each sign-in so a stale name doesn't survive past a transfer.
+
+## ENS reverse-lookup
+
+ENS resolution is opt-in. Pass either `ens_rpc_url` (the built-in resolver
+uses `web3.py` against your RPC endpoint) or a fully custom `ens_resolver`
+callable. Lookups are best-effort: a network failure never blocks sign-in.
+
+~~~python title="auth.py"
+from kernia.plugins.siwe import siwe
+
+plugins = [
+    siwe(
+        enable_ens=True,
+        # Either: built-in web3.py resolver
+        ens_rpc_url="https://mainnet.infura.io/v3/<key>",
+        # OR: custom resolver. Async callable (address: str) -> str | None.
+        # ens_resolver=my_resolver,
+    ),
+]
+~~~
+
+The built-in resolver does a **forward-resolve confirmation** (the ENS name's
+`address` record must resolve back to the same wallet) so we never accept a
+squatted reverse record.
 
 ## Behavior and options
 
-- Nonces must be single-use and short-lived.
-- Verify domain, URI, nonce, chain id, issued-at, and signature.
-- Treat ENS lookup as enrichment, not as the identity proof itself.
+- Nonces are 17-char alphanumeric, stored in the `verification` table,
+  single-use, and TTL of 15 minutes by default.
+- Verify domain, URI, nonce, chain id, issued-at, and signature via the
+  pluggable `verify_message` callable (defaults to `eth_account.Account.recover_message`).
+- ENS lookup is **enrichment**, not identity proof — the wallet address is the
+  durable identifier.
 
 ## Test and demo coverage
 
-Test nonce issue, valid signature, wrong domain, replayed nonce, bad signature, ENS refresh, user creation, and session cookie behavior.
+Nonce issue, valid signature, wrong domain, replayed nonce, bad signature,
+ENS happy path, ENS resolver returns `None`, ENS refresh on stale name, user
+creation, and session cookie behavior.

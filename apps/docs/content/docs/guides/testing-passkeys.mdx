@@ -1,0 +1,120 @@
+---
+title: "Testing passkeys without a browser"
+description: "Drive the WebAuthn register + authenticate flow end-to-end from a Python test using SoftAuthenticator."
+---
+
+WebAuthn flows are normally exercised by a browser + a hardware or platform
+authenticator. That's hard to script in CI. Kernia ships `SoftAuthenticator`
+in `kernia_test_utils` — a fully software WebAuthn authenticator that emits
+real CBOR attestation objects and ES256 signatures.
+
+The `webauthn` library's strict verifier accepts its output, so you can drive
+the full register → authenticate cycle end-to-end without any browser.
+
+## Setup
+
+`SoftAuthenticator` lives in `kernia_test_utils`:
+
+~~~python
+from kernia_test_utils import ASGIDriver, SoftAuthenticator
+from webauthn.helpers import base64url_to_bytes
+~~~
+
+It generates a fresh P-256 keypair per credential, builds COSE_Key payloads
+(RFC 8152 §13.1.1), wraps them in a CBOR `fmt:"none"` attestation object,
+and signs assertions with `sha256(authData || clientDataHash)` exactly the
+way a hardware token does.
+
+## Full register + authenticate flow
+
+~~~python title="test_passkey_e2e.py"
+RP_ID = "localhost"
+ORIGIN = "http://localhost:3000"
+
+@pytest.mark.asyncio
+async def test_full_passkey_register_and_authenticate() -> None:
+    auth = init(KerniaOptions(
+        database=memory_adapter(),
+        secret="test-secret",
+        plugins=[
+            email_and_password(),
+            passkey(rp_id=RP_ID, rp_name="Test", origin=ORIGIN),
+        ],
+    ))
+    driver = ASGIDriver(app=auth.router.mount())
+    await driver.request(
+        "POST", "/sign-up/email",
+        json_body={"email": "user@example.com", "password": "correcthorse"},
+    )
+
+    authenticator = SoftAuthenticator()
+
+    # --- registration -----------------------------------------------------
+    r = await driver.request("POST", "/passkey/register/start", json_body={})
+    options = r.json()["options"]
+    challenge = base64url_to_bytes(options["challenge"])
+
+    attestation = authenticator.register(
+        challenge=challenge, origin=ORIGIN, rp_id=RP_ID,
+    )
+    r = await driver.request(
+        "POST", "/passkey/register/finish", json_body={"response": attestation},
+    )
+    cred_id_b64 = r.json()["credentialId"]
+
+    # --- authentication ---------------------------------------------------
+    auth_driver = ASGIDriver(app=auth.router.mount())  # fresh session
+    r = await auth_driver.request("POST", "/passkey/authenticate/start", json_body={})
+    auth_challenge = base64url_to_bytes(r.json()["options"]["challenge"])
+
+    assertion = authenticator.authenticate(
+        challenge=auth_challenge, origin=ORIGIN, rp_id=RP_ID,
+        credential_id=cred_id_b64,
+    )
+    r = await auth_driver.request(
+        "POST", "/passkey/authenticate/finish", json_body={"response": assertion},
+    )
+    assert "better-auth.session_token" in auth_driver.cookies
+~~~
+
+## Negative-path tests
+
+The same fixture is useful for security tests because it can produce
+*invalid* outputs by feeding it the wrong inputs.
+
+**Forged signature.** Register one authenticator, then have a different
+authenticator try to authenticate while claiming the same credential id.
+Its private key won't match the stored public key, so the server's
+`verify_authentication_response` must reject:
+
+~~~python
+impostor = SoftAuthenticator()
+impostor.register(challenge=b"x" * 32, origin=ORIGIN, rp_id=RP_ID)
+assertion = impostor.authenticate(challenge=auth_challenge, origin=ORIGIN, rp_id=RP_ID)
+# Force the impostor's assertion to advertise the REAL credential id —
+# the public key the server looks up won't match.
+assertion["id"] = real_cred_id
+assertion["rawId"] = real_cred_id
+r = await driver.request("POST", "/passkey/authenticate/finish", json_body={"response": assertion})
+assert r.status >= 400
+~~~
+
+**Tampered challenge.** Get a real challenge, then sign a different one.
+The clientDataJSON's challenge field won't match what the server issued, so
+attestation verification must reject:
+
+~~~python
+r = await driver.request("POST", "/passkey/register/start", json_body={})
+fake = authenticator.register(challenge=b"\x00" * 32, origin=ORIGIN, rp_id=RP_ID)
+r = await driver.request("POST", "/passkey/register/finish", json_body={"response": fake})
+assert r.status == 400
+assert r.json()["code"] == "INVALID_PASSKEY_ATTESTATION"
+~~~
+
+## Limitations
+
+- `SoftAuthenticator` only produces `fmt:"none"` attestations. If your
+  deployment requires `packed`, `tpm`, or other attestation formats with a
+  real trust chain, the soft authenticator can't exercise that path.
+- It uses ES256 (P-256) exclusively. Other algorithms aren't generated.
+- This is a test fixture; never use it in production.

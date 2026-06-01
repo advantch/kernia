@@ -99,6 +99,33 @@ Adds SSO provider and domain tables from `kernia_sso.schema`. Run migrations bef
 - Domain verification prevents arbitrary tenants from claiming a domain.
 - SAML security checks must cover signatures, audience, recipient, timestamps, request IDs, and replay prevention.
 
+## SAML validation modes
+
+The plugin exposes two validation modes via `advanced["sso"]["saml_validation"]`:
+
+- `"strict"` (default) — runs `python3-saml`'s full XML-DSIG verifier against
+  the IdP's certificate. This is the production-correct setting and works
+  out-of-the-box against the bundled `MockSAMLIdP` test fixture (the fixture
+  canonicalizes via `lxml` exclusive C14N, so its signature value reconstructs
+  byte-for-byte during verification).
+- `"permissive"` — verifies issuer, audience, NotBefore/NotOnOrAfter,
+  InResponseTo, Status, the Reference URI, and that the embedded
+  `X509Certificate` matches the provider's configured PEM, but does NOT verify
+  the XML-DSIG signature value. Use this only for legacy IdPs whose
+  canonicalization isn't libxml2-compatible.
+
+Switch in `auth.py`:
+
+~~~python title="auth.py"
+auth = init(KerniaOptions(
+    ...,
+    advanced={"sso": {"saml_validation": "strict"}},
+))
+~~~
+
 ## Test and demo coverage
 
-Use `MockSAMLIdP` and OIDC mocks. Test provider CRUD, domain verification, OIDC callback, SAML metadata, SAML ACS, replay rejection, timestamp validation, and IdP-initiated flows if enabled.
+Use `MockSAMLIdP` (strict-mode compatible) and `MockIdP` for OIDC. Tests
+cover provider CRUD, domain verification, OIDC callback, SAML metadata, SAML
+ACS, replay rejection, timestamp validation, IdP-initiated flows when
+enabled, and strict-mode signature rejection with a wrong cert.
