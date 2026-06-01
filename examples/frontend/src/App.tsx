@@ -12,6 +12,7 @@ import {
   Mail,
   Plus,
   RefreshCw,
+  Radio,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -38,7 +39,14 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type SessionData = Awaited<ReturnType<typeof authClient.getSession>>["data"];
-type Section = "overview" | "settings" | "admin";
+type Section = "overview" | "settings" | "admin" | "events";
+
+type EventRow = {
+  event: string;
+  organization_id: string;
+  user_id: string;
+  role: string;
+};
 
 type AuthMethod = { enabled?: boolean; label?: string };
 type Organization = { id: string; name: string; slug: string; role?: string };
@@ -363,6 +371,7 @@ export function App() {
                   syncStripe={syncStripe}
                 />
               )}
+              {section === "events" && <EventsPanel />}
             </div>
           </section>
         ) : (
@@ -492,6 +501,7 @@ function Sidebar(props: {
     ["overview", Activity, "Overview"],
     ["settings", Settings, "Settings"],
     ["admin", ShieldCheck, "Admin"],
+    ["events", Radio, "Events"],
   ];
   return (
     <aside className="rounded-lg border border-border bg-card p-3">
@@ -785,6 +795,76 @@ function ListCard({ title, description, rows, action }: { title: string; descrip
       </CardHeader>
       <CardContent className="grid gap-3">
         {rows.length === 0 ? <Empty label={`No ${title.toLowerCase()} yet.`} /> : rows.map((row, idx) => <Row key={`${row.title}-${idx}`} {...row} />)}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EventsPanel() {
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [polling, setPolling] = useState(true);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    async function tick() {
+      try {
+        const r = await fetch("/api/demo/events", { credentials: "include" });
+        if (r.ok) {
+          const data = await r.json();
+          setEvents(data.events ?? []);
+        }
+      } catch {
+        // network blip — keep polling
+      }
+      if (polling) timer = window.setTimeout(tick, 2000);
+    }
+    tick();
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [polling]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Event bus</CardTitle>
+        <CardDescription>
+          Live tap of <code>kernia.events</code> from the running server. The Stripe
+          plugin subscribes to <code>organization.member.added/removed</code> in its{" "}
+          <code>init</code> hook and pushes <code>quantity</code> updates to Stripe
+          on every change. Invite or remove a member from the Settings tab — the
+          events flow through here in real time.
+        </CardDescription>
+        <CardAction>
+          <Button variant="outline" size="sm" onClick={() => setPolling((p) => !p)}>
+            {polling ? "Pause" : "Resume"}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {events.length === 0 ? (
+          <Empty label="No events captured yet. Try inviting an org member from Settings → Organization." />
+        ) : (
+          events
+            .slice()
+            .reverse()
+            .map((e, idx) => (
+              <div
+                key={`${e.event}-${idx}`}
+                className="flex items-center justify-between rounded-md border border-border bg-card p-3"
+                data-testid="event-row"
+              >
+                <div className="grid min-w-0 gap-1">
+                  <div className="text-sm font-medium">{e.event}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    org <code>{e.organization_id.slice(0, 12)}…</code> · user{" "}
+                    <code>{e.user_id.slice(0, 12)}…</code> · role{" "}
+                    <Badge variant="outline">{e.role}</Badge>
+                  </div>
+                </div>
+              </div>
+            ))
+        )}
       </CardContent>
     </Card>
   );

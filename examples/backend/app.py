@@ -93,16 +93,28 @@ def build_app() -> FastAPI:
                 organization(),
                 admin(),
                 api_key(),
+                # subscription_for="organization" + seats=True wires the Stripe
+                # plugin into the events bus: every /organization/accept-invitation
+                # and /remove-member fires `organization.member.{added,removed}`
+                # and the seat-sync hook pushes the new quantity to Stripe.
                 stripe(
                     StripeOptions(
                         stripe_client=stripe_client,
                         webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", "whsec_demo"),
+                        subscription_for="organization",
                         plans={
                             "starter": StripePlan(
                                 name="starter",
                                 price_id="price_starter_monthly",
                                 lookup_key="starter-monthly",
-                            )
+                            ),
+                            "team": StripePlan(
+                                name="team",
+                                price_id="price_team_base",
+                                seats=True,
+                                seat_price_id="price_team_seat",
+                                lookup_key="team-monthly",
+                            ),
                         },
                     )
                 ),
@@ -117,6 +129,26 @@ def build_app() -> FastAPI:
             },
         )
     )
+
+    # ----- demo: tap the in-process event bus so the frontend can show what
+    # plugins are emitting in real time. Production code would subscribe in
+    # its own plugin's init hook.
+    from kernia.events import get_bus
+
+    event_log: list[dict] = []
+
+    async def _log_member_event(payload) -> None:
+        event_log.append({
+            "event": f"organization.member.{payload.action}",
+            "organization_id": payload.organization_id,
+            "user_id": payload.user_id,
+            "role": payload.role,
+        })
+
+    bus = get_bus(auth.context)
+    bus.on("organization.member.added", _log_member_event)
+    bus.on("organization.member.removed", _log_member_event)
+    bus.on("organization.member.updated", _log_member_event)
 
     app = FastAPI(title="kernia example")
     app.add_middleware(
@@ -149,6 +181,15 @@ def build_app() -> FastAPI:
     @app.get("/api/whoami")
     async def whoami(session=Depends(get_session)) -> dict:
         return {"signed_in": session is not None}
+
+    @app.get("/api/demo/events")
+    async def demo_events() -> dict:
+        """Return the last N events captured from the in-process event bus.
+
+        The frontend's billing/team panel polls this to show the seat-sync hook
+        firing in real time as members are invited or removed.
+        """
+        return {"events": list(event_log[-50:])}
 
     return app
 
