@@ -1,0 +1,98 @@
+---
+title: "SIWE"
+description: "Sign in with Ethereum wallets using nonce and signature verification."
+---
+
+The SIWE plugin implements Sign-In with Ethereum. Kernia issues a nonce, verifies the signed message, resolves ENS metadata when configured, creates or updates the user, and sets a session cookie.
+
+## Installation
+
+~~~bash
+uv add kernia eth-account
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.siwe import siwe
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.siwe import siwe
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        siwe(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/siwe/nonce">
+  Returns a nonce for the wallet to include in the SIWE message.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/siwe/verify">
+  Verifies the signed message, creates or resolves the user, and creates a session.
+</APIMethod>
+
+## Schema impact
+
+Extends the `user` table with two optional fields:
+
+- `walletAddress` — checksummed EIP-55 address (unique). Populated on the
+  first successful verify.
+- `ensName` — last resolved ENS name, if ENS resolution is enabled. Refreshed
+  on each sign-in so a stale name doesn't survive past a transfer.
+
+## ENS reverse-lookup
+
+ENS resolution is opt-in. Pass either `ens_rpc_url` (the built-in resolver
+uses `web3.py` against your RPC endpoint) or a fully custom `ens_resolver`
+callable. Lookups are best-effort: a network failure never blocks sign-in.
+
+~~~python title="auth.py"
+from kernia.plugins.siwe import siwe
+
+plugins = [
+    siwe(
+        enable_ens=True,
+        # Either: built-in web3.py resolver
+        ens_rpc_url="https://mainnet.infura.io/v3/<key>",
+        # OR: custom resolver. Async callable (address: str) -> str | None.
+        # ens_resolver=my_resolver,
+    ),
+]
+~~~
+
+The built-in resolver does a **forward-resolve confirmation** (the ENS name's
+`address` record must resolve back to the same wallet) so we never accept a
+squatted reverse record.
+
+## Behavior and options
+
+- Nonces are 17-char alphanumeric, stored in the `verification` table,
+  single-use, and TTL of 15 minutes by default.
+- Verify domain, URI, nonce, chain id, issued-at, and signature via the
+  pluggable `verify_message` callable (defaults to `eth_account.Account.recover_message`).
+- ENS lookup is **enrichment**, not identity proof — the wallet address is the
+  durable identifier.
+
+## Test and demo coverage
+
+Nonce issue, valid signature, wrong domain, replayed nonce, bad signature,
+ENS happy path, ENS resolver returns `None`, ENS refresh on stale name, user
+creation, and session cookie behavior.

@@ -1,11 +1,11 @@
 # Captcha
 
-> Module: `better_auth.plugins.captcha`
-> Constructor: `CaptchaProvider`
+> Module: `kernia.plugins.captcha`
+> Constructor: `captcha`
 
 Captcha plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/captcha/`. The plugin
+Mirrors `Better Auth reference: plugins/captcha/`. The plugin
 validates a captcha challenge token (carried in the `x-captcha-token` or legacy
 `x-captcha-response` header) before sensitive endpoints run their handlers.
 
@@ -24,16 +24,16 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.captcha import CaptchaProvider
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.captcha import captcha
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[
-            CaptchaProvider(),
+            captcha(),
         ],
     )
 )

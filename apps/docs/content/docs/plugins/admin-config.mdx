@@ -1,0 +1,133 @@
+---
+title: "Admin Config"
+description: "Persist runtime auth configuration, email clients, and Stripe settings."
+---
+
+The admin-config plugin stores operational auth configuration in the database. It is the piece the SaaS demo uses to show login-method availability, redact secrets on read, and reject disabled auth methods before their route handlers run.
+
+## Installation
+
+```bash
+uv add kernia
+```
+
+## Import path
+
+```python
+from kernia.plugins.admin_config import AdminConfigOptions, admin_config
+```
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.admin_config import AdminConfigOptions, admin_config
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        admin_config(AdminConfigOptions(
+            admin_user_ids=(os.environ["ADMIN_USER_ID"],),
+            admin_roles=("admin", "owner"),
+        )),
+    ),
+))
+```
+
+## What it controls
+
+`AdminConfigOptions.default_auth_methods` defines the public auth methods shown by the UI. The default map includes email/password, magic link, email OTP, Google, GitHub, passkey, two-factor, username, phone number, SIWE, anonymous, one-tap, and enterprise SSO.
+
+When a method is disabled, the plugin's `on_request` gate checks the incoming auth path and returns a typed disabled-method error before the target route executes. For example, disabling `magic-link` blocks `/sign-in/magic-link` and `/magic-link/verify`.
+
+## Admin authorization
+
+An authenticated user can manage config when one of these is true:
+
+- Their user id is in `admin_user_ids`.
+- Their `user.role` field contains one of `admin_roles`.
+- `allow_any_authenticated=True` is set for local development.
+
+Do not use `allow_any_authenticated=True` outside a throwaway local demo.
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/admin/config/public-auth">
+  Returns the public auth-method configuration. This route does not require a session and is safe for the login screen.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/admin/config/auth-methods">
+  Returns the full auth-method configuration for an admin session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/config/auth-methods">
+  Updates enabled states, labels, and method metadata. Secrets are not accepted on this endpoint.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/admin/config/email-clients">
+  Returns configured email clients with secret fields redacted.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/config/email-clients">
+  Stores SMTP, Resend, Postmark, or custom email-client settings. Secret fields default to `password`, `apiKey`, `token`, and `secret`.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/admin/config/stripe">
+  Returns Stripe settings with configured secret fields redacted.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/admin/config/stripe">
+  Stores Stripe operational settings. Secret fields default to `apiKey` and `webhookSecret`.
+</APIMethod>
+
+## Request shape
+
+Configuration writes use the same body shape:
+
+```json
+{
+  "value": {
+    "clients": [
+      {
+        "id": "transactional",
+        "kind": "resend",
+        "from": "support@example.com",
+        "apiKey": "re_..."
+      }
+    ]
+  },
+  "secretFields": ["apiKey"]
+}
+```
+
+Secrets are stored as part of the value but redacted when read back. The API returns the same object shape with secret values replaced by redaction markers.
+
+## Schema changes
+
+The plugin adds one table:
+
+<DatabaseTable
+  title="adminConfig"
+  fields={[
+    { name: "id", type: "string", description: "Unique row id.", isUnique: true },
+    { name: "key", type: "string", description: "Configuration key such as auth-methods, email-clients, or stripe." },
+    { name: "value", type: "json", description: "Stored configuration payload." },
+    { name: "secretFields", type: "json", description: "Field names redacted on read.", isOptional: true },
+    { name: "createdAt", type: "number", description: "Creation timestamp." },
+    { name: "updatedAt", type: "number", description: "Last update timestamp." },
+  ]}
+/>
+
+Run `kernia generate` or `kernia migrate` after enabling the plugin.
+
+## Demo coverage
+
+The SaaS demo should use `public-auth` on the login screen and the admin routes in the admin area. It should show disabled methods as disabled, not hidden fake successes, and should prove that email and Stripe secrets are redacted after save.

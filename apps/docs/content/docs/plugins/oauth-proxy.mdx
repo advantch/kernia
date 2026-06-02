@@ -1,0 +1,67 @@
+---
+title: "OAuth Proxy"
+description: "Keep OAuth client secrets on the server for SPA-driven provider flows."
+---
+
+OAuth proxy lets a browser app request an OAuth URL without learning the provider client secret. Kernia stores the provider configuration, signs state, exchanges the code server-side, and creates a session.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.oauth_proxy import OAuthProxyOptions, oauth_proxy
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.oauth_proxy import OAuthProxyOptions, oauth_proxy
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        oauth_proxy(OAuthProxyOptions(
+            providers={"google": google_provider},
+            redirect_uri="https://api.example.com/api/auth/oauth-proxy/callback",
+        )),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/oauth-proxy/authorize">
+  Returns the provider authorization URL and signed state for the requested provider.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/oauth-proxy/callback">
+  Validates callback state, exchanges the code, creates a user/session, and returns callback data.
+</APIMethod>
+
+## Schema impact
+
+No new tables. Provider accounts are stored in the core `account` table.
+
+## Behavior and options
+
+- Use this for SPA popup flows or hosted frontends that should never handle provider secrets.
+- `redirect_uri` must be registered at the provider exactly.
+- `success_callback_url` controls the default app return target.
+
+## Test and demo coverage
+
+Test authorize URL generation, unknown providers, state validation, callback exchange, disabled sign-up, trusted provider linking, and session cookie creation.

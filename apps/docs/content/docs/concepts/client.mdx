@@ -1,0 +1,103 @@
+---
+title: "Client"
+description: "Call a Kernia Python backend from Vite, React, Next.js, React Router, and other browser clients."
+---
+
+Kernia is a Python server implementation with Better Auth-compatible wire behavior. The client boundary is HTTP: browsers call the mounted Python auth routes and include cookies. You may use the official Better Auth JavaScript client where its wire format matches the Kernia route, or use a small typed fetch wrapper.
+
+## Install the browser client
+
+For a Vite or React app using the official client APIs:
+
+~~~bash
+pnpm add better-auth@1.6.11
+~~~
+
+For framework-agnostic code, no client package is required. Use `fetch` with `credentials: "include"`.
+
+## Base URL
+
+~~~ts title="src/lib/auth-base.ts"
+export const authBaseURL =
+  import.meta.env.VITE_AUTH_BASE_URL ?? "http://localhost:8000/api/auth";
+~~~
+
+The value must include the auth mount. For the FastAPI demo that is `/api/auth`.
+
+## Raw fetch client
+
+~~~ts title="src/lib/auth-client.ts"
+import { authBaseURL } from "./auth-base";
+
+export async function authRequest(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${authBaseURL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+
+export const authClient = {
+  signInEmail: (email: string, password: string) =>
+    authRequest("/sign-in/email", {
+      method: "POST",
+      body: JSON.stringify({ email, password, remember_me: true }),
+    }),
+  getSession: () => authRequest("/get-session"),
+  signOut: () => authRequest("/sign-out", { method: "POST" }),
+};
+~~~
+
+## Official JS client interop
+
+When using the official client, set the base URL to the Python auth mount and keep the frontend origin in `trusted_origins` on the Python server.
+
+~~~ts title="src/lib/auth-interop.ts"
+import { createAuthClient } from "better-auth/react";
+
+export const auth = createAuthClient({
+  baseURL: import.meta.env.VITE_AUTH_BASE_URL,
+});
+~~~
+
+Keep this as a wire-compatibility dependency. Python imports and packages remain Kernia names.
+
+## React usage
+
+~~~tsx title="src/routes/settings.tsx"
+import { useEffect, useState } from "react";
+import { authClient } from "../lib/auth-client";
+
+export function SettingsPage() {
+  const [session, setSession] = useState<any>(null);
+
+  useEffect(() => {
+    authClient.getSession().then(setSession).catch(() => setSession(null));
+  }, []);
+
+  if (!session) return null;
+  return <div>{session.user.email}</div>;
+}
+~~~
+
+## Errors
+
+Kernia returns JSON errors shaped around `code` and `message`. UI code should display friendly copy but keep logic based on `code`.
+
+~~~ts
+try {
+  await authClient.signInEmail(email, password);
+} catch (error) {
+  if (error.code === "INVALID_PASSWORD") setFormError("Check your email and password.");
+}
+~~~
+
+## Cookies and CORS
+
+For cross-origin local development, configure the Python app with credentialed CORS and call with credentials included. Browser clients should not manually read the session cookie; it is HTTP-only.

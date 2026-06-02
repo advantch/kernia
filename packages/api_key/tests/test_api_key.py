@@ -1,36 +1,57 @@
-"""Tests for the API key plugin."""
+"""Unit tests for the API key plugin's pure helpers.
+
+Endpoint / flow behavior is covered by ``e2e/plugins/test_api_key.py``.
+"""
 
 from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_api_key import api_key, generate_api_key, parse_api_key
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_api_key import api_key, generate_api_key, parse_api_key
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
-# ----- Unit tests ----------------------------------------------------------
+def test_default_key_generator_length_and_alphabet() -> None:
+    key = default_key_generator(64, None)
+    assert len(key) == 64
+    assert key.isalpha()
 
 
-def test_generate_api_key_format() -> None:
-    raw, prefix = generate_api_key()
-    assert raw.startswith("ba_")
-    parts = raw.split("_")
-    assert len(parts) == 3
-    assert parts[1] == prefix
-    assert len(parts[2]) == 32
+def test_default_key_generator_applies_prefix() -> None:
+    key = default_key_generator(32, "hello_")
+    assert key.startswith("hello_")
+    assert len(key) == len("hello_") + 32
 
 
-def test_parse_api_key_returns_prefix() -> None:
-    raw, prefix = generate_api_key()
-    assert parse_api_key(raw) == prefix
+def test_default_key_hasher_is_deterministic_base64url() -> None:
+    a = default_key_hasher("some-key")
+    b = default_key_hasher("some-key")
+    assert a == b
+    # base64url, no padding
+    assert "=" not in a
+    assert "+" not in a
+    assert "/" not in a
+    assert default_key_hasher("other") != a
 
 
-def test_parse_api_key_rejects_bad_shapes() -> None:
+def test_generate_api_key_returns_start() -> None:
+    raw, start = generate_api_key(length=64)
+    assert len(raw) == 64
+    assert start == raw[:6]
+
+
+def test_generate_api_key_with_prefix() -> None:
+    raw, start = generate_api_key(length=16, prefix="pk_")
+    assert raw.startswith("pk_")
+    assert start == raw[:6]
+
+
+def test_parse_api_key_handles_empty() -> None:
     assert parse_api_key("") is None
     assert parse_api_key("ba_") is None
     assert parse_api_key("nope_xx_yy") is None
@@ -42,7 +63,7 @@ def test_parse_api_key_rejects_bad_shapes() -> None:
 
 async def _signed_in_driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],
@@ -127,7 +148,7 @@ async def test_api_key_header_attaches_session() -> None:
 
 async def test_revoke_rejects_other_users_key() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[email_and_password(), api_key()],

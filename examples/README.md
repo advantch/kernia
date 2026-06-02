@@ -1,24 +1,31 @@
 # Examples — full-stack walkthrough
 
-A working FastAPI server + React SPA, demonstrating that the Python port of
-better-auth is wire-compatible with the official JavaScript client.
+A working FastAPI server + React SPA, demonstrating that Kernia is
+wire-compatible with the official JavaScript client.
 
 ## What's here
 
 ```
 examples/
 ├── backend/
-│   ├── app.py          # FastAPI app: email/password + organization + open_api
+│   ├── app.py          # FastAPI app: auth, admin config, API keys, Stripe, OpenAPI
 │   └── run.sh          # boot helper
 └── frontend/
     ├── package.json
-    ├── vite.config.ts  # /api → :8000 proxy (same-origin cookies)
+    ├── vite.config.ts  # /api → :5050 proxy (same-origin cookies)
     ├── src/
-    │   ├── App.tsx     # sign-up / sign-in / org list / org create UI
+    │   ├── App.tsx     # SaaS login, dashboard, settings, admin, billing UI
+    │   │               # plus a live Events tab tapping `kernia.events`
     │   └── auth-client.ts  # the official `better-auth` JS client
     └── scripts/
         └── wire-check.mjs  # headless protocol check driven by the JS client
 ```
+
+The backend wires the Stripe plugin with `subscription_for="organization"`
+and a `team` plan flagged `seats=True`, so the in-process event bus carries
+`organization.member.{added,removed}` payloads to the Stripe seat-sync hook
+on every membership mutation. The frontend Events tab polls
+`/api/demo/events` and shows them landing live.
 
 ## Run it
 
@@ -26,7 +33,7 @@ In one terminal:
 
 ```bash
 cd <repo>
-.venv/bin/python -m uvicorn examples.backend.app:app --port 8000 --reload
+.venv/bin/python -m uvicorn examples.backend.app:app --port 5050 --reload
 ```
 
 In another:
@@ -38,8 +45,10 @@ pnpm dev       # serves http://localhost:5173
 ```
 
 Open <http://localhost:5173> in a browser. You can sign up, sign in, sign out,
-create organizations, see them listed. All cookies flow correctly because the
-vite dev proxy makes `/api/*` same-origin.
+create organizations, manage sessions and API keys, toggle auth methods, save
+redacted email/Stripe settings, import Stripe products/prices, and check billing
+entitlements. All cookies flow correctly because the vite dev proxy makes
+`/api/*` same-origin.
 
 ## Headless wire-protocol check
 
@@ -55,7 +64,7 @@ node scripts/wire-check.mjs
 Expected output:
 
 ```
-=== Wire check against http://localhost:8000/api/auth ===
+=== Wire check against http://localhost:5050/api/auth ===
 ✓ signUp.email
 ✓ getSession (after sign-up)
 ✓ signOut
@@ -65,7 +74,7 @@ Expected output:
 ✓ organization.list contains created org
 ✓ signIn.email rejects wrong password  INVALID_CREDENTIALS
 
-OK — wire protocol matches better-auth client expectations
+OK — wire protocol matches Better Auth client expectations
 ```
 
 This is the test that subsumes the "containerized Node oracle" idea from the
@@ -83,7 +92,7 @@ around the wrapped shape and didn't catch this — only an actual better-auth
 client did. The wire-check (and one-line fixes to the routes) are the visible
 result.
 
-## Optional: Google OAuth
+## Optional providers
 
 To enable Google sign-in in the demo, export real credentials before booting
 the backend:
@@ -93,11 +102,12 @@ export GOOGLE_CLIENT_ID="..."
 export GOOGLE_CLIENT_SECRET="..."
 ```
 
-The backend auto-registers `google` as a social provider whenever both vars
-are set. The `/api/auth/sign-in/social` route then accepts `provider: "google"`.
+The backend auto-registers `google` as a social provider whenever both vars are
+set. Other external methods appear in the UI as not configured until credentials
+or server-side plugins are provided.
 
 ## Visual click-through
 
 If you want to actually click through the flow rather than run the headless
-check, just open <http://localhost:5173> after both servers are up. The minimal
-demo UI ships sign-up, sign-in, sign-out, and an organization create+list flow.
+check, just open <http://localhost:5173> after both servers are up. The demo is
+intended to behave like a small SaaS control plane, not a mocked marketing page.

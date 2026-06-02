@@ -1,5 +1,5 @@
 {
-  "name": "better-auth-python-frontend-example",
+  "name": "kernia-frontend-example",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,14 +9,26 @@
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@tailwindcss/vite": "^4.3.0",
     "better-auth": "^1.6.11",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "radix-ui": "^1.4.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "shadcn": "^4.8.2",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.0",
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.60.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }

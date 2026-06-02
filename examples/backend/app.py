@@ -1,6 +1,6 @@
-"""Reference FastAPI app demonstrating better-auth-python end-to-end.
+"""Reference FastAPI app demonstrating Kernia end-to-end.
 
-This is what a consumer would write. Boots on port 8000. The vite frontend at
+This is what a consumer would write. Boots on port 5050. The vite frontend at
 `../frontend/` points its `better-auth/client` at this server's `/api/auth/*`.
 
 What's wired up:
@@ -23,18 +23,34 @@ from typing import Annotated
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.organization import organization
-from better_auth.plugins.open_api import open_api
-from better_auth.social_providers import google
-from better_auth.types.context import Session
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_fastapi import get_session, mount_better_auth, require_session
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.admin import admin
+from kernia.plugins.admin_config import AdminConfigOptions, admin_config
+from kernia.plugins.email_otp import email_otp
+from kernia.plugins.magic_link import magic_link
+from kernia.plugins.organization import organization
+from kernia.plugins.open_api import open_api
+from kernia.social_providers import google
+from kernia.types.context import Session
+from kernia.types.init_options import KerniaOptions
+from kernia_fastapi import get_session, mount_kernia, require_session
+from kernia_api_key import api_key
+from kernia_memory_adapter import memory_adapter
+from kernia_stripe import StripeClient, StripeOptions, StripePlan, stripe
+
+try:  # demo-only fallback when no real Stripe key is configured
+    from kernia_test_utils import MockStripe
+except Exception:  # pragma: no cover
+    MockStripe = None  # type: ignore[assignment]
 
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+DEV_FRONTEND_ORIGINS = {
+    FRONTEND_ORIGIN,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
 
 
 def build_app() -> FastAPI:
@@ -46,44 +62,116 @@ def build_app() -> FastAPI:
             client_id=google_id, client_secret=google_secret
         )
 
+    async def _log_magic_link(email: str, url: str, token: str) -> None:
+        print(f"[kernia demo] magic link for {email}: {url} ({token})")
+
+    async def _log_otp(email: str, otp: str, purpose: str) -> None:
+        print(f"[kernia demo] email otp for {email}: {otp} ({purpose})")
+
+    stripe_key = os.environ.get("STRIPE_API_KEY", "")
+    if stripe_key:
+        stripe_client = StripeClient(api_key=stripe_key)
+    else:
+        mock = MockStripe() if MockStripe is not None else None
+        stripe_client = StripeClient(
+            api_key="sk_test_demo",
+            transport=mock.mock_transport() if mock is not None else None,
+        )
+
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
-            secret=os.environ.get("BETTER_AUTH_SECRET", "dev-only-secret-change-me"),
+            secret=os.environ.get("KERNIA_SECRET", "dev-only-secret-change-me"),
             base_url="http://localhost:8000",
             base_path="/api/auth",
-            trusted_origins=[FRONTEND_ORIGIN, "http://localhost:8000"],
-            plugins=[email_and_password(), organization(), open_api()],
+            trusted_origins=[*DEV_FRONTEND_ORIGINS, "http://localhost:8000", "http://127.0.0.1:8000"],
+            plugins=[
+                admin_config(AdminConfigOptions(allow_any_authenticated=True)),
+                email_and_password(),
+                magic_link(),
+                email_otp(),
+                organization(),
+                admin(),
+                api_key(),
+                # subscription_for="organization" + seats=True wires the Stripe
+                # plugin into the events bus: every /organization/accept-invitation
+                # and /remove-member fires `organization.member.{added,removed}`
+                # and the seat-sync hook pushes the new quantity to Stripe.
+                stripe(
+                    StripeOptions(
+                        stripe_client=stripe_client,
+                        webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", "whsec_demo"),
+                        subscription_for="organization",
+                        plans={
+                            "starter": StripePlan(
+                                name="starter",
+                                price_id="price_starter_monthly",
+                                lookup_key="starter-monthly",
+                            ),
+                            "team": StripePlan(
+                                name="team",
+                                price_id="price_team_base",
+                                seats=True,
+                                seat_price_id="price_team_seat",
+                                lookup_key="team-monthly",
+                            ),
+                        },
+                    )
+                ),
+                open_api(),
+            ],
             social_providers=social_providers,
             advanced={
+                "magic-link": {"send_magic_link": _log_magic_link},
+                "email-otp": {"send_otp": _log_otp},
                 # Frontend handles same-site cookies; we want the cookie back
                 # via fetch credentials: include — so SameSite=Lax is enough.
             },
         )
     )
 
-    app = FastAPI(title="better-auth-python example")
+    # ----- demo: tap the in-process event bus so the frontend can show what
+    # plugins are emitting in real time. Production code would subscribe in
+    # its own plugin's init hook.
+    from kernia.events import get_bus
+
+    event_log: list[dict] = []
+
+    async def _log_member_event(payload) -> None:
+        event_log.append({
+            "event": f"organization.member.{payload.action}",
+            "organization_id": payload.organization_id,
+            "user_id": payload.user_id,
+            "role": payload.role,
+        })
+
+    bus = get_bus(auth.context)
+    bus.on("organization.member.added", _log_member_event)
+    bus.on("organization.member.removed", _log_member_event)
+    bus.on("organization.member.updated", _log_member_event)
+
+    app = FastAPI(title="kernia example")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[FRONTEND_ORIGIN],
+        allow_origins=[*DEV_FRONTEND_ORIGINS],
         allow_credentials=True,  # required so cookies flow cross-origin
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["set-cookie"],
     )
 
-    mount_better_auth(app, auth)
+    mount_kernia(app, auth)
 
     @app.get("/")
     async def root() -> dict:
-        return {"name": "better-auth-python example", "auth_base": "/api/auth"}
+        return {"name": "kernia example", "auth_base": "/api/auth"}
 
     @app.get("/api/me")
     async def me(session: Annotated[Session, Depends(require_session)]) -> dict:
         user = await auth.context.adapter.find_one(
             model="user",
             where=(
-                __import__("better_auth.types.adapter", fromlist=["Where"]).Where(
+                __import__("kernia.types.adapter", fromlist=["Where"]).Where(
                     field="id", value=session.user_id
                 ),
             ),
@@ -94,6 +182,15 @@ def build_app() -> FastAPI:
     async def whoami(session=Depends(get_session)) -> dict:
         return {"signed_in": session is not None}
 
+    @app.get("/api/demo/events")
+    async def demo_events() -> dict:
+        """Return the last N events captured from the in-process event bus.
+
+        The frontend's billing/team panel polls this to show the seat-sync hook
+        firing in real time as members are invited or removed.
+        """
+        return {"events": list(event_log[-50:])}
+
     return app
 
 
@@ -103,4 +200,4 @@ app = build_app()
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=5050, log_level="info")

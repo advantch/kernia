@@ -5,19 +5,17 @@ Covers: config validation, discovery URL merging, authorize URL construction.
 
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
-
 import httpx
 import pytest
 
-from better_auth.plugins.generic_oauth import (
+from kernia.plugins.generic_oauth import (
     GenericOAuthConfig,
     auth0,
     generic_oauth,
     keycloak,
     okta,
 )
-from better_auth.plugins.generic_oauth.routes import _DISCOVERY_CACHE, _resolve
+from kernia.plugins.generic_oauth.routes import _DISCOVERY_CACHE, _resolve
 
 
 def test_config_requires_endpoints_or_discovery() -> None:

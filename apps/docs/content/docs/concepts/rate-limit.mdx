@@ -1,0 +1,68 @@
+---
+title: "Rate Limit"
+description: "Configure global and plugin route rate limits."
+---
+
+Kernia applies rate limiting before expensive auth work such as password checks, OTP verification, social callbacks, or token issuance. The default in-memory limiter is safe for local development; distributed deployments should use a shared store.
+
+## Global configuration
+
+```python title="auth.py"
+from kernia.types.init_options import RateLimitOptions
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    rate_limit=RateLimitOptions(enabled=True, window=60, max=100),
+))
+```
+
+`window` is the number of seconds in the bucket. `max` is the maximum number of matching requests allowed in that bucket.
+
+## Per-route rules
+
+Plugins can contribute path-specific rules. Two-factor TOTP verification, OTP send routes, anonymous sign-in, device authorization, password reset, and API key creation should usually be stricter than a general session lookup.
+
+```python title="plugin.py"
+from kernia.types.plugin import RateLimitRule
+
+RateLimitRule(path="/two-factor/verify-totp", window=60, max=10)
+```
+
+## Request identity
+
+The limiter keys requests by route and client identity. Behind a proxy, make sure the app receives trustworthy forwarded IP headers. Do not trust arbitrary `x-forwarded-for` values from the public internet without a proxy boundary.
+
+## Storage
+
+When no store is provided, `init` creates `InMemoryRateLimitStore`. That does not coordinate across workers.
+
+For multi-worker or multi-region deployments, provide a Redis-backed store or route all auth traffic through a shared limiter.
+
+```python title="auth.py"
+auth = init(KerniaOptions(
+    database=adapter,
+    secondary_storage=redis_storage(env.REDIS_URL),
+    secret=env.KERNIA_SECRET,
+))
+```
+
+## Client behavior
+
+A blocked request returns a typed auth error with a rate-limit status. Client UI should display a cooldown message and avoid immediate retry loops.
+
+```json
+{
+  "code": "RATE_LIMITED",
+  "message": "Too many requests",
+  "status": 429
+}
+```
+
+## Admin and security
+
+Admin routes, API key creation, SSO configuration, SCIM token rotation, and Stripe setup should have conservative limits. Rate limits should complement backend authorization, not replace it.
+
+## Testing
+
+Rate-limit tests should hit the public route repeatedly through the mounted framework app. That proves middleware order, path matching, identity extraction, and error serialization.

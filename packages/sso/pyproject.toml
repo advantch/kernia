@@ -1,15 +1,16 @@
 [project]
-name = "better-auth-sso"
+name = "kernia-sso"
 version = "0.0.0"
-description = "SAML + OIDC SSO plugin for better-auth"
+description = "SAML + OIDC SSO plugin for Kernia"
 requires-python = ">=3.11"
 dependencies = [
-    "better-auth",
+    "kernia",
     "authlib>=1.3",
     "python3-saml>=1.16",
     "httpx>=0.27",
     "anyio>=4.0",
     "pydantic>=2",
+    "cryptography>=41",
 ]
 
 [build-system]
@@ -17,4 +18,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/better_auth_sso"]
+packages = ["src/kernia_sso"]

@@ -1,4 +1,4 @@
-"""Unit tests for better_auth.i18n."""
+"""Unit tests for kernia.i18n."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from better_auth.i18n import i18n, parse_accept_language
+from kernia.i18n import i18n, parse_accept_language
 
 
 @pytest.mark.parametrize(

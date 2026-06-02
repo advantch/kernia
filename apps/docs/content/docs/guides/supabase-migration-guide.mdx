@@ -1,0 +1,56 @@
+---
+title: "Migrating from Supabase Auth to Kernia"
+description: "Move Supabase Auth users, identities, sessions, and Postgres data into Kernia."
+---
+
+Supabase Auth migrations often keep PostgreSQL but replace the auth service. That makes the database familiar, but you still need to map schemas, password hashes, identities, row-level security assumptions, and frontend SDK usage.
+
+## Inventory
+
+- `auth.users` fields used by your app.
+- `auth.identities` providers and provider account ids.
+- Email verification, phone verification, and recovery state.
+- RLS policies that read `auth.uid()` or JWT claims.
+- Edge functions and triggers that depend on Supabase auth events.
+- Frontend calls through `supabase.auth`.
+
+## Kernia setup
+
+```python title="auth.py"
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+adapter = sqlalchemy_adapter(engine)
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+))
+```
+
+## Data mapping
+
+| Supabase | Kernia |
+|---|---|
+| `auth.users.id` | `user.id` or external id field. |
+| `auth.users.email` | `user.email`. |
+| `auth.users.email_confirmed_at` | `user.email_verified`. |
+| `auth.identities` | `account` rows. |
+| Recovery tokens | Do not import active tokens; reissue through Kernia. |
+| JWT claims | App-specific session/user fields or API responses. |
+
+## Passwords
+
+Verify whether your exported password hashes can be checked outside Supabase. If they can, implement a temporary legacy verifier and rehash after successful login. If not, run a reset-password migration.
+
+## RLS and authorization
+
+Kernia sessions are not Supabase JWTs. If your app uses Postgres RLS based on Supabase claims, either move authorization to the Python API layer or issue compatible database claims through a carefully reviewed token path.
+
+## Frontend migration
+
+Replace `supabase.auth.signInWithPassword`, `getSession`, and provider methods with Kernia route calls or the compatible JS client. Keep provider callback URLs pointed at the Python backend.
+
+## Validation
+
+Test email/password, social sign-in, password reset, email verification, protected API routes, RLS-dependent reads, logout, and account deletion in staging before switching production traffic.

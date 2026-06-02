@@ -1,0 +1,74 @@
+---
+title: "SMS Service"
+description: "Connect phone-number OTP flows to an SMS provider."
+---
+
+SMS delivery is required when phone-number verification, phone sign-in, or step-up verification uses text messages. Kernia should call a configured SMS provider through a small application-owned adapter. It does not currently ship a hosted SMS delivery service.
+
+## Interface
+
+```python title="sms.py"
+class SMSClient:
+    async def send(self, *, to: str, body: str) -> None:
+        ...
+```
+
+Attach the client when enabling phone-number authentication:
+
+```python title="auth.py"
+from kernia.plugins.phone_number import phone_number
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    plugins=[
+        phone_number(send_sms=sms_client.send),
+    ],
+))
+```
+
+## Provider examples
+
+| Provider | Notes |
+|---|---|
+| Twilio | Common default for global SMS and WhatsApp. |
+| Vonage | Useful when your region has better deliverability there. |
+| AWS SNS | Works well in AWS-heavy stacks. |
+
+## Message requirements
+
+SMS templates should be short, unambiguous, and include only the verification code and expiration. Do not send passwords, session tokens, reset tokens, API keys, or OAuth credentials by SMS.
+
+```text
+Your Kernia verification code is 123456. It expires in 10 minutes.
+```
+
+## Rate limits
+
+Rate-limit SMS sends by phone number, IP address, and user id when available. Also apply a daily cap per destination to avoid provider bill shock and abuse.
+
+| Limit | Example |
+|---|---|
+| Per phone number | 3 sends per 10 minutes. |
+| Per IP address | 20 sends per hour. |
+| Per user | 10 sends per day. |
+| Verification attempts | 5 attempts per code. |
+
+## Failure handling
+
+The auth route should distinguish invalid user input from provider failures:
+
+| Failure | Response |
+|---|---|
+| Invalid phone number | Return a validation error before calling the provider. |
+| Rate limited | Return `429` and do not send. |
+| Provider rejected | Return a typed delivery error and store provider metadata. |
+| Provider timeout | Return a retryable error and record an operational event. |
+
+## Security notes
+
+SMS is weaker than passkeys and TOTP because phone numbers can be reassigned and SIM-swapped. For admin accounts, billing settings, API key rotation, SSO configuration, and SCIM token changes, prefer passkey or TOTP step-up.
+
+## Test coverage
+
+Use a fake SMS client in tests and assert the phone plugin calls it only after validation and rate limiting. Browser tests should show phone auth only when configured and should render provider failures as unavailable, not as successful sign-in.

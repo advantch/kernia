@@ -1,20 +1,20 @@
 # OpenAPI
 
 The [`open_api`](plugins/open_api.md) plugin auto-generates an OpenAPI 3 document
-for every registered better-auth route — core endpoints plus everything each
+for every registered Better Auth route — core endpoints plus everything each
 plugin contributes.
 
 ## Usage
 
 ```python
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
-from better_auth.plugins.open_api import open_api
-from better_auth.plugins.email_password import email_and_password
-from better_auth_memory_adapter import memory_adapter
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.open_api import open_api
+from kernia.plugins.email_password import email_and_password
+from kernia_memory_adapter import memory_adapter
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=memory_adapter(),
         secret="change-me",
         plugins=[

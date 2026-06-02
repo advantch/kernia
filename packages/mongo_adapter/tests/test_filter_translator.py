@@ -6,8 +6,8 @@ filters our MongoDB adapter emits.
 
 from __future__ import annotations
 
-from better_auth.types.adapter import Where
-from better_auth_mongo.adapter import _escape_regex, _field_name, where_to_bson
+from kernia.types.adapter import Where
+from kernia_mongo.adapter import _escape_regex, _field_name, where_to_bson
 
 
 def test_empty_where_is_empty_filter() -> None:

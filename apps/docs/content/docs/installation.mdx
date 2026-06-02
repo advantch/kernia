@@ -1,0 +1,50 @@
+---
+title: "Installation"
+description: "Install Kernia and create the first Python auth server."
+---
+
+## Install
+
+```bash
+uv add kernia kernia-fastapi
+```
+
+Add an adapter package for your database, for example:
+
+```bash
+uv add kernia-sqlalchemy
+```
+
+## Configure
+
+```python
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+))
+```
+
+## Mount
+
+```python
+from fastapi import FastAPI
+from kernia_fastapi import mount_kernia
+
+app = FastAPI()
+mount_kernia(app, auth)
+```
+
+## Generate a secret
+
+<GenerateSecret />
+
+## Verify
+
+Call `/api/auth/ok`, then enable a sign-in method and test through a browser with cookies enabled.

@@ -1,0 +1,60 @@
+---
+title: "One Tap"
+description: "Verify Google One Tap ID tokens and create Kernia sessions."
+---
+
+The One Tap plugin accepts an ID token issued by Google, verifies it against JWKS, resolves or creates the user through the OAuth account flow, and sets a Kernia session cookie.
+
+## Installation
+
+~~~bash
+uv add kernia httpx
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.one_tap import OneTapOptions, one_tap
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.one_tap import OneTapOptions, one_tap
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        one_tap(OneTapOptions(client_id=os.environ["GOOGLE_CLIENT_ID"])),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/one-tap/verify">
+  Verifies a Google ID token, links or creates the user, and creates a session.
+</APIMethod>
+
+## Schema impact
+
+No new tables. It writes the user and provider account through core models.
+
+## Behavior and options
+
+- `client_id` must match the Google client id used by the browser widget.
+- Test environments can override JWKS URL and issuer.
+- Use admin config to hide the One Tap UI until credentials exist.
+
+## Test and demo coverage
+
+Test valid token, invalid signature, wrong audience, wrong issuer, missing email, disabled sign-up, trusted-provider linking, and cookie creation.

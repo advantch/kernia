@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from better_auth.integrations.session import strip_base_path
+from kernia.integrations.session import strip_base_path
 
 
 def test_strip_base_path_trims_prefix() -> None:

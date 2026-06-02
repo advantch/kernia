@@ -1,0 +1,60 @@
+---
+title: "Anonymous"
+description: "Create temporary users and upgrade them to real accounts later."
+---
+
+Anonymous auth creates a user row without credentials so first-time visitors can save state before registering. When the visitor later signs in or signs up with a real method, the plugin can merge application data and delete the anonymous user.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.anonymous import anonymous
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.anonymous import anonymous
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        anonymous(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/sign-in/anonymous">
+  Creates an anonymous user, creates a session, and marks the user as anonymous.
+</APIMethod>
+
+## Schema impact
+
+Extends `user` with `isAnonymous`. No separate anonymous table is required.
+
+## Behavior and options
+
+- The optional `on_link` callback receives the anonymous user, the new user, and the endpoint context.
+- Upgrade hooks run around email, username, magic-link, and passkey sign-in paths.
+- Applications should move product data before the anonymous user is deleted.
+
+## Test and demo coverage
+
+Test anonymous sign-in, a second anonymous sign-in rejection, upgrade through email sign-up, `on_link` data migration, old session cleanup, and frontend display of anonymous state.

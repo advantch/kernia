@@ -1,13 +1,13 @@
-"""Unit tests for better_auth.db.migrations.codegen."""
+"""Unit tests for kernia.db.migrations.codegen."""
 
 from __future__ import annotations
 
 import pytest
 
-from better_auth.db.migrations import emit_migration, resolve_full_schema
-from better_auth.db.schema import CORE_MODELS
-from better_auth.types.adapter import FieldDef, ModelDef
-from better_auth.types.plugin import PluginSchema
+from kernia.db.migrations import emit_migration, resolve_full_schema
+from kernia.db.schema import CORE_MODELS
+from kernia.types.adapter import FieldDef, ModelDef
+from kernia.types.plugin import PluginSchema
 
 
 class _P:

@@ -1,11 +1,11 @@
 # Access
 
-> Module: `better_auth.plugins.access`
-> Constructor: `AccessControl`
+> Module: `kernia.plugins.access`
+> Constructor: `default_roles`
 
 access — primitives used by `admin`, `organization`, `api_key`, `scim` for RBAC.
 
-Mirrors `reference/packages/better-auth/src/plugins/access/`.
+Mirrors `Better Auth reference: plugins/access/`.
 
 ## Endpoints
 
@@ -18,16 +18,16 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.access import AccessControl
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.access import default_roles
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[
-            AccessControl(),
+            default_roles(),
         ],
     )
 )

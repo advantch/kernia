@@ -1,0 +1,68 @@
+---
+title: "Multi Session"
+description: "Keep and switch between multiple sessions in one browser."
+---
+
+The multi-session plugin maintains a signed session-list cookie containing the browser sessions available for switching. The active session remains the normal session token cookie.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.multi_session import multi_session
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.multi_session import multi_session
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        multi_session(maximum=5),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/multi-session/list">
+  Returns the sessions available in the signed session-list cookie.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/multi-session/switch">
+  Switches the active session token to another stored session.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/multi-session/revoke">
+  Revokes a stored session and updates the session-list cookie.
+</APIMethod>
+
+## Schema impact
+
+No tables are added. It reads and writes existing `session` rows and the signed session-list cookie.
+
+## Behavior and options
+
+- The `maximum` option limits how many sessions stay in the browser list.
+- Older entries are evicted when the list exceeds the limit.
+- This is browser convenience, not a replacement for server-side session revocation.
+
+## Test and demo coverage
+
+Test list creation after sign-in, switching users, max-list eviction, revocation, invalid token rejection, and cookie updates after sign-out.

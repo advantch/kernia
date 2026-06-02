@@ -13,23 +13,23 @@ Mirrors the behaviour locked by better-auth's own `db/with-hooks` and
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
-from better_auth.auth import init
-from better_auth.db.hook_queue import collect_after_hooks
-from better_auth.db.schema.resolve import resolve_tables
-from better_auth.db.with_hooks import get_with_hooks
-from better_auth.types.adapter import FieldDef, FieldTransform, ModelDef, Where
-from better_auth.types.db_hooks import (
+import pytest
+from kernia.auth import init
+from kernia.db.hook_queue import collect_after_hooks
+from kernia.db.schema.resolve import resolve_tables
+from kernia.db.with_hooks import get_with_hooks
+from kernia.types.adapter import FieldDef, FieldTransform, ModelDef, Where
+from kernia.types.db_hooks import (
     DatabaseHooksEntry,
     HookData,
     HookOp,
     ModelHooks,
 )
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth.types.plugin import PluginSchema
-from better_auth_memory_adapter import memory_adapter
-
+from kernia.types.init_options import KerniaOptions
+from kernia.types.plugin import PluginSchema
+from kernia_memory_adapter import memory_adapter
 
 # --------------------------------------------------------------------------
 # helpers
@@ -117,7 +117,7 @@ def test_resolve_tables_rejects_extend_unknown_model():
 
 def _auth_with(**opts):
     raw = memory_adapter()
-    handle = init(BetterAuthOptions(database=raw, secret="x" * 32, **opts))
+    handle = init(KerniaOptions(database=raw, secret="x" * 32, **opts))
     return raw, handle.context
 
 
@@ -304,11 +304,13 @@ async def test_init_collects_options_and_plugin_database_hooks():
     class HookPlugin(_Plugin):
         id = "hooky"
         schema = None
-        database_hooks = {"user": ModelHooks(create=HookOp(before=lambda d, c: calls.append("plugin")))}
+        database_hooks: ClassVar = {
+            "user": ModelHooks(create=HookOp(before=lambda d, c: calls.append("plugin")))
+        }
 
     raw = memory_adapter()
     handle = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=raw,
             secret="x" * 32,
             plugins=[HookPlugin()],

@@ -1,0 +1,84 @@
+---
+title: "PostgreSQL"
+description: "Use PostgreSQL with Kernia through the SQLAlchemy async adapter."
+---
+
+PostgreSQL is the recommended relational backend for production Kernia deployments. Use the SQLAlchemy adapter with `asyncpg`, run committed Alembic migrations, and keep auth traffic on a healthy connection pool.
+
+## Installation
+
+```bash
+uv add kernia kernia-sqlalchemy sqlalchemy asyncpg alembic
+```
+
+## Configuration
+
+```python title="auth.py"
+import os
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+engine = create_async_engine(
+    os.environ["DATABASE_URL"],
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+)
+adapter = sqlalchemy_adapter(engine)
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+))
+```
+
+Use a URL shaped like:
+
+```text
+postgresql+asyncpg://user:password@host:5432/dbname
+```
+
+## Migrations
+
+Generate migrations from the configured auth object:
+
+```bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+alembic upgrade head
+```
+
+Run migrations before deploying code that enables new plugins.
+
+## Schema
+
+Kernia stores date values as Unix seconds and JSON-capable plugin fields as JSON columns. Core tables include users, sessions, accounts, and verification records. Plugins add their own tables for organizations, API keys, passkeys, SSO, SCIM, Stripe, and admin config.
+
+## Non-default schemas
+
+If your auth tables live outside `public`, set the PostgreSQL search path in the connection string or database role:
+
+```text
+postgresql+asyncpg://user:password@host:5432/dbname?server_settings=search_path%3Dauth
+```
+
+Create the schema and grant privileges before running migrations:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS auth;
+GRANT USAGE, CREATE ON SCHEMA auth TO app_user;
+```
+
+## Production notes
+
+- Monitor failed queries, lock waits, and pool exhaustion.
+- Keep session token, user email, provider account, and API key hash indexes healthy.
+- Use a migration pipeline instead of creating tables from application startup.
+- Use separate database roles for migration and runtime access where possible.
+
+## Test and demo coverage
+
+Run the FastAPI demo and adapter tests against PostgreSQL before treating a plugin as production-ready. Cover sign-up, sign-in, OAuth callback, session refresh, logout, API key usage, organization membership, Stripe webhooks, and admin config writes.

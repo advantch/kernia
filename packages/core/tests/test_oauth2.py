@@ -14,7 +14,7 @@ import time
 import httpx
 import pytest
 
-from better_auth.oauth2 import (
+from kernia.oauth2 import (
     pkce_challenge,
     pkce_verifier,
     verify_id_token,
@@ -39,7 +39,7 @@ def _b64url_int(i: int) -> str:
 
 @pytest.fixture(scope="module")
 def rsa_key():
-    cryptography = pytest.importorskip("cryptography")
+    pytest.importorskip("cryptography")
     from cryptography.hazmat.primitives.asymmetric import rsa
 
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)

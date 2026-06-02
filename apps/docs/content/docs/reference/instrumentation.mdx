@@ -1,0 +1,80 @@
+---
+title: "Instrumentation"
+description: "Instrument Kernia endpoints, adapters, hooks, and provider calls."
+---
+
+Kernia exposes instrumentation boundaries at framework requests, endpoint handlers, adapter operations, provider HTTP calls, email/SMS delivery, webhooks, and hooks. Use these boundaries to debug production issues without recording secrets or high-cardinality personal data.
+
+## Setup
+
+Configure OpenTelemetry in your Python application before creating the auth instance:
+
+```python title="observability.py"
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(provider)
+```
+
+Then wrap the mounted ASGI app or framework middleware with your normal OpenTelemetry integration.
+
+## Endpoint spans
+
+Record one span per public auth request.
+
+| Attribute | Value |
+|---|---|
+| `http.method` | Request method. |
+| `http.route` | Low-cardinality route template, such as `/api/auth/get-session`. |
+| `http.status_code` | Response status. |
+| `kernia.operation_id` | Stable operation id, such as `getSession`. |
+| `kernia.error_code` | Stable auth error code when present. |
+
+Do not record passwords, OTPs, raw cookies, bearer tokens, OAuth codes, state values, or API key plaintext.
+
+## Hook spans
+
+Global and plugin hooks should emit child spans so slow authorization, email, billing, or audit logic is visible.
+
+| Span | When |
+|---|---|
+| `hook before {route}` | Before a route handler runs. |
+| `hook after {route}` | After a route handler returns. |
+| `plugin on_request {plugin}` | Before plugin request handling. |
+| `plugin on_response {plugin}` | After plugin response handling. |
+
+## Database spans
+
+Instrument adapter calls by model and operation:
+
+| Attribute | Example |
+|---|---|
+| `db.operation.name` | `create`, `find_one`, `update`, `delete` |
+| `db.collection.name` | `user`, `session`, `account`, `verification` |
+| `kernia.adapter` | `sqlalchemy`, `mongo`, `memory` |
+
+For SQLAlchemy, combine Kernia adapter spans with SQLAlchemy engine instrumentation so you can see both auth model operations and SQL timing.
+
+## Provider spans
+
+Measure external provider calls separately from local auth logic:
+
+- OAuth token exchange.
+- OAuth userinfo fetch.
+- JWKS fetch and cache refresh.
+- SAML metadata fetch.
+- Stripe REST calls.
+- Email sends.
+- SMS sends.
+- SCIM provisioning calls.
+
+## Alerts
+
+Alert on OAuth callback error spikes, webhook signature failures, email/SMS delivery failures, rate-limit spikes, unexpected admin config changes, and sustained latency on session lookup.
+
+## Test coverage
+
+Instrumentation tests should assert that spans are emitted with low-cardinality attributes and that sensitive fields are not present. Production smoke tests should verify traces include both framework requests and adapter operations.

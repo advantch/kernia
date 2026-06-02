@@ -11,14 +11,14 @@ import base64
 import json
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
-from better_auth.auth import init
-from better_auth.plugins import email_and_password
-from better_auth.plugins.jwt import JwtOptions, jwt
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.jwt import JwtOptions, jwt
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _decode_header(token: str) -> dict:
@@ -30,7 +30,7 @@ def _decode_header(token: str) -> dict:
 @pytest.fixture
 def driver() -> ASGIDriver:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -103,7 +103,7 @@ async def test_rotation_old_token_still_verifies(driver: ASGIDriver) -> None:
 
 async def test_token_requires_session() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[email_and_password(), jwt()],
@@ -112,3 +112,93 @@ async def test_token_requires_session() -> None:
     d = ASGIDriver(app=auth.router.mount())
     r = await d.request("GET", "/token")
     assert r.status == 401
+
+
+# ----- ported from reference jwt.test.ts (HTTP surface) -----
+
+
+def _build(opts: JwtOptions):
+    auth = init(
+        KerniaOptions(
+            database=memory_adapter(),
+            secret="test-secret",
+            base_url="http://localhost:3000",
+            plugins=[email_and_password(), jwt(opts)],
+        )
+    )
+    return ASGIDriver(app=auth.router.mount())
+
+
+async def test_default_jwks_alg_is_eddsa() -> None:
+    """Ported from "Get JWKS": the first JWK advertises EdDSA by default."""
+    d = _build(JwtOptions())
+    await _signup(d)
+    await d.request("GET", "/token")  # bootstrap a key
+    r = await d.request("GET", "/jwks")
+    assert r.status == 200, r.json()
+    assert r.json()["keys"][0]["alg"] == "EdDSA"
+
+
+async def test_subject_defaults_to_user_id() -> None:
+    """Ported from "should set subject to user id by default"."""
+    d = _build(JwtOptions())
+    await _signup(d)
+    r = await d.request("GET", "/token")
+    token = r.json()["token"]
+    r2 = await d.request("GET", "/jwks")
+    claims = jose_jwt.decode(token, JsonWebKey.import_key_set(r2.json()))
+    # sub must be present and equal the user id claim.
+    assert claims["sub"]
+    assert claims["sub"] == claims["id"]
+
+
+async def test_define_payload_and_get_subject() -> None:
+    """definePayload/getSubject hooks shape the token (parity with jwt options)."""
+
+    def define_payload(session: dict) -> dict:
+        return {"role": "admin", "email": session["user"]["email"]}
+
+    def get_subject(session: dict) -> str:
+        return "subject-override"
+
+    d = _build(JwtOptions(define_payload=define_payload, get_subject=get_subject))
+    await _signup(d)
+    r = await d.request("GET", "/token")
+    token = r.json()["token"]
+    r2 = await d.request("GET", "/jwks")
+    claims = jose_jwt.decode(token, JsonWebKey.import_key_set(r2.json()))
+    assert claims["role"] == "admin"
+    assert claims["email"] == "jwt@test"
+    assert claims["sub"] == "subject-override"
+
+
+async def test_remote_url_disables_jwks_http() -> None:
+    """Ported from "should disable /jwks endpoint when remoteUrl is configured".
+
+    /jwks returns 404 but /token still works.
+    """
+    d = _build(
+        JwtOptions(
+            algorithm="ES256",
+            remote_url="https://example.com/.well-known/jwks.json",
+        )
+    )
+    await _signup(d)
+    r = await d.request("GET", "/jwks")
+    assert r.status == 404
+    r = await d.request("GET", "/token")
+    assert r.status == 200, r.json()
+    assert r.json()["token"].count(".") == 2
+
+
+async def test_custom_jwks_path_http() -> None:
+    """Ported from "should use custom jwksPath when specified"."""
+    d = _build(JwtOptions(jwks_path="/.well-known/jwks.json"))
+    await _signup(d)
+    await d.request("GET", "/token")
+    r = await d.request("GET", "/.well-known/jwks.json")
+    assert r.status == 200, r.json()
+    assert len(r.json()["keys"]) > 0
+    # The old /jwks path is gone.
+    r = await d.request("GET", "/jwks")
+    assert r.status == 404

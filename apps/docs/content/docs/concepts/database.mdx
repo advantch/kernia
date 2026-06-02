@@ -1,0 +1,84 @@
+---
+title: "Database"
+description: "Configure adapters, generate schema, and understand Kernia core and plugin tables."
+---
+
+Kernia never talks to a database directly. The core calls the `CustomAdapter` protocol for create, read, update, delete, count, optional transactions, and optional token consumption. Adapters translate those calls into SQLAlchemy, MongoDB, memory, or another storage backend.
+
+## Adapters
+
+Install the adapter package that matches your backend.
+
+~~~bash
+uv add kernia kernia-sqlalchemy
+~~~
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+from .database import async_engine
+
+adapter = sqlalchemy_adapter(async_engine)
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+))
+~~~
+
+## Core schema
+
+Kernia starts with four logical models. Field names intentionally match the wire-compatible schema.
+
+| Model | Purpose | Important fields |
+|---|---|---|
+| `user` | Human account record. | `id`, `email`, `emailVerified`, `name`, `image`, timestamps |
+| `session` | Active browser or API session. | `userId`, `token`, `expiresAt`, `ipAddress`, `userAgent` |
+| `account` | Credential or social-provider account linked to a user. | `accountId`, `providerId`, OAuth tokens, `password` |
+| `verification` | Short-lived verification tokens. | `identifier`, `value`, `expiresAt` |
+
+## Plugin schema
+
+Plugins either add new tables or extend existing models. Examples: two-factor auth adds confirmation and backup-code tables, username extends `user`, API keys add an `apiKey` table, and SSO adds provider/domain tables.
+
+~~~python title="schema_resolution.py"
+from kernia.db.schema import CORE_MODELS
+from kernia.db.migrations import resolve_full_schema
+
+models = resolve_full_schema(CORE_MODELS, auth.context.plugins)
+~~~
+
+## Generate migrations
+
+~~~bash
+uv run kernia generate --app app.auth:auth --output alembic/versions/0001_kernia.py
+~~~
+
+Review generated migrations before applying them. Generated files should be committed so the deployed database matches the deployed plugin list.
+
+## Secondary storage
+
+Some features need short-lived storage or distributed coordination. Pass `secondary_storage` when using Redis-backed flows.
+
+~~~python
+from kernia_redis_storage import redis_storage
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secondary_storage=redis_storage(os.environ["REDIS_URL"]),
+    secret=os.environ["KERNIA_SECRET"],
+))
+~~~
+
+## Adapter contract
+
+A custom adapter implements `create`, `find_one`, `find_many`, `update`, `update_many`, `delete`, `delete_many`, and `count`. Optional protocols add atomic `consume_one`, schema materialization, and transactions.
+
+## Troubleshooting
+
+Missing tables usually mean the migration was generated before a plugin was enabled. Incorrect casing usually means the physical adapter mapping does not match Kernia's logical model names. OAuth callback failures after a successful provider redirect often point to missing `account` or `verification` tables.

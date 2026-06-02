@@ -1,0 +1,85 @@
+---
+title: "Generic OAuth"
+description: "Register custom OAuth or OIDC providers without writing a provider module."
+---
+
+Generic OAuth is for providers that are not exposed as first-class constructors. You define authorization, token, userinfo, scopes, and profile mapping, then Kernia registers provider-specific sign-in and callback routes.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        generic_oauth((
+            GenericOAuthConfig(
+                provider_id="acme",
+                client_id=os.environ["ACME_CLIENT_ID"],
+                client_secret=os.environ["ACME_CLIENT_SECRET"],
+                authorization_endpoint="https://idp.example.com/oauth/authorize",
+                token_endpoint="https://idp.example.com/oauth/token",
+                userinfo_endpoint="https://idp.example.com/oauth/userinfo",
+            ),
+        )),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="GET" path="/api/auth/oauth2/sign-in/:provider_id">
+  Starts a provider-specific OAuth redirect flow.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/oauth2/callback/:provider_id">
+  Handles standard query callback responses.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/callback/:provider_id">
+  Handles form-post callback responses.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/oauth2">
+  Starts OAuth from a JSON API call.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/oauth2/link">
+  Links a provider account to the active user.
+</APIMethod>
+
+## Schema impact
+
+No new tables. Generic OAuth writes linked accounts to the core `account` table.
+
+## Behavior and options
+
+- Provider IDs must be unique.
+- Use issuer validation for OIDC providers that return an issuer.
+- Profile mapping must provide a stable external id and an email strategy appropriate for the provider.
+
+## Test and demo coverage
+
+Test duplicate provider IDs at startup, redirect URL creation, callback state validation, userinfo normalization, account linking, form-post callback, and unknown provider errors.

@@ -6,9 +6,9 @@ The plugin interface is defined in
 
 Note: a thin extension type is also declared in
 `reference/packages/better-auth/src/types/plugins.ts`, but the canonical
-`BetterAuthPlugin` lives in core.
+`KerniaPlugin` lives in core.
 
-## `BetterAuthPlugin` (verbatim)
+## `KerniaPlugin` (verbatim)
 
 From `reference/packages/core/src/types/plugin.ts`:
 
@@ -21,11 +21,11 @@ import type {
 } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
-import type { BetterAuthPluginDBSchema } from "../db";
+import type { KerniaPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
+import type { KerniaOptions } from "./init-options";
 
 type DeepPartial<T> = T extends Function
   ? T
@@ -44,14 +44,14 @@ export type HookEndpointContext = Partial<
   headers?: Headers | undefined;
 };
 
-export type BetterAuthPluginErrorCodePart = {
+export type KerniaPluginErrorCodePart = {
   /**
    * The error codes returned by the plugin
    */
   $ERROR_CODES?: Record<string, RawError>;
 };
 
-export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
+export type KerniaPlugin = KerniaPluginErrorCodePart & {
   id: LiteralString;
   version?: string | undefined;
   /**
@@ -63,7 +63,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
         | Awaitable<{
             context?: DeepPartial<Omit<AuthContext, "options">> &
               Record<string, unknown>;
-            options?: Partial<BetterAuthOptions>;
+            options?: Partial<KerniaOptions>;
           }>
         | void
         | Promise<void>)
@@ -122,7 +122,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
    *   user: { fields: { email: { type: "string" }, emailVerified: { type: "boolean", defaultValue: false } } }
    * } as AuthPluginSchema
    */
-  schema?: BetterAuthPluginDBSchema | undefined;
+  schema?: KerniaPluginDBSchema | undefined;
   /**
    * The migrations of the plugin. If you define schema that will automatically create
    * migrations for you.
@@ -183,7 +183,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 - Returning `{ context }` deeply merges into the live `AuthContext`. Plugins
   use this to inject helpers (e.g. token issuers, JWKS providers, mailer
   wrappers) under arbitrary keys.
-- Returning `{ options }` replaces or augments `BetterAuthOptions` before
+- Returning `{ options }` replaces or augments `KerniaOptions` before
   the rest of init runs (used by the JWT plugin to register secondary
   secrets, by the organization plugin to extend `user.additionalFields`,
   etc.).
@@ -220,7 +220,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
   handler's return value, before serialization) and `context.responseHeaders`.
   They may mutate response headers, e.g. set additional cookies.
 
-### `schema?: BetterAuthPluginDBSchema`
+### `schema?: KerniaPluginDBSchema`
 - Adds tables / fields. Field attributes (`type`, `required`, `defaultValue`,
   `references`, `unique`, `input`, `transform`, `bigint`, etc.) are merged
   with core schema. Field types are defined in
@@ -275,7 +275,7 @@ export const bearer = (options?: BearerOptions) => ({
   hooks: {
     before: [{ matcher(ctx) { /* has Authorization: Bearer */ }, handler }],
   },
-} satisfies BetterAuthPlugin);
+} satisfies KerniaPlugin);
 ```
 
 This plugin uses only `hooks.before` to rewrite the request — no DB schema,
@@ -302,7 +302,7 @@ Files: `reference/packages/better-auth/src/plugins/jwt/`
 
 ## Python port guidance
 
-A `BetterAuthPlugin` becomes a Python `Protocol` / dataclass with the same
+A `KerniaPlugin` becomes a Python `Protocol` / dataclass with the same
 field names converted to snake_case where appropriate (`$ERROR_CODES` →
 `error_codes`, etc.). Each callback receives an `AuthContext` analog and is
 expected to be a normal `async def` returning the documented shape. The

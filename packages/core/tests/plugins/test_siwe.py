@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from better_auth.plugins.siwe import SIWE_ERROR_CODES, siwe
-from better_auth.plugins.siwe.routes import _extract_nonce
+from kernia.plugins.siwe import SIWE_ERROR_CODES, siwe
+from kernia.plugins.siwe.routes import _extract_nonce
 
 
 def test_siwe_plugin_id_and_endpoints() -> None:

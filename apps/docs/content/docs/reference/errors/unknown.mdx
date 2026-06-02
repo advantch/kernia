@@ -1,0 +1,35 @@
+---
+title: "Unknown"
+description: "A fallback error was returned for an unexpected failure."
+---
+
+# Unknown
+
+`UNKNOWN` is a fallback error for failures that were not mapped to a more specific Kernia error code. Treat it as a bug or missing error mapping until logs prove otherwise.
+
+## Response shape
+
+```json
+{
+  "code": "UNKNOWN",
+  "message": "An unknown error occurred",
+  "status": 500
+}
+```
+
+## What to inspect
+
+- Server exception logs for the same request id.
+- Adapter errors from the primary database.
+- Provider HTTP failures.
+- Hook exceptions.
+- Webhook parsing and signature verification.
+- Secret/config loading during startup.
+
+## How to fix
+
+If the failure is expected, map it to a specific error code and document it. If it is unexpected, add a regression test that reproduces the route, payload, adapter state, and plugin list.
+
+## Reporting
+
+Issue reports should include Kernia package versions, framework integration, adapter, plugin list, route, request shape without secrets, response code, and server log excerpt with secrets removed.

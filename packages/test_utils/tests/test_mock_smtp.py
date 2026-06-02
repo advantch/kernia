@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth_test_utils import MockSMTP, SentEmail
+from kernia_test_utils import MockSMTP, SentEmail
 
 
 async def test_send_captures_messages() -> None:

@@ -1,0 +1,86 @@
+---
+title: "SAML SSO with Okta"
+description: "Configure Okta SAML SSO for Kernia."
+---
+
+This guide walks through an Okta SAML application that signs users into a Kernia backend through the SSO plugin. Use the full [SSO plugin reference](/docs/plugins/sso) for route and schema details.
+
+## Install
+
+```bash
+uv add kernia kernia-sso
+```
+
+## Backend setup
+
+```python title="auth.py"
+from kernia.plugins.sso import sso
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url="https://api.example.com/api/auth",
+    plugins=[
+        sso(),
+    ],
+))
+```
+
+## Create the Okta application
+
+In Okta, create a SAML 2.0 application:
+
+| Okta field | Value |
+|---|---|
+| Single sign-on URL | `https://api.example.com/api/auth/sso/callback/okta` |
+| Audience URI | Kernia service provider entity id. |
+| Name ID format | Email address unless your app uses another immutable id. |
+| Name ID | `user.email` |
+
+Download the IdP metadata XML or copy the SSO URL, entity ID, and certificate.
+
+## Register the provider
+
+Register the provider through admin config or a migration:
+
+```python title="seed_sso.py"
+await sso_service.create_provider({
+    "id": "okta",
+    "issuer": "https://example.okta.com/app/...",
+    "sso_url": "https://example.okta.com/app/.../sso/saml",
+    "certificate": env.OKTA_SAML_CERT,
+    "domains": ["example.com"],
+})
+```
+
+## Initiate sign-in
+
+```ts title="src/lib/sso.ts"
+await fetch("/api/auth/sso/sign-in", {
+  method: "POST",
+  credentials: "include",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ provider_id: "okta", callback_url: "/dashboard" }),
+});
+```
+
+## Attribute mapping
+
+Map stable Okta attributes into Kernia user fields:
+
+| SAML attribute | Kernia field |
+|---|---|
+| `email` | `user.email` |
+| `firstName`, `lastName` | `user.name` or profile fields |
+| `groups` | Organization role mapping if enabled |
+
+## Troubleshooting
+
+- Invalid audience: Okta audience URI does not match Kernia service provider metadata.
+- Signature failure: wrong certificate or Okta rotated signing keys.
+- User not assigned: user is not assigned to the Okta SAML app.
+- Domain not found: the email domain is not mapped to the registered SSO provider.
+
+## Test coverage
+
+Use a mock SAML IdP in CI and a real Okta tenant only for live smoke tests. Cover metadata import, signed response validation, domain routing, account creation, existing account sign-in, and logout.

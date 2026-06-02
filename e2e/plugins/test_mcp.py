@@ -7,24 +7,22 @@ an access token, then verifies the token via the plugin's `introspect_mcp_token`
 from __future__ import annotations
 
 import pytest
-from authlib.jose import JsonWebKey, jwt as jose_jwt
-
-from better_auth.auth import init
-from better_auth.plugins.email_password import email_and_password
-from better_auth.plugins.jwt import jwt
-from better_auth.plugins.mcp import MCPOptions, mcp
-from better_auth.plugins.mcp.plugin import introspect_mcp_token
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_oauth_provider import OAuthProviderOptions, oauth_provider
-from better_auth_oauth_provider.plugin import create_client
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.email_password import email_and_password
+from kernia.plugins.jwt import jwt
+from kernia.plugins.mcp import MCPOptions, mcp
+from kernia.plugins.mcp.plugin import introspect_mcp_token
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
+from kernia_oauth_provider.plugin import create_client
+from kernia_test_utils import ASGIDriver
 
 
 @pytest.fixture
 async def setup():
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret",
             plugins=[
@@ -103,12 +101,43 @@ async def test_mcp_introspect_rejects_wrong_resource(setup) -> None:
 
 async def test_mcp_well_known(setup) -> None:
     _, driver, _, _ = setup
-    r = await driver.request("GET", "/.well-known/oauth-authorization-server")
+    # RFC 9728 protected-resource metadata (the MCP server is a resource server;
+    # the AS metadata lives on oauth_provider's oauth-authorization-server doc).
+    r = await driver.request("GET", "/.well-known/oauth-protected-resource")
     assert r.status == 200
     j = r.json()
-    assert j["issuer"] == "https://issuer.test"
+    assert j["resource"] == "https://issuer.test"
+    assert j["authorization_servers"] == ["https://issuer.test"]
     assert j["authorization_endpoint"].endswith("/mcp/authorize")
     assert j["resource_indicators_supported"] is True
+
+
+# Port of upstream describe("mcp discovery metadata (security)").
+# @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
+# The discovery documents must never advertise the insecure `alg=none`.
+
+
+async def test_authorization_server_metadata_must_not_advertise_alg_none(setup) -> None:
+    """Port of "/.well-known/oauth-authorization-server must not advertise alg=none".
+
+    The RFC 8414 authorization-server metadata is served by the oauth_provider
+    plugin in this repo (the mcp package is the resource server). Its
+    ``id_token_signing_alg_values_supported`` must never contain ``none``.
+    """
+    _, driver, _, _ = setup
+    r = await driver.request("GET", "/.well-known/oauth-authorization-server")
+    assert r.status == 200
+    algs = r.json().get("id_token_signing_alg_values_supported") or []
+    assert "none" not in algs
+
+
+async def test_protected_resource_metadata_must_not_advertise_alg_none(setup) -> None:
+    """Port of "/.well-known/oauth-protected-resource must not advertise alg=none"."""
+    _, driver, _, _ = setup
+    r = await driver.request("GET", "/.well-known/oauth-protected-resource")
+    assert r.status == 200
+    algs = r.json().get("resource_signing_alg_values_supported") or []
+    assert "none" not in algs
 
 
 async def test_mcp_rejects_unknown_client(setup) -> None:
@@ -135,7 +164,7 @@ async def test_mcp_authorize_requires_user(setup) -> None:
     _, _, client, _ = setup
     # Build a fresh driver with no session
     fresh_auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[

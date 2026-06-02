@@ -1,0 +1,39 @@
+---
+title: "No Code"
+description: "The OAuth or verification callback did not include a code."
+---
+
+# No Code
+
+`NO_CODE` occurs when a callback route expects a `code` but the request does not include one. In OAuth authorization-code flows, the provider redirects back to Kernia with `code` and `state`. Without `code`, Kernia cannot exchange anything for tokens.
+
+## Response shape
+
+```json
+{
+  "code": "NO_CODE",
+  "message": "Missing code",
+  "status": 400
+}
+```
+
+## Common causes
+
+- The provider returned `error` instead of `code` because the user canceled consent.
+- The provider callback URL is wrong.
+- A proxy, rewrite, or CDN stripped query parameters.
+- A mobile deep-link handoff dropped the query string.
+- The frontend called the callback URL manually without provider parameters.
+- The provider is configured for an unsupported response mode.
+
+## How to fix
+
+- Start the flow through `/sign-in/social`.
+- Confirm the provider redirect URI exactly matches `KERNIA_BASE_URL + /callback/:provider`.
+- Inspect the callback request in browser DevTools or server logs during development.
+- Preserve the query string through proxies and rewrites.
+- For mobile flows, test the full handoff path on real devices.
+
+## Tests
+
+Callback tests should assert missing `code` produces `NO_CODE`, provider `error` values are handled clearly, and valid callbacks continue to exchange the code.

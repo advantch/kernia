@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import time
 
 import pytest
 
-from better_auth.error import APIError
-from better_auth_stripe import StripeClient, verify_signature
-from better_auth_test_utils import MockStripe
+from kernia.error import APIError
+from kernia_stripe import StripeClient, verify_signature
+from kernia_test_utils import MockStripe
 
 
 async def test_stripe_client_creates_customer_through_mock_transport() -> None:

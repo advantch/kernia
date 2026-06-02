@@ -1,0 +1,64 @@
+---
+title: "One Time Token"
+description: "Generate and consume short-lived one-time tokens."
+---
+
+The one-time-token plugin gives applications a simple authenticated token exchange for flows that need a short-lived, single-use value.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.one_time_token import one_time_token
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.one_time_token import one_time_token
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        one_time_token(),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/generate-one-time-token">
+  Creates a one-time token for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/verify-one-time-token">
+  Consumes a token and returns the verification result.
+</APIMethod>
+
+## Schema impact
+
+Reuses the core `verification` table.
+
+## Behavior and options
+
+- Tokens are single-use and expire.
+- Keep payloads narrow and do not use this as a long-lived API key replacement.
+- Pair with rate limiting when exposed to browsers.
+
+## Test and demo coverage
+
+Test generation, successful consumption, replay rejection, expiry, unauthenticated generation, and invalid token errors.

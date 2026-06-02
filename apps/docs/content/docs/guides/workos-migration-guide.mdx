@@ -1,0 +1,61 @@
+---
+title: "Migrating from WorkOS to Kernia"
+description: "Move WorkOS SSO, organizations, directory sync, and user provisioning into Kernia."
+---
+
+WorkOS migrations usually involve enterprise SSO, organizations, domains, directory sync, and admin portal workflows. Kernia replaces those pieces with the SSO, SCIM, organization, and admin-config plugins while keeping the Python backend in control.
+
+## Inventory
+
+- Organizations and domains.
+- SSO connections and provider metadata.
+- Directory sync directories and users.
+- Role and group mappings.
+- Admin portal workflows currently exposed to customers.
+- Frontend and backend code that calls WorkOS APIs.
+
+## Kernia setup
+
+```python title="auth.py"
+from kernia.plugins.organization import organization
+from kernia.plugins.scim import scim
+from kernia.plugins.sso import sso
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    base_url=env.KERNIA_BASE_URL,
+    plugins=[
+        organization(),
+        sso(),
+        scim(),
+    ],
+))
+```
+
+## Mapping
+
+| WorkOS | Kernia |
+|---|---|
+| Organization | Organization plugin organization. |
+| Connection | SSO provider. |
+| Domain | SSO domain routing. |
+| Directory | SCIM directory. |
+| Directory user | SCIM user provisioning. |
+| Groups | Organization roles or custom mapping. |
+
+## SSO migration
+
+Create Kernia SSO provider rows from each WorkOS connection. Verify issuer, SSO URL, certificate, ACS URL, entity ID, signed response requirements, and domain routing.
+
+## Directory sync migration
+
+Create SCIM directories and issue new SCIM tokens. Most identity providers require updating the SCIM base URL and bearer token in their admin console. Do not reuse old WorkOS SCIM tokens.
+
+## Customer admin experience
+
+If customers previously used WorkOS Admin Portal, build or expose equivalent admin screens backed by Kernia admin-config, SSO, SCIM, and organization APIs. Secret fields must be write-only and redacted on read.
+
+## Validation
+
+Test enterprise sign-in, domain discovery, existing user linking, new user provisioning, group changes, deprovisioning, SCIM token rotation, and non-admin access rejection.

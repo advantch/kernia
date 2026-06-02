@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.additional_fields import additional_fields
-from better_auth.plugins.email_password import email_and_password
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.additional_fields import additional_fields
+from kernia.plugins.email_password import email_and_password
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def test_schema_extension_present() -> None:
@@ -21,7 +21,7 @@ def test_schema_extension_present() -> None:
 
 async def test_signup_persists_additional_fields() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[
@@ -56,7 +56,7 @@ async def test_signup_persists_additional_fields() -> None:
 
 async def test_signup_missing_required_field_rejected() -> None:
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="test-secret-key",
             plugins=[

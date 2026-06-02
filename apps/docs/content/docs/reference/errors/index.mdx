@@ -1,0 +1,39 @@
+---
+title: "Errors"
+description: "Kernia error reference."
+---
+
+# Errors
+
+Kernia errors are returned as structured JSON with a stable code, message, HTTP status, and optional field details. Browser redirects may also land on an error page with the same code in the URL.
+
+## Shape
+
+```json
+{
+  "code": "STATE_MISMATCH",
+  "message": "OAuth state verification failed",
+  "status": 400
+}
+```
+
+## Known errors
+
+- [Invalid code](/docs/reference/errors/invalid_code)
+- [No code](/docs/reference/errors/no_code)
+- [State mismatch](/docs/reference/errors/state_mismatch)
+- [Unable to create session](/docs/reference/errors/unable_to_create_session)
+- [Unable to create user](/docs/reference/errors/unable_to_create_user)
+- [Unknown](/docs/reference/errors/unknown)
+
+## Client handling
+
+Clients should branch on `code`, not on localized message text. Admin and demo pages should render a human-readable state and keep the raw code available for diagnostics.
+
+## Logging
+
+Server logs should include request id, route, provider, status, and error code. Do not log passwords, OTPs, OAuth codes, state values, session cookies, API keys, webhook secrets, or provider tokens.
+
+## Test coverage
+
+Route tests should assert the HTTP status, stable code, response shape, and absence of leaked secrets.

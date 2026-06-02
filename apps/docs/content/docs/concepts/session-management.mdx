@@ -1,0 +1,74 @@
+---
+title: "Session Management"
+description: "Create, read, update, revoke, cache, and secure Kernia sessions."
+---
+
+A Kernia session is a database row plus a signed HTTP-only cookie. The row records the user, token, expiration, IP address, user agent, and timestamps. The cookie proves possession of the session token; the database decides whether the session is still valid.
+
+## Session table
+
+The `session` model stores `id`, `userId`, `token`, `expiresAt`, `ipAddress`, `userAgent`, `createdAt`, and `updatedAt`.
+
+## Expiration and refresh
+
+~~~python
+from kernia.types.init_options import SessionOptions
+
+session=SessionOptions(
+    expires_in=60 * 60 * 24 * 7,
+    update_age=60 * 60 * 24,
+    cookie_cache_enabled=True,
+    cookie_cache_max_age=60 * 5,
+)
+~~~
+
+`expires_in` controls the server-side lifetime. `update_age` controls how often a valid session should be refreshed.
+
+## Read the current session
+
+~~~ts
+await fetch("http://localhost:8000/api/auth/get-session", {
+  credentials: "include",
+});
+~~~
+
+FastAPI routes can use `get_session` for optional access and `require_session` for protected access.
+
+~~~python
+from fastapi import Depends
+from kernia_fastapi import require_session
+
+@app.get("/api/private")
+async def private(session = Depends(require_session)):
+    return {"user_id": session.user_id}
+~~~
+
+## List and revoke sessions
+
+<APIMethod method="GET" path="/api/auth/list-sessions">
+  Returns sessions for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-session">
+  Revokes a selected session by id or token.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-other-sessions">
+  Keeps the current session and revokes the rest.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-sessions">
+  Revokes all sessions for the active user.
+</APIMethod>
+
+## Multi-session plugin
+
+The multi-session plugin keeps a signed session list cookie so users can switch between browser sessions. It does not replace the server `session` table.
+
+## Secondary storage
+
+Stateless or Redis-backed session strategies can use `secondary_storage`, but the default database-backed session is the reference path for the current Python packages.
+
+## Testing
+
+Session tests should prove that sign-in sets cookies, `/get-session` reads them, revocation removes server state, and a revoked cookie no longer authenticates.

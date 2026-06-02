@@ -1,0 +1,90 @@
+---
+title: "Contributing"
+description: "Contribution expectations for Kernia docs and packages."
+---
+
+Kernia contributions should be small, tested, and tied to documented behavior. A change is not complete just because a page or package name exists. The route, schema, adapter behavior, docs, and tests must agree.
+
+## Development setup
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/advantch/kernia.git
+cd kernia
+uv sync
+```
+
+Docs live in `apps/docs`:
+
+```bash
+cd apps/docs
+pnpm install
+pnpm dev
+```
+
+## Making a change
+
+<Steps>
+  <Step>
+    ### Pick a narrow behavior
+
+    Write down the route, model, option, plugin, or docs page you are changing. Avoid unrelated formatting and metadata churn.
+  </Step>
+
+  <Step>
+    ### Add or update tests
+
+    Backend changes need route-level tests. Adapter changes need real backend tests. UI/demo changes need browser checks. Docs changes need build and search gates.
+  </Step>
+
+  <Step>
+    ### Update docs
+
+    Plugin docs should include install command, import path, server configuration, routes, schema changes, options, examples, troubleshooting, and test/demo coverage where applicable.
+  </Step>
+</Steps>
+
+## Code style
+
+- Prefer existing package patterns over new abstractions.
+- Keep public imports under `kernia` and plugin imports under `kernia_*`.
+- Preserve compatibility identifiers on the wire when browser clients depend on them.
+- Do not vendor upstream source into this repository.
+- Do not document a feature as supported until the implementation and tests exist.
+
+## Docs style
+
+Docs should be operational. A reader should be able to install the package, configure the server, call the route, understand database changes, and know what is not supported.
+
+Every major feature page should cover:
+
+- Installation.
+- Server configuration.
+- Client usage when relevant.
+- API routes.
+- Schema changes.
+- Options.
+- Examples.
+- Troubleshooting.
+- Test and demo coverage.
+
+## Testing
+
+Run the focused tests first, then the broader suite:
+
+```bash
+uv run pytest packages/ e2e/ -q
+cd apps/docs && pnpm docs:quality && pnpm typecheck && pnpm build
+```
+
+If a test cannot run locally because it needs a provider credential, add a mock provider test and document the live-test environment variables.
+
+## Pull request checklist
+
+- The behavior is implemented, not only described.
+- Public examples use Kernia package names and imports.
+- Secret values are redacted in logs, docs, CLI output, and admin reads.
+- Migrations are included for schema changes.
+- The FastAPI demo is updated when a user-facing flow changes.
+- Unsupported features are documented as unavailable or planned, not implied as working.

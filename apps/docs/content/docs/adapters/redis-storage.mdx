@@ -1,0 +1,59 @@
+---
+title: "Redis Storage"
+description: "Use Redis as Kernia secondary storage for short-lived plugin data."
+---
+
+Redis storage is not the primary database adapter. It implements Kernia's secondary storage contract for short-lived values, distributed coordination, token caches, rate limits, and flows that need atomic get-and-delete behavior.
+
+## Installation
+
+```bash
+uv add kernia-redis-storage redis
+```
+
+## Configuration
+
+```python title="auth.py"
+import os
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_redis_storage import redis_storage
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secondary_storage=redis_storage(os.environ["REDIS_URL"]),
+    secret=os.environ["KERNIA_SECRET"],
+))
+```
+
+## Operations
+
+| Operation | Purpose |
+|---|---|
+| `get` | Read a short-lived value by key. |
+| `set` | Store a value with optional TTL. |
+| `delete` | Remove a key. |
+| `get_and_delete` | Atomically consume one-time values. |
+
+Atomic consumption is important for one-time verification, device authorization, email OTP, magic links, and rate-limit counters.
+
+## Key design
+
+Use namespaced keys so multiple apps can share the same Redis cluster safely:
+
+```text
+kernia:{environment}:{app}:{purpose}:{id}
+```
+
+Set TTLs on verification, OTP, device, and rate-limit keys. Persistent auth records belong in the primary adapter, not Redis secondary storage.
+
+## Production notes
+
+- Use TLS and authentication for managed Redis.
+- Set eviction policies carefully; auth flows should not silently lose verification tokens under memory pressure.
+- Monitor latency and connection errors because auth routes are latency-sensitive.
+- Keep Redis region close to the API server.
+
+## Test coverage
+
+Use a Redis container for integration tests that depend on atomic behavior. Pure in-memory replacements can miss race conditions around one-time token consumption and distributed rate limits.

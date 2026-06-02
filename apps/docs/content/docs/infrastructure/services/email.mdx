@@ -1,0 +1,99 @@
+---
+title: "Email Service"
+description: "Configure SMTP, Resend, or Postmark delivery for Kernia auth flows."
+---
+
+Email delivery powers verification, password reset, magic link, email OTP, organization invitations, unknown-device alerts, and billing notifications. Kernia uses a common email client interface so the same auth flow can send through SMTP, Resend, Postmark, or an application-provided implementation.
+
+## Configuration
+
+Install the package for your integration and enable the flows that send email:
+
+```bash
+uv add kernia
+```
+
+```python title="auth.py"
+from kernia.email import SMTPEmailClient
+from kernia.plugins.email_otp import email_otp
+from kernia.plugins.magic_link import magic_link
+
+email_client = SMTPEmailClient(
+    host=env.SMTP_HOST,
+    port=587,
+    username=env.SMTP_USERNAME,
+    password=env.SMTP_PASSWORD,
+    from_email="Kernia <auth@example.com>",
+)
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=env.KERNIA_SECRET,
+    email=email_client,
+    plugins=[
+        magic_link(),
+        email_otp(),
+    ],
+))
+```
+
+## Providers
+
+| Provider | Use when |
+|---|---|
+| SMTP | You own an SMTP relay or use a transactional provider through SMTP. |
+| Resend | You want Resend's HTTP API and templates. |
+| Postmark | You want Postmark streams and message metadata. |
+
+## Admin configuration
+
+The admin-config plugin can persist email settings so operators can switch providers without changing code. Secrets are write-only:
+
+```json title="GET /api/admin/config/email-clients"
+{
+  "active": "resend",
+  "clients": [
+    {
+      "id": "resend-prod",
+      "provider": "resend",
+      "from_email": "Kernia <auth@example.com>",
+      "api_key": "********"
+    }
+  ]
+}
+```
+
+## Templates
+
+Every auth email needs a clear subject, single action URL or code, expiration language, and support copy. Keep provider-specific HTML in templates, but keep route and token generation in Kernia.
+
+| Flow | Required template values |
+|---|---|
+| Email verification | `email`, `verification_url`, `expires_at` |
+| Password reset | `email`, `reset_url`, `expires_at` |
+| Magic link | `email`, `sign_in_url`, `expires_at` |
+| Email OTP | `email`, `otp`, `expires_at` |
+| Organization invitation | `inviter`, `organization`, `invite_url`, `expires_at` |
+
+## Sending contract
+
+Custom clients should implement the same send contract:
+
+```python title="email_client.py"
+class EmailClient:
+    async def send(self, message: EmailMessage) -> EmailResult:
+        ...
+```
+
+The implementation should return provider message IDs and raise typed failures for invalid configuration, rejected recipients, and transient provider errors.
+
+## Troubleshooting
+
+- If no email is sent, confirm the relevant plugin is enabled and the email client is attached to the auth instance.
+- If provider credentials are invalid, the admin page should show a configuration error without exposing the secret.
+- If links point to the wrong host, set the public `base_url` to the mounted auth URL.
+- If messages go to spam, verify SPF, DKIM, DMARC, and provider domain ownership.
+
+## Test and demo coverage
+
+Unit tests should use a recording email client and assert the exact recipient, subject, action URL, and expiration. Admin tests should prove secret redaction on reads and write-only updates. The SaaS demo should show SMTP, Resend, and Postmark states as configured, invalid, or not configured.

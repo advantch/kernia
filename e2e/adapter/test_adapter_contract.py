@@ -15,11 +15,11 @@ from typing import Any
 
 import pytest
 
-from better_auth.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
-from better_auth_memory_adapter import memory_adapter
-from better_auth_mongo import mongo_adapter
-from better_auth_sqlalchemy import sqlalchemy_adapter
-from better_auth_test_utils.containers import docker_available, mongodb_container
+from kernia.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
+from kernia_memory_adapter import memory_adapter
+from kernia_mongo import mongo_adapter
+from kernia_sqlalchemy import sqlalchemy_adapter
+from kernia_test_utils.containers import docker_available, mongodb_container
 
 
 async def _memory() -> AsyncIterator[CustomAdapter]:
@@ -37,7 +37,7 @@ async def _mongo() -> AsyncIterator[CustomAdapter]:
         # Each test gets its own random db so parametrize doesn't leak state.
         adapter = await mongo_adapter(
             url=url,
-            db_name=f"better_auth_test_{secrets.token_hex(4)}",
+            db_name=f"kernia_test_{secrets.token_hex(4)}",
         )
         yield adapter
 
@@ -221,7 +221,7 @@ async def test_find_one_with_join_returns_nested_record(adapter: CustomAdapter) 
 async def test_find_one_with_join_missing_foreign_is_none(adapter: CustomAdapter) -> None:
     # MongoDB enforces ObjectId-style FK references via lookup; we pass through
     # whatever the caller provides and the missing-row case must surface as None.
-    if getattr(adapter, "__class__").__name__ == "MongoAdapter":
+    if adapter.__class__.__name__ == "MongoAdapter":
         pytest.skip("MongoDB does not enforce FK; missing-foreign-key tested via lookup elsewhere")
     await adapter.create(
         model="session",
@@ -260,9 +260,9 @@ async def test_transaction_rolls_back_on_exception(adapter: CustomAdapter) -> No
         pytest.skip("adapter does not implement TransactionalAdapter")
     # In-memory has no real rollback — declare that explicitly so the test
     # is not silently misleading.
-    if getattr(adapter, "__class__").__name__ == "MemoryAdapter":
+    if adapter.__class__.__name__ == "MemoryAdapter":
         pytest.skip("memory adapter transactions are no-ops (documented)")
-    if getattr(adapter, "__class__").__name__ == "MongoAdapter":
+    if adapter.__class__.__name__ == "MongoAdapter":
         pytest.skip("MongoAdapter transactions require replica-set deployment")
     pre = await adapter.count(model="user")
     with pytest.raises(RuntimeError):
@@ -287,7 +287,7 @@ async def test_sqlalchemy_uuid_pk_mode() -> None:
     """
     import uuid as uuid_mod
 
-    from better_auth.types.adapter import FieldDef, ModelDef
+    from kernia.types.adapter import FieldDef, ModelDef
 
     uuid_model = ModelDef(
         name="widget",

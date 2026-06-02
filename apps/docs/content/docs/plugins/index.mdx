@@ -1,0 +1,59 @@
+---
+title: "Plugins"
+description: "Extend Kernia with auth, organization, API, and billing features."
+---
+
+Kernia plugins add routes, schema, hooks, request middleware, rate limits, and error codes to the auth instance. A plugin is passed to `KerniaOptions.plugins` and is mounted under the same auth base path as core routes.
+
+## Server configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.admin import admin
+from kernia.plugins.organization import organization
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=[
+        admin(),
+        organization(),
+    ],
+))
+```
+
+## What plugins can contribute
+
+| Contribution | Example |
+|---|---|
+| Routes | `/api-key/create`, `/organization/create`, `/stripe/checkout`. |
+| Schema | API key tables, organization tables, passkey credentials, billing catalog. |
+| Hooks | Before sign-up, after session creation, webhook processing. |
+| Middleware | Bearer token parsing, API key auth, admin config gates. |
+| Rate limits | OTP, password, magic-link, and token routes. |
+| Errors | Stable plugin-specific error codes. |
+
+## Plugin order
+
+Plugin order matters when hooks or middleware depend on earlier behavior. Put low-level request authentication before plugins that read the resolved actor, and put audit/logging hooks where they can see the final result.
+
+## Schema changes
+
+After adding a plugin, inspect the resolved schema and generate migrations:
+
+```bash
+kernia info --app app.auth:auth
+kernia generate --app app.auth:auth --output alembic/versions/0002_plugin.py
+```
+
+## Client usage
+
+Some plugins expose client helpers through the compatible JavaScript client. Others expose normal HTTP routes that your app calls directly. Each plugin page documents the supported path.
+
+## Documentation standard
+
+Every plugin page should show install command, import path, server config, routes, schema changes, options, examples, troubleshooting, and demo or test coverage status.

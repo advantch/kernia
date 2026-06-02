@@ -11,11 +11,10 @@ Locks the two behaviours the previous fire-and-forget `init()` got wrong:
 from __future__ import annotations
 
 import pytest
-
-from better_auth.auth import init
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth.types.plugin import InitResult
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.types.init_options import KerniaOptions
+from kernia.types.plugin import InitResult
+from kernia_memory_adapter import memory_adapter
 
 
 class _Plugin:
@@ -42,7 +41,7 @@ class _Plugin:
 
 
 def _opts(plugin):
-    return BetterAuthOptions(database=memory_adapter(), secret="x" * 32, plugins=[plugin])
+    return KerniaOptions(database=memory_adapter(), secret="x" * 32, plugins=[plugin])
 
 
 def test_init_runs_eagerly_when_no_loop():

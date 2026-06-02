@@ -1,0 +1,84 @@
+---
+title: "Passkey"
+description: "Add WebAuthn registration and authentication to Kernia."
+---
+
+The passkey plugin implements WebAuthn registration and authentication ceremonies. It stores credential IDs, public keys, counters, transports, and device metadata so users can register and sign in with platform or roaming authenticators.
+
+## Installation
+
+~~~bash
+uv add kernia-passkey
+~~~
+
+## Import path
+
+~~~python
+from kernia_passkey import passkey
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_passkey import passkey
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        passkey(
+            rp_id="localhost",
+            rp_name="Kernia Demo",
+            origin="http://localhost:5173",
+        ),
+    ),
+))
+~~~
+
+## API routes
+
+<APIMethod method="POST" path="/api/auth/passkey/register/start">
+  Creates WebAuthn registration options for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/passkey/register/finish">
+  Verifies the registration response and stores the credential.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/passkey/authenticate/start">
+  Creates WebAuthn authentication options.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/passkey/authenticate/finish">
+  Verifies the assertion and creates a session.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/passkey/list">
+  Lists passkeys registered by the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/passkey/delete">
+  Deletes one registered passkey for the active user.
+</APIMethod>
+
+## Schema impact
+
+Adds a passkey credential table. Generate migrations after installing the standalone package.
+
+## Behavior and options
+
+- `rp_id` must match the effective domain. Localhost and production domains need separate settings.
+- `origin` must match the browser origin that calls WebAuthn.
+- Conditional UI requires browser support and frontend feature detection.
+
+## Test and demo coverage
+
+Use `SoftAuthenticator` for route tests. Cover registration start/finish, duplicate credentials, authentication, counter updates, list, delete, bad origin, and unavailable browser states.

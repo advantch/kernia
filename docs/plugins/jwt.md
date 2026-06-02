@@ -1,11 +1,11 @@
 # Jwt
 
-> Module: `better_auth.plugins.jwt`
+> Module: `kernia.plugins.jwt`
 > Constructor: `jwt`
 
 JWT plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/jwt/`. Issues JSON Web Tokens
+Mirrors `Better Auth reference: plugins/jwt/`. Issues JSON Web Tokens
 signed with a key managed in our `jwk` table; exposes a JWKS doc; supports key
 rotation.
 
@@ -31,12 +31,12 @@ Endpoints:
 ## Usage
 
 ```python
-from better_auth.plugins.jwt import jwt
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.jwt import jwt
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

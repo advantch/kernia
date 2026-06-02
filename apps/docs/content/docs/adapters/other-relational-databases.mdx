@@ -1,0 +1,45 @@
+---
+title: "Other Relational Databases"
+description: "Run Kernia on other SQL databases through SQLAlchemy and verified migrations."
+---
+
+Kernia's SQL path is the SQLAlchemy adapter. If SQLAlchemy supports an async dialect for your database, you can usually run Kernia after validating generated migrations and adapter behavior.
+
+## Core SQL paths
+
+- [PostgreSQL](/docs/adapters/postgresql)
+- [SQLite](/docs/adapters/sqlite)
+- [MySQL](/docs/adapters/mysql)
+- [MSSQL](/docs/adapters/mssql)
+- [SQLAlchemy](/docs/adapters/sqlalchemy)
+
+## Checklist
+
+- Install `kernia-sqlalchemy`, SQLAlchemy, Alembic, and the async dialect.
+- Create an async engine URL.
+- Generate migrations from the configured `auth` object.
+- Review generated column types and indexes.
+- Run the core auth route tests against the target database.
+- Add indexes for email, session token, account provider/account id, API key hash, and plugin lookup fields.
+
+## Adapter behavior to verify
+
+Test create, find-one, find-many with pagination, update, update-many, delete, delete-many, count, transactions, and JSON field behavior. OAuth and verification flows also rely on correct uniqueness and token consumption semantics.
+
+## Dialect-specific risks
+
+| Risk | What to check |
+|---|---|
+| Identifier length | Long plugin table/index names may be truncated. |
+| JSON support | Some dialects emulate JSON as text. |
+| Boolean support | Defaults may be represented as integers or constraints. |
+| Timestamp precision | Expiration checks need stable round-trips. |
+| Transaction semantics | One-time tokens and OAuth linking need atomic behavior. |
+
+## When to write a custom adapter
+
+Write a custom adapter only when SQLAlchemy cannot represent the database cleanly or when your application already has a strong storage abstraction. Start from the `CustomAdapter` protocol and the adapter test suite.
+
+## Documentation requirements
+
+If you publish an adapter page for another database, include install command, connection URL shape, migration command, supported database versions, known limitations, and test matrix.

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.plugins.email_otp import EMAIL_OTP_ERROR_CODES, email_otp, generate_otp
-from better_auth.plugins.email_otp.routes import _identifier
+from kernia.plugins.email_otp import EMAIL_OTP_ERROR_CODES, email_otp, generate_otp
+from kernia.plugins.email_otp.routes import _identifier
 
 
 def test_default_otp_is_six_digits() -> None:
@@ -40,7 +40,11 @@ def test_plugin_id_and_paths() -> None:
         "/email-otp/send-verification-otp",
         "/email-otp/verify-email",
         "/forget-password/email-otp",
+        "/email-otp/request-password-reset",
         "/email-otp/reset-password",
+        "/email-otp/create-verification-otp",
+        "/email-otp/get-verification-otp",
+        "/email-otp/check-verification-otp",
         "/email-otp/request-email-change",
         "/email-otp/change-email",
     }

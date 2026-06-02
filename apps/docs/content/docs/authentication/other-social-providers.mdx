@@ -1,0 +1,81 @@
+---
+title: "Other Social Providers"
+description: "Configure any built-in Kernia social provider."
+---
+
+Kernia ships constructor functions for built-in OAuth providers in `kernia.social_providers`. Use the provider ID as the key in `social_providers` and register the matching `/api/auth/callback/:provider` URL with that provider.
+
+## Available constructors
+
+`apple`, `atlassian`, `cognito`, `discord`, `dropbox`, `facebook`, `figma`, `github`, `gitlab`, `google`, `huggingface`, `kakao`, `kick`, `line`, `linear`, `linkedin`, `microsoft`, `naver`, `notion`, `paybin`, `paypal`, `polar`, `railway`, `reddit`, `roblox`, `salesforce`, `slack`, `spotify`, `tiktok`, `twitch`, `twitter`, `vercel`, `vk`, `wechat`, and `zoom`.
+
+## Configuration
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.social_providers import discord, github, slack
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    social_providers={
+        "github": github(
+            client_id=os.environ["GITHUB_CLIENT_ID"],
+            client_secret=os.environ["GITHUB_CLIENT_SECRET"],
+        ),
+        "discord": discord(
+            client_id=os.environ["DISCORD_CLIENT_ID"],
+            client_secret=os.environ["DISCORD_CLIENT_SECRET"],
+        ),
+        "slack": slack(
+            client_id=os.environ["SLACK_CLIENT_ID"],
+            client_secret=os.environ["SLACK_CLIENT_SECRET"],
+        ),
+    },
+))
+```
+
+## Callback URLs
+
+Register a callback URL for each provider:
+
+```text
+https://api.example.com/api/auth/callback/github
+https://api.example.com/api/auth/callback/discord
+https://api.example.com/api/auth/callback/slack
+```
+
+The provider id in the callback path must match the key in `social_providers`.
+
+## Client usage
+
+```ts title="src/lib/social.ts"
+export async function signInSocial(provider: string) {
+  const response = await fetch("http://localhost:8000/api/auth/sign-in/social", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      provider,
+      callback_url: "http://localhost:5173/dashboard",
+    }),
+  });
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+```
+
+## Provider differences
+
+Not every provider returns the same fields. Some require verified emails, some need extra scopes, and some return provider-specific avatar or username fields. Read the provider page when one exists, and test the exact scopes you request.
+
+## Troubleshooting
+
+- `PROVIDER_NOT_FOUND`: provider key does not match the configured key.
+- Callback 404: the provider console URL does not include the mounted auth path.
+- Missing email: request the provider's email scope or use an account-linking policy that can handle missing emails.
+- Not configured in the demo: add credentials and enable the method through admin config.

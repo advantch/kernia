@@ -1,0 +1,123 @@
+---
+title: "Routes Reference"
+description: "Core Kernia routes and how plugin routes are mounted."
+---
+
+All routes are mounted under `KerniaOptions.base_path`. This page shows routes with the common `/api/auth` mount. If your backend mounts at a different path, replace `/api/auth` with your configured path.
+
+## Route conventions
+
+- Request and response bodies are JSON unless a provider callback requires query parameters.
+- Mutating routes use `POST`, `PATCH`, or `DELETE`.
+- Cookies are set by the server and must be sent by the browser with `credentials: "include"`.
+- Plugin routes use the same mount, error envelope, hooks, cookies, and rate limiter as core routes.
+
+## Health
+
+<APIMethod method="GET" path="/api/auth/ok">
+  Health check for the mounted auth router.
+</APIMethod>
+
+## Email and password
+
+<APIMethod method="POST" path="/api/auth/sign-up/email">
+  Create an email/password user when email/password auth is enabled.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/email">
+  Sign in with email and password and set the session cookie.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/change-password">
+  Change the active user's password.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/forget-password">
+  Send a password reset email when the email client is configured.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/reset-password">
+  Consume a password reset token and set a new password.
+</APIMethod>
+
+## Sessions
+
+<APIMethod method="GET" path="/api/auth/get-session">
+  Return the current session and user, or `null` when no valid session cookie exists.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-out">
+  Revoke the active session and clear auth cookies.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/list-sessions">
+  List sessions for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-session">
+  Revoke one session by id.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-sessions">
+  Revoke all sessions for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/revoke-other-sessions">
+  Revoke every other session and keep the current one.
+</APIMethod>
+
+## User and account
+
+<APIMethod method="POST" path="/api/auth/update-user">
+  Update user profile fields exposed by the configured schema.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/change-email">
+  Start or complete an email change flow, depending on verification configuration.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/delete-user">
+  Delete or schedule deletion for the active user.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/list-accounts">
+  List linked accounts for the active user.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/unlink-account">
+  Unlink a social or OAuth account when policy allows it.
+</APIMethod>
+
+## OAuth
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Start a social OAuth flow. The body includes `provider` and an optional `callback_url`.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/callback/:provider">
+  Handle provider callbacks, exchange the code, link or create the user, set cookies, and redirect.
+</APIMethod>
+
+## Plugin route families
+
+| Plugin | Route family |
+|---|---|
+| API key | `/api/auth/api-key/*` |
+| Organization | `/api/auth/organization/*` |
+| Passkey | `/api/auth/passkey/*` |
+| SSO | `/api/auth/sso/*` |
+| SCIM | `/api/auth/scim/*` |
+| Stripe | `/api/auth/stripe/*`, `/api/auth/billing/*` |
+| Admin config | `/api/auth/admin/config/*` |
+
+## Error envelope
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "Authentication required",
+  "status": 401
+}
+```
+
+Clients should branch on `code`, not localized message text.

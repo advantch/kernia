@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins import with_custom_session
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.plugins import with_custom_session
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
 
 
 class _NoopProvider:
@@ -30,7 +30,7 @@ class _NoopProvider:
 async def test_plugin_installs_provider_in_plugin_state() -> None:
     provider = _NoopProvider()
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[with_custom_session(provider)],

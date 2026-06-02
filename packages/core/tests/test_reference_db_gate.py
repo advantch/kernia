@@ -20,13 +20,13 @@ rather than silently dropped, so the gate honestly reports the remaining gap.
 from __future__ import annotations
 
 import pytest
-from better_auth.auth import init
-from better_auth.db.schema.resolve import resolve_tables
-from better_auth.db.with_hooks import get_with_hooks
-from better_auth.types.adapter import FieldDef, Where
-from better_auth.types.db_hooks import DatabaseHooksEntry, HookData, HookOp, ModelHooks
-from better_auth.types.init_options import BetterAuthOptions, ModelConfig
-from better_auth_memory_adapter import memory_adapter
+from kernia.auth import init
+from kernia.db.schema.resolve import resolve_tables
+from kernia.db.with_hooks import get_with_hooks
+from kernia.types.adapter import FieldDef, Where
+from kernia.types.db_hooks import DatabaseHooksEntry, HookData, HookOp, ModelHooks
+from kernia.types.init_options import KerniaOptions, ModelConfig
+from kernia_memory_adapter import memory_adapter
 
 
 def _fields_by_name(model):
@@ -48,7 +48,7 @@ def _user_row(**over):
 
 def _auth(**opts):
     raw = memory_adapter()
-    return raw, init(BetterAuthOptions(database=raw, secret="x" * 32, **opts)).context
+    return raw, init(KerniaOptions(database=raw, secret="x" * 32, **opts)).context
 
 
 # ==========================================================================

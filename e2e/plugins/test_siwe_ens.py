@@ -13,12 +13,12 @@ import asyncio
 
 import pytest
 
-from better_auth.auth import init
-from better_auth.plugins.siwe import siwe
-from better_auth.types.adapter import Where
-from better_auth.types.init_options import BetterAuthOptions
-from better_auth_memory_adapter import memory_adapter
-from better_auth_test_utils import ASGIDriver
+from kernia.auth import init
+from kernia.plugins.siwe import siwe
+from kernia.types.adapter import Where
+from kernia.types.init_options import KerniaOptions
+from kernia_memory_adapter import memory_adapter
+from kernia_test_utils import ASGIDriver
 
 
 def _make_resolver(table: dict[str, str | None]):
@@ -30,8 +30,6 @@ def _make_resolver(table: dict[str, str | None]):
 
 async def _signed_in(driver: ASGIDriver, *, address: str, ens: bool = False) -> dict:
     """Drive the SIWE flow through the public endpoints with a real signature."""
-    from eth_account import Account
-    from eth_account.messages import encode_defunct
 
     # 1. Nonce
     r = await driver.request("GET", "/siwe/nonce", query=f"address={address}")
@@ -67,7 +65,7 @@ async def test_ens_name_persisted_on_first_sign_in(signing_key) -> None:
     addr = signing_key.address
     resolver_table: dict[str, str | None] = {addr.lower(): "alice.eth"}
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[siwe(enable_ens=True, ens_resolver=_make_resolver(resolver_table))],
@@ -110,7 +108,7 @@ async def test_sign_in_works_when_resolver_returns_none(signing_key) -> None:
     addr = signing_key.address
     # Resolver always returns None
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[siwe(enable_ens=True, ens_resolver=_make_resolver({}))],
@@ -151,7 +149,7 @@ async def test_ens_name_refreshed_on_repeat_sign_in(signing_key) -> None:
     addr = signing_key.address
     table: dict[str, str | None] = {addr.lower(): "old.eth"}
     auth = init(
-        BetterAuthOptions(
+        KerniaOptions(
             database=memory_adapter(),
             secret="s",
             plugins=[siwe(enable_ens=True, ens_resolver=_make_resolver(table))],

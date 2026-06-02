@@ -1,0 +1,87 @@
+---
+title: "Plugins"
+description: "Install, configure, and write Kernia plugins."
+---
+
+Plugins are Kernia's extension unit. A plugin can add routes, schema, hooks, request or response behavior, rate-limit rules, and error codes. The core composes plugins once during `init` and all framework integrations mount the resulting route table.
+
+## Use a plugin
+
+~~~bash
+uv add kernia-api-key
+~~~
+
+~~~python title="auth.py"
+from kernia_api_key import api_key
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    plugins=(api_key(),),
+))
+~~~
+
+Run schema generation after adding plugins that contribute tables or fields.
+
+## Plugin contract
+
+A plugin object exposes an `id` plus optional fields: `schema`, `endpoints`, `middlewares`, `hooks`, `on_request`, `on_response`, `rate_limit`, `error_codes`, and `init`.
+
+## Add endpoints
+
+~~~python
+from dataclasses import dataclass
+from kernia.api import create_auth_endpoint
+from kernia.types.endpoint import EndpointOptions
+from kernia.types.plugin import KerniaPlugin
+
+async def ping(ctx):
+    return {"ok": True}
+
+@dataclass(frozen=True)
+class PingPlugin:
+    id: str = "ping"
+    endpoints: tuple = (create_auth_endpoint("/ping", EndpointOptions(method="GET"), ping),)
+    version: str | None = None
+    schema = None
+    middlewares = None
+    hooks = None
+    on_request = None
+    on_response = None
+    rate_limit = None
+    error_codes = None
+    init = None
+
+def ping_plugin() -> KerniaPlugin:
+    return PingPlugin()
+~~~
+
+## Add schema
+
+Plugins can create tables or extend existing tables.
+
+~~~python
+from kernia.types.adapter import FieldDef, ModelDef
+from kernia.types.plugin import PluginSchema
+
+schema = PluginSchema(
+    tables=(ModelDef("workspace", (FieldDef("id", "string", unique=True),)),),
+    extend={"user": (FieldDef("workspaceRole", "string", required=False),)},
+)
+~~~
+
+## Add hooks
+
+Use hooks for behavior that wraps core routes, such as two-factor interception, anonymous account upgrade, captcha checks, or admin method gates.
+
+## Error codes
+
+Expose machine-readable error codes so clients can branch without scraping messages.
+
+~~~python
+error_codes = {"WORKSPACE_NOT_FOUND": "Workspace does not exist."}
+~~~
+
+## Testing plugin behavior
+
+A plugin test should mount a real auth app, hit the public route, assert database changes, and assert cookies or errors when relevant. Unit tests should be reserved for pure helpers.

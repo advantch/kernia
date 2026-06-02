@@ -1,0 +1,82 @@
+---
+title: "Security Reference"
+description: "Security controls and deployment checks for Kernia."
+---
+
+This page lists the security controls that should be enabled before using Kernia in production. Authentication bugs tend to come from deployment configuration as much as code, so verify the server, proxy, cookies, providers, and admin routes together.
+
+## Passwords
+
+New passwords should use Argon2id. If your project imports users from another system, verify legacy hashes only long enough to migrate them after a successful sign-in.
+
+Password reset tokens and verification tokens must be single-use, time-limited, and stored hashed or otherwise protected at rest.
+
+## Secret rotation
+
+Use one active signing/encryption secret and keep previous secrets available for verification during a rotation window. New tokens should be issued with the current secret; old tokens should expire naturally or be revoked explicitly.
+
+```python title="auth.py"
+KerniaOptions(
+    secret=env.KERNIA_SECRET,
+    previous_secrets=[env.KERNIA_SECRET_OLD],
+)
+```
+
+## Sessions
+
+Sessions should be stored server-side and represented in the browser by HTTP-only cookies. Revoke sessions on password change, account deletion, suspicious login, and explicit logout.
+
+See [session management](/docs/concepts/session-management) for route-level behavior.
+
+## Cookies
+
+Session cookies are signed, HTTP-only, and secure on HTTPS base URLs. Browser JavaScript should not read session tokens. Cross-origin frontends must use `credentials: "include"` and CORS must allow credentials only for trusted origins.
+
+Compatibility cookie names may use established wire identifiers. Do not rename them unless you also update every compatible client and conformance test.
+
+## CSRF and origins
+
+Mutating browser routes should validate origin and trusted origins. Avoid accepting cross-site form submissions for sign-in, sign-up, password reset, email change, billing portal, API key creation, and admin configuration.
+
+Use exact frontend origins:
+
+```python title="auth.py"
+KerniaOptions(
+    trusted_origins=("https://app.example.com",),
+)
+```
+
+## OAuth state and PKCE
+
+OAuth flows must use signed state. Public clients should use PKCE when supported by the provider. Callback URLs must match the mounted auth base URL exactly.
+
+Provider client secrets belong on the Python server. Do not put them in Vite, Next.js client bundles, mobile apps, or docs examples.
+
+## Rate limits
+
+Keep rate limits enabled on password, OTP, two-factor, magic-link, anonymous, device, token, and admin routes. For multiple application instances, use shared storage such as Redis.
+
+## Proxy headers
+
+Only trust forwarded host, proto, and IP headers when they are set by your own proxy or load balancer. Otherwise an attacker can influence generated URLs, redirect checks, or rate limits.
+
+## Admin APIs
+
+Admin config, user management, billing setup, SSO, and SCIM require backend authorization. Frontend-only checks are not sufficient. Every admin write should produce an audit event with secrets redacted.
+
+## Webhooks
+
+Stripe and other provider webhooks must verify signatures before parsing trusted event data. Store processed event ids to prevent replay.
+
+## Production checklist
+
+- HTTPS public auth base URL.
+- Secret manager for all secrets.
+- Migrations applied before deploy.
+- Provider callback URLs match `base_url`.
+- CORS and trusted origins match frontend origins.
+- Webhook signatures verified.
+- Rate limits use shared storage.
+- Admin APIs enforce backend authorization.
+- Audit logs cover sensitive admin and billing events.
+- Browser tests cover login, logout, settings, billing, and admin actions.

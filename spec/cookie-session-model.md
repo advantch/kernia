@@ -14,8 +14,8 @@ Source files:
   `getSessionQuerySchema`.
 - `reference/packages/better-auth/src/crypto/jwt.ts` — `signJWT`,
   `verifyJWT`, `symmetricEncodeJWT`, `symmetricDecodeJWT`.
-- `reference/packages/core/src/types/cookie.ts` — `BetterAuthCookie`,
-  `BetterAuthCookies`.
+- `reference/packages/core/src/types/cookie.ts` — `KerniaCookie`,
+  `KerniaCookies`.
 
 ## Cookie inventory
 
@@ -71,7 +71,7 @@ When `secure` is `true`, every cookie name is prefixed with
 
 If `crossSubDomainCookies.enabled` is true but no `domain` can be
 determined (and `baseURL` is not a dynamic config), `createCookieGetter`
-throws `BetterAuthError("baseURL is required when crossSubdomainCookies are enabled.")`.
+throws `KerniaError("baseURL is required when crossSubdomainCookies are enabled.")`.
 
 ## Signing scheme
 

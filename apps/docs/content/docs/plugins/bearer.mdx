@@ -1,0 +1,58 @@
+---
+title: "Bearer"
+description: "Resolve Kernia sessions from Authorization headers."
+---
+
+The bearer plugin lets non-browser clients authenticate with an `Authorization: Bearer` header. The token can be the signed session-cookie value, or a raw session token when signature enforcement is explicitly disabled.
+
+## Installation
+
+~~~bash
+uv add kernia
+~~~
+
+## Import path
+
+~~~python
+from kernia.plugins.bearer import bearer
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins.bearer import bearer
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        bearer(require_signature=True),
+    ),
+))
+~~~
+
+## API routes
+
+
+
+## Schema impact
+
+No tables or fields are added. The plugin reads the existing `session` table.
+
+## Behavior and options
+
+- Cookie sessions take precedence over bearer headers.
+- Keep `require_signature=True` unless you have a controlled internal transport and a documented reason.
+- This plugin is useful for mobile clients, CLI tools, and service calls that need to reuse Kernia sessions.
+
+## Test and demo coverage
+
+Test signed bearer resolution, invalid signatures, raw token rejection when signatures are required, cookie precedence, and protected route access through the mounted framework app.

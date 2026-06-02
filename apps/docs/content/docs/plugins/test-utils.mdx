@@ -1,0 +1,60 @@
+---
+title: "Test Utils"
+description: "Use Kernia test fixtures for ASGI apps, providers, emails, SMS, Stripe, SAML, WebAuthn, and adapters."
+---
+
+The test utilities package gives integration tests deterministic fixtures for auth flows that normally require third-party providers or real browsers.
+
+## Installation
+
+~~~bash
+uv add --dev kernia-test-utils
+~~~
+
+## Import path
+
+~~~python
+from kernia_test_utils import ASGIDriver, MockIdP, MockSMTP, MockStripe, SoftAuthenticator
+~~~
+
+## Server configuration
+
+~~~python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia_test_utils import ASGIDriver, MockIdP, MockSMTP, MockStripe, SoftAuthenticator
+
+from .db import adapter
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    base_path="/api/auth",
+    plugins=(
+        # test utilities are imported by tests, not configured as a production plugin
+    ),
+))
+~~~
+
+## API routes
+
+
+
+## Schema impact
+
+No application schema changes. Some fixtures create temporary adapter state or containers during tests.
+
+## Behavior and options
+
+- `ASGIDriver` calls mounted ASGI apps without a live server.
+- `MockIdP` signs test OIDC tokens.
+- `MockSMTP` and `MockSMS` capture outbound messages.
+- `MockStripe` verifies webhooks and mocks Stripe REST calls.
+- `SoftAuthenticator` drives passkey tests.
+
+## Test and demo coverage
+
+Use these fixtures to exercise public HTTP routes. The goal is to prove cookies, redirects, database writes, provider callbacks, and webhooks, not only isolated helper functions.

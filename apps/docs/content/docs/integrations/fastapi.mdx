@@ -1,0 +1,181 @@
+---
+title: "FastAPI"
+description: "Mount Kernia in a FastAPI backend and protect application routes."
+---
+
+FastAPI is the reference Python integration for Kernia. It mounts the Kernia ASGI router under the configured auth base path and exposes dependencies for reading or requiring the active session in your own FastAPI routes.
+
+<Callout type="info">
+  This page uses the local `kernia_fastapi` package as the source of truth. FastAPI is Python-specific, so the implementation details come from this repository rather than a JavaScript framework guide.
+</Callout>
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the packages
+
+    ```bash
+    uv add kernia kernia-fastapi fastapi uvicorn
+    ```
+
+    Add whichever adapter package your application uses, for example `kernia-sqlalchemy` for SQLAlchemy-backed relational databases.
+  </Step>
+
+  <Step>
+    ### Create the auth instance
+
+    `base_path` is where FastAPI mounts the auth router. `base_url` must include that same path, because OAuth providers redirect to `base_url + /callback/:provider`.
+
+    ```python title="auth.py"
+    import os
+
+    from kernia import KerniaOptions
+    from kernia.auth import init
+    from kernia.types.init_options import EmailPasswordOptions
+
+    from .db import adapter
+
+    auth = init(KerniaOptions(
+        database=adapter,
+        secret=os.environ["KERNIA_SECRET"],
+        base_url=os.environ.get("KERNIA_BASE_URL", "http://localhost:8000/api/auth"),
+        base_path="/api/auth",
+        trusted_origins=("http://localhost:5173",),
+        email_and_password=EmailPasswordOptions(enabled=True),
+    ))
+    ```
+  </Step>
+
+  <Step>
+    ### Mount Kernia in FastAPI
+
+    ```python title="main.py"
+    from fastapi import Depends, FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+
+    from kernia.types.context import Session
+    from kernia_fastapi import mount_kernia, require_session
+
+    from .auth import auth
+
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    mount_kernia(app, auth)
+
+    @app.get("/api/me")
+    async def me(session: Session = Depends(require_session)):
+        return {"user_id": session.user_id, "session_id": session.id}
+    ```
+  </Step>
+</Steps>
+
+## What `mount_kernia` does
+
+`mount_kernia(app, auth)` reads `auth.context.options.base_path`, mounts the auth ASGI app there, strips the mount prefix before dispatch, and stores the auth handle on `app.state.kernia`.
+
+That prefix stripping matters because Kernia routes are registered as canonical auth paths such as `/sign-in/email`, `/get-session`, and `/callback/google`, while the public FastAPI URL is normally `/api/auth/sign-in/email`.
+
+## Session dependencies
+
+The integration exports two dependencies:
+
+| Helper | Behavior |
+|---|---|
+| `get_session(request)` | Returns the active `Session` or `None`. |
+| `require_session(request)` | Returns the active `Session` or raises `401` with `UNAUTHORIZED`. |
+
+The helper reads the compatibility cookie named `better-auth.session_token`, verifies it with the Kernia secret, then loads the matching `session` row through the configured adapter.
+
+```python title="routes.py"
+from fastapi import APIRouter, Depends
+from kernia.types.context import Session
+from kernia_fastapi import get_session, require_session
+
+router = APIRouter()
+
+@router.get("/optional-session")
+async def optional_session(session: Session | None = Depends(get_session)):
+    return {"signed_in": session is not None}
+
+@router.post("/workspace/action")
+async def workspace_action(session: Session = Depends(require_session)):
+    return {"actor": session.user_id}
+```
+
+## Frontend calls
+
+The Vite app should call the FastAPI backend with credentials included. Do not treat missing provider credentials as a successful login path; surface the provider as unavailable until the environment and admin config make it available.
+
+```ts title="src/lib/auth.ts"
+export async function signInWithEmail(email: string, password: string) {
+  const response = await fetch("http://localhost:8000/api/auth/sign-in/email", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password, remember_me: true }),
+  });
+
+  if (!response.ok) throw await response.json();
+  return response.json();
+}
+
+export async function getSession() {
+  const response = await fetch("http://localhost:8000/api/auth/get-session", {
+    credentials: "include",
+  });
+  return response.ok ? response.json() : null;
+}
+```
+
+## OAuth callback URLs
+
+For Google, GitHub, Apple, and other social providers, register callback URLs against the FastAPI backend, not the Vite frontend.
+
+| Environment | Callback URL |
+|---|---|
+| Local Google/GitHub | `http://localhost:8000/api/auth/callback/google` |
+| Local Apple | Apple requires HTTPS; use a tunnel or development domain. |
+| Production | `https://api.example.com/api/auth/callback/:provider` |
+
+## Routes
+
+Kernia routes are available under the mount prefix:
+
+<APIMethod method="POST" path="/api/auth/sign-up/email">
+  Creates an email/password user when `EmailPasswordOptions(enabled=True)` is configured.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/email">
+  Signs in with email and password and sets the session cookie.
+</APIMethod>
+
+<APIMethod method="GET" path="/api/auth/get-session">
+  Returns the current session and user, or `null` when no valid session cookie is present.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-out">
+  Revokes the current session and clears auth cookies.
+</APIMethod>
+
+<APIMethod method="POST" path="/api/auth/sign-in/social">
+  Starts an OAuth flow. The body uses Kernia's current Python shape: `{ "provider": "google", "callback_url": "http://localhost:5173/dashboard" }`.
+</APIMethod>
+
+## Troubleshooting
+
+- If every protected route returns `401`, verify the frontend sends `credentials: "include"`, CORS has `allow_credentials=True`, and the browser accepts cookies for the API origin.
+- If OAuth redirects to the wrong URL, set `KERNIA_BASE_URL` to the public auth mount, including `/api/auth`.
+- If a route exists under `/api/auth/...` but the router returns not found, check that `mount_kernia(app, auth)` runs before the app starts and that `base_path` matches the public mount.
+- If sessions work locally but not behind a proxy, forward the original scheme/host and configure secure cookie behavior consistently at the edge.
+
+## Test and demo coverage
+
+A real FastAPI + Vite demo should cover email sign-up, email sign-in, session refresh, logout, OAuth provider unavailable states, profile update, linked accounts, sessions revoke, API keys, and admin configuration. Tests should drive HTTP requests against the mounted FastAPI app rather than calling route handlers directly.

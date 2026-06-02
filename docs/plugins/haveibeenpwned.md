@@ -1,11 +1,11 @@
 # Haveibeenpwned
 
-> Module: `better_auth.plugins.haveibeenpwned`
+> Module: `kernia.plugins.haveibeenpwned`
 > Constructor: `have_i_been_pwned`
 
 Have-I-Been-Pwned password compromise plugin.
 
-Mirrors `reference/packages/better-auth/src/plugins/haveibeenpwned/index.ts`.
+Mirrors `Better Auth reference: plugins/haveibeenpwned/index.ts`.
 Hashes the candidate password (SHA-1), sends the first 5 hex chars to the
 pwnedpasswords range API, and rejects the request if the remainder appears in
 the response.
@@ -21,12 +21,12 @@ _(no schema contributions)_
 ## Usage
 
 ```python
-from better_auth.plugins.haveibeenpwned import have_i_been_pwned
-from better_auth import BetterAuthOptions
-from better_auth.auth import init
+from kernia.plugins.haveibeenpwned import have_i_been_pwned
+from kernia import KerniaOptions
+from kernia.auth import init
 
 auth = init(
-    BetterAuthOptions(
+    KerniaOptions(
         database=...,
         secret=...,
         plugins=[

@@ -1,0 +1,44 @@
+---
+title: "Unable To Create User"
+description: "Kernia could not create a user during sign-up, OAuth, or SSO."
+---
+
+# Unable To Create User
+
+`UNABLE_TO_CREATE_USER` occurs when a flow needs a new user row but the adapter or schema rejects the write. It most often appears during sign-up, first social sign-in, SSO just-in-time provisioning, or SCIM-created accounts.
+
+## Response shape
+
+```json
+{
+  "code": "UNABLE_TO_CREATE_USER",
+  "message": "Unable to create user",
+  "status": 500
+}
+```
+
+## Common causes
+
+- Database migrations are missing or stale.
+- Required user fields are missing.
+- Email unique constraint conflicts with an existing user.
+- A custom user hook returned invalid data.
+- The adapter lost a transaction during user plus account creation.
+- The database connection failed or timed out.
+- Imported data violates the current schema.
+
+## How to fix
+
+- Confirm the user table or collection matches the resolved Kernia schema.
+- Check whether the email already belongs to another user.
+- Validate custom hooks and imported profile data.
+- Run the same flow against the adapter test suite.
+- Inspect database logs for constraint or type errors.
+
+## Account linking
+
+For OAuth and SSO, do not resolve this by blindly linking on email. Link on provider account id when possible and require verified email before any email-based linking policy.
+
+## Tests
+
+Tests should cover duplicate email, missing required field, hook failure, adapter failure, and successful rollback when account creation fails after user creation.

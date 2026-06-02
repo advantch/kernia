@@ -6,7 +6,7 @@ import time
 
 import pyotp
 
-from better_auth.plugins.two_factor import TWO_FACTOR_ERROR_CODES, two_factor
+from kernia.plugins.two_factor import TWO_FACTOR_ERROR_CODES, two_factor
 
 
 def test_two_factor_plugin_id_and_endpoints() -> None:

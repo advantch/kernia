@@ -10,7 +10,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from better_auth_sso.saml import SAMLPlan, sp_metadata_xml
+from kernia_sso.saml import SAMLPlan, sp_metadata_xml
 
 
 @pytest.fixture
@@ -54,7 +54,8 @@ async def test_metadata_contains_sp_descriptor(plan: SAMLPlan) -> None:
     assert sp_descriptor is not None, "no SPSSODescriptor in metadata"
     # NameIDFormat is included.
     name_id_fmt = sp_descriptor.find(f"{{{ns}}}NameIDFormat")
-    assert name_id_fmt is not None and "emailAddress" in (name_id_fmt.text or "")
+    assert name_id_fmt is not None
+    assert "emailAddress" in (name_id_fmt.text or "")
 
 
 async def test_metadata_contains_assertion_consumer_binding(plan: SAMLPlan) -> None:

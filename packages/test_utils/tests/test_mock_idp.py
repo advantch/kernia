@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import httpx
 
-from better_auth.oauth2 import verify_id_token
-from better_auth_test_utils import MockIdP
+from kernia.oauth2 import verify_id_token
+from kernia_test_utils import MockIdP
 
 
 async def test_jwks_endpoint_serves_valid_keys() -> None:
