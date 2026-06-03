@@ -1,64 +1,102 @@
 ---
 title: "Magic Link"
-description: "Send one-click sign-in links by email."
+description: "Passwordless email sign-in with one-time links."
 ---
 
-Magic link auth sends a signed, short-lived URL to the user. The verification route consumes the token, creates or links the user according to configuration, and sets a session cookie.
+The magic link plugin emails the user a signed, short-lived URL. When they open
+it, Kernia consumes the token, creates or links the account, and issues a
+session — no password required.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `magic_link()` to your Kernia config and supply a `send_magic_link`
+callback. The callback receives the recipient, the verification URL, and the
+raw token — send the email however you like (Resend, SES, Postmark, SMTP).
 
-~~~python
-from kernia.plugins.magic_link import magic_link
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
-import os
-
+```python title="auth.py"
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.magic_link import magic_link
 
-from .db import adapter
+async def send_magic_link(email: str, url: str, token: str) -> None:
+    await email_client.send(
+        to=email,
+        subject="Sign in to Acme",
+        html=f'<a href="{url}">Click to sign in</a>',
+    )
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        magic_link(),
-    ),
+    plugins=[magic_link()],
+    advanced={"magic-link": {"send_magic_link": send_magic_link}},
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/sign-in/magic-link">
-  Creates a magic-link token and calls the configured sender.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `magicLink` client plugin:
 
-<APIMethod method="GET" path="/api/auth/magic-link/verify">
-  Consumes the token and creates a session.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { magicLinkClient } from "better-auth/client/plugins";
 
-## Schema impact
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [magicLinkClient()],
+});
+```
+</Step>
+</Steps>
 
-Reuses the core `verification` table.
+## Usage
 
-## Behavior and options
+### Send a magic link
 
-- Configure `advanced["magic-link"]` with `send_magic_link`, `expires_in`, and `disable_sign_up`.
-- Keep links short-lived and single-use.
-- Use explicit unavailable states in the UI when no sender is configured.
+```ts
+await authClient.signIn.magicLink({
+  email: "user@example.com",
+  callbackURL: "/dashboard",   // where to land after the link is verified
+});
+```
 
-## Test and demo coverage
+The user receives the email. When they click the link, the browser hits
+`/api/auth/magic-link/verify`, Kernia sets the session cookie, and redirects to
+`callbackURL`.
 
-Test send, verify, expired token, reused token, disabled sign-up, missing sender, and the final session cookie.
+### Verify manually
+
+If you handle the redirect yourself (e.g. a native-app deep link), verify the
+token explicitly:
+
+```ts
+await authClient.magicLink.verify({ query: { token } });
+```
+
+## Options
+
+Configure under `advanced["magic-link"]`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `send_magic_link` | `async (email, url, token) -> None` | — | **Required.** Delivers the link. |
+| `expires_in` | `int` | `300` | Token lifetime in seconds. |
+| `disable_sign_up` | `bool` | `False` | Reject links for emails with no existing account. |
+
+## Schema
+
+The plugin reuses the core `verification` table — no migration beyond the core
+schema is required.
+
+<Callout>
+Tokens are single-use and consumed atomically on verify, so a leaked link can't
+be replayed after the first click.
+</Callout>

@@ -1,25 +1,21 @@
 ---
 title: "One Tap"
-description: "Verify Google One Tap ID tokens and create Kernia sessions."
+description: "Sign users in with the Google One Tap widget by verifying its ID token."
 ---
 
-The One Tap plugin accepts an ID token issued by Google, verifies it against JWKS, resolves or creates the user through the OAuth account flow, and sets a Kernia session cookie.
+The One Tap plugin accepts a Google One Tap ID token, verifies it against
+Google's JWKS, resolves or creates the matching user, and sets a Kernia session
+cookie — all from a single tap in the browser.
 
 ## Installation
 
-~~~bash
-uv add kernia httpx
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `one_tap()` with the Google OAuth client id used by the browser widget.
 
-~~~python
-from kernia.plugins.one_tap import OneTapOptions, one_tap
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
 
 from kernia import KerniaOptions
@@ -32,29 +28,85 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        one_tap(OneTapOptions(client_id=os.environ["GOOGLE_CLIENT_ID"])),
-    ),
+    plugins=[one_tap(OneTapOptions(client_id=os.environ["GOOGLE_CLIENT_ID"]))],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/one-tap/verify">
-  Verifies a Google ID token, links or creates the user, and creates a session.
-</APIMethod>
+The client plugin renders the One Tap prompt and posts the resulting ID token
+to Kernia. Pass the same Google client id.
 
-## Schema impact
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oneTapClient } from "better-auth/client/plugins";
 
-No new tables. It writes the user and provider account through core models.
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [
+    oneTapClient({
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+    }),
+  ],
+});
+```
+</Step>
+</Steps>
 
-## Behavior and options
+## Usage
 
-- `client_id` must match the Google client id used by the browser widget.
-- Test environments can override JWKS URL and issuer.
-- Use admin config to hide the One Tap UI until credentials exist.
+### Trigger the prompt
 
-## Test and demo coverage
+Call `authClient.oneTap()` (usually on mount of your sign-in page). It shows the
+Google prompt, then posts the ID token to `/api/auth/one-tap/verify`, which
+creates the session.
 
-Test valid token, invalid signature, wrong audience, wrong issuer, missing email, disabled sign-up, trusted-provider linking, and cookie creation.
+```ts
+await authClient.oneTap({
+  fetchOptions: {
+    onSuccess: () => router.push("/dashboard"),
+  },
+});
+```
+
+### Render a button instead
+
+To show a styled Google button rather than the auto-prompt:
+
+```ts
+await authClient.oneTap({
+  button: {
+    container: "#signin-button",
+    config: { theme: "filled_blue", size: "large" },
+  },
+});
+```
+
+## Options
+
+Server options on `OneTapOptions`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `client_id` | `str` | `None` | Google OAuth client id. Falls back to `socialProviders.google` when omitted. |
+| `provider_id` | `str` | `"google"` | Provider id linked accounts are stored under. |
+| `disable_sign_up` | `bool` | `False` | Reject tokens for users with no existing account. |
+| `trusted_provider` | `bool` | `True` | Trust Google's `email_verified` claim as authoritative. |
+| `disable_implicit_linking` | `bool` | `False` | Don't auto-link to an existing user by matching email. |
+| `require_local_email_verified` | `bool` | `True` | Require the local account email to be verified before linking. |
+| `jwks_url` / `issuer` | `str` | Google defaults | Override for testing against a non-Google issuer. |
+
+Client options (`oneTapClient`) include `clientId` (required), `autoSelect`,
+`cancelOnTapOutside`, and `context` (`"signin"`, `"signup"`, or `"use"`).
+
+## Schema
+
+No new tables. The user and the linked Google account are written through the
+core `user` and `account` models.
+
+<Callout>
+The `client_id` on the server must match the one passed to `oneTapClient` in the
+browser, or token verification fails on the audience (`aud`) check.
+</Callout>

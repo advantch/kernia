@@ -1,25 +1,22 @@
 ---
 title: "JWT"
-description: "Issue local JWT access tokens and publish JWKS keys."
+description: "Issue signed JWT access tokens and publish a JWKS endpoint for verification."
 ---
 
-The JWT plugin creates and rotates signing keys stored in the database, issues short-lived access tokens for active sessions, and publishes public keys through a JWKS route. Other plugins, including MCP, can use the same signer.
+The JWT plugin manages a rotating signing key in the database, issues short-lived
+JWT access tokens for the active session, and publishes the public keys at a JWKS
+route so any service can verify those tokens without calling back to Kernia.
 
 ## Installation
 
-~~~bash
-uv add kernia authlib
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `jwt()` to your Kernia config. Set the `issuer` to your base URL so the
+`iss` claim is correct.
 
-~~~python
-from kernia.plugins.jwt import JwtOptions, jwt
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
 
 from kernia import KerniaOptions
@@ -32,37 +29,80 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        jwt(JwtOptions(issuer=os.environ["KERNIA_BASE_URL"])),
-    ),
+    plugins=[jwt(JwtOptions(issuer=os.environ["KERNIA_BASE_URL"]))],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="GET" path="/api/auth/token">
-  Issues a JWT for the active session.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { jwtClient } from "better-auth/client/plugins";
 
-<APIMethod method="GET" path="/api/auth/jwks">
-  Publishes public JSON Web Keys for token verification.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [jwtClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/jwks/rotate">
-  Marks current keys inactive and creates a new active signing key.
-</APIMethod>
+## Usage
 
-## Schema impact
+### Get a token
 
-Adds the `jwk` table with key id, algorithm, public key, private key, active flag, and timestamps.
+The recommended path is `authClient.token()`, which calls `/token` with the
+active session and returns a fresh JWT:
 
-## Behavior and options
+```ts
+const { data } = await authClient.token();
+const jwt = data?.token;
+```
 
-- Default access token lifetime is 15 minutes.
-- Supported algorithms include ES256, RS256, and EdDSA depending on installed crypto support.
-- Protect rotation with an admin token or an authenticated admin session.
+A JWT is also returned in the `set-auth-jwt` response header whenever the client
+calls `getSession()`, so you can capture it without an extra round trip.
 
-## Test and demo coverage
+### Verify a token
 
-Test first-use key creation, token issuance, JWKS output, key rotation, old-key verification, unauthorized rotation, and issuer/audience claims.
+Other services fetch the public keys from the JWKS endpoint and verify the token
+locally — no shared secret, no call back to Kernia:
+
+```
+GET /api/auth/jwks
+```
+
+### Rotate keys
+
+`POST /api/auth/jwks/rotate` marks the current key inactive and mints a new one.
+The old key stays in the JWKS during the grace period so tokens already in flight
+keep verifying. Protect the route with `rotate_admin_token` or an admin session.
+
+## Options
+
+Pass these on `JwtOptions`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `issuer` | `str` | `None` | Value for the `iss` claim. Set to your base URL. |
+| `audience` | `str` | `None` | Value for the `aud` claim. |
+| `algorithm` | `str` | `"EdDSA"` | Key-pair algorithm: `EdDSA`, `ES256`, `ES384`, `ES512`, `RS256`, or `PS256`. |
+| `expiration_time` | `int \| str` | `900` | Token lifetime in seconds or a string like `"15m"`, `"1h"`, `"7d"`. |
+| `define_payload` | `(session) -> dict` | `None` | Customize the JWT payload issued by `/token`. |
+| `get_subject` | `(session) -> str` | `None` | Override the `sub` claim. |
+| `jwks_path` | `str` | `"/jwks"` | Path the JWKS is served from. |
+| `remote_url` | `str` | `None` | Publish keys remotely; disables the local `/jwks` route. |
+| `rotation_interval` | `int` | `None` | Seconds after which a key triggers rotation. |
+| `grace_period` | `int` | `None` | Seconds a rotated key stays in the JWKS for in-flight tokens. |
+| `rotate_admin_token` | `str` | `None` | If set, `/jwks/rotate` requires this bearer token. |
+
+## Schema
+
+Adds the `jwk` table holding each signing key: id, algorithm, public key,
+encrypted private key, active flag, and timestamps.
+
+<Callout>
+Private keys are encrypted at rest with your `KERNIA_SECRET`. Rotating that
+secret invalidates stored keys, so plan a rotation window if you ever change it.
+</Callout>

@@ -3,74 +3,164 @@ title: "Two Factor"
 description: "Add TOTP and backup-code challenges after password or username sign-in."
 ---
 
-The two-factor plugin adds a second step to credential sign-in. When a user with two-factor enabled signs in with email/password or username/password, Kernia removes the provisional session and returns a pending confirmation id. The user must verify a TOTP code or backup code before a real session is issued.
+The two-factor plugin adds a second step to credential sign-in. When a user with
+2FA enabled signs in with email/password or username/password, Kernia withholds
+the session and returns `{ twoFactorRedirect: true }`. The user must verify a
+TOTP code, an emailed OTP, or a backup code before a real session is issued.
 
 ## Installation
 
-~~~bash
-uv add kernia pyotp
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `two_factor()` to your Kernia config. The plugin requires `pyotp`
+(installed via the `two-factor` extra). Configuration — issuer, TOTP settings,
+and the optional OTP sender — lives under `advanced["two-factor"]`.
 
-~~~python
-from kernia.plugins.two_factor import two_factor
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.two_factor import two_factor
 
-from .db import adapter
+async def send_otp(data: dict, ctx) -> None:
+    # data = {"user": <user row>, "otp": "123456"}
+    await email_client.send(
+        to=data["user"]["email"],
+        subject="Your verification code",
+        html=f"<p>Your code is <strong>{data['otp']}</strong></p>",
+    )
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        two_factor(),
-    ),
+    plugins=[two_factor()],
+    advanced={
+        "two-factor": {
+            "issuer": "Acme",
+            "otp_options": {"send_otp": send_otp},
+            "totp_options": {"digits": 6, "period": 30},
+        }
+    },
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/two-factor/enable">
-  Creates a TOTP secret for the active user and returns setup data for an authenticator app.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `twoFactorClient` plugin and handle the redirect that
+signals a second factor is required.
 
-<APIMethod method="POST" path="/api/auth/two-factor/verify-totp">
-  Verifies the TOTP code during setup or sign-in and issues a session when a confirmation id is supplied.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
 
-<APIMethod method="POST" path="/api/auth/two-factor/disable">
-  Disables two-factor auth for the active user after password or code verification.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [
+    twoFactorClient({
+      onTwoFactorRedirect({ twoFactorMethods }) {
+        // e.g. ["totp", "otp"] — route the user to your 2FA screen
+        window.location.href = "/two-factor";
+      },
+    }),
+  ],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/two-factor/generate-backup-codes">
-  Creates fresh backup codes for the active user.
-</APIMethod>
+## Usage
 
-<APIMethod method="POST" path="/api/auth/two-factor/verify-backup-code">
-  Consumes one backup code and issues a session for a pending two-factor confirmation.
-</APIMethod>
+### Enable two factor
 
-## Schema impact
+Enabling requires the user's password. Kernia returns a `totpURI` to render as a
+QR code in an authenticator app, plus backup codes.
 
-Adds `twoFactorConfirmation` and `twoFactorBackupCode` tables and extends `user` with `twoFactorEnabled` and `twoFactorSecret` fields. Run `kernia generate` after enabling it.
+```ts
+const { data } = await authClient.twoFactor.enable({
+  password: "the-password",
+});
+// data.totpURI -> render as QR; data.backupCodes -> show once
+```
 
-## Behavior and options
+### Verify during setup or sign-in
 
-- Sign-in interception is implemented as an after hook on `/sign-in/email` and `/sign-in/username`.
-- Backup codes are single-use and stored hashed.
-- TOTP confirmation ids expire; stale confirmations should be treated as a fresh sign-in requirement.
+After credential sign-in returns `twoFactorRedirect`, collect the code and
+verify it. `trustDevice` skips the second factor on this browser for future
+sign-ins.
 
-## Test and demo coverage
+```ts
+await authClient.twoFactor.verifyTotp({
+  code: "123456",
+  trustDevice: true,
+});
+```
 
-Route tests should cover enable, verify setup, intercepted sign-in, invalid code, backup-code sign-in, backup-code reuse, disable, and session cookie behavior after the second step.
+### Email OTP as a second factor
+
+If you configured `otp_options.send_otp`, the user can request a one-time code
+instead of using their authenticator app.
+
+```ts
+await authClient.twoFactor.sendOtp();           // delivers via your send_otp
+await authClient.twoFactor.verifyOtp({ code: "123456" });
+```
+
+### Backup codes
+
+```ts
+// Regenerate (requires password) — show the new set once
+await authClient.twoFactor.generateBackupCodes({ password: "the-password" });
+
+// Use one to clear a 2FA challenge when the device is unavailable
+await authClient.twoFactor.verifyBackupCode({ code: "a1b2-c3d4" });
+```
+
+### Disable two factor
+
+```ts
+await authClient.twoFactor.disable({ password: "the-password" });
+```
+
+## Options
+
+Configure under `advanced["two-factor"]`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `issuer` | `str` | app name | Label shown in authenticator apps. |
+| `otp_options.send_otp` | `async ({user, otp}, ctx) -> None` | — | Delivers the email/SMS OTP second factor. Required to use the OTP flow. |
+| `totp_options` | `dict` | `{digits: 6, period: 30}` | TOTP algorithm settings (`digits`, `period`, `disable`). |
+| `skip_verification_on_enable` | `bool` | `False` | Enable 2FA immediately without a verification step. |
+| `trust_device_max_age` | `int` | `2592000` | Trust-device cookie lifetime in seconds (30 days). |
+| `two_factor_cookie_max_age` | `int` | `600` | Lifetime of the pending-challenge cookie in seconds. |
+
+## Schema
+
+The plugin adds a `twoFactor` table and supporting tables, and extends `user`:
+
+<DatabaseTable
+  fields={[
+    { name: "twoFactor.id", type: "string", description: "Primary key." },
+    { name: "twoFactor.userId", type: "string", description: "References user.id." },
+    { name: "twoFactor.secret", type: "string", description: "TOTP secret (not returned)." },
+    { name: "twoFactor.backupCodes", type: "string", description: "Hashed backup codes (not returned)." },
+    { name: "twoFactor.verified", type: "boolean", description: "Whether the factor is confirmed." },
+    { name: "user.twoFactorEnabled", type: "boolean", description: "Whether 2FA is active for the user." },
+  ]}
+/>
+
+It also adds `twoFactorConfirmation` and `twoFactorBackupCode` tables. Run
+`kernia generate` after enabling the plugin.
+
+<Callout>
+The sign-in gate is an after-hook on `/sign-in/email`, `/sign-in/username`, and
+`/sign-in/phone-number`: it deletes the provisional session and returns
+`twoFactorRedirect`. Always handle `onTwoFactorRedirect` on the client, or
+sign-in will appear to silently fail for 2FA users.
+</Callout>

@@ -1,6 +1,11 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm build",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --no-package-lock",
   "outputDirectory": "dist",
-  "installCommand": "pnpm install --frozen-lockfile"
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "regions": ["iad1"]
 }

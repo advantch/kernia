@@ -89,7 +89,3 @@ async def require_admin_session(session):
 ## Schema changes
 
 The dashboard itself usually adds no auth tables, but the features it displays do. Expect migrations for admin config, audit events, API keys, billing catalog, usage events, SCIM directories, and SSO providers.
-
-## Test and demo coverage
-
-Browser tests should cover a real admin login, auth-method toggling, email provider redaction, Stripe catalog sync, billing entitlement display, API key creation/revocation, session revocation, and forbidden access for non-admin users.

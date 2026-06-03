@@ -175,7 +175,3 @@ Kernia routes are available under the mount prefix:
 - If OAuth redirects to the wrong URL, set `KERNIA_BASE_URL` to the public auth mount, including `/api/auth`.
 - If a route exists under `/api/auth/...` but the router returns not found, check that `mount_kernia(app, auth)` runs before the app starts and that `base_path` matches the public mount.
 - If sessions work locally but not behind a proxy, forward the original scheme/host and configure secure cookie behavior consistently at the edge.
-
-## Test and demo coverage
-
-A real FastAPI + Vite demo should cover email sign-up, email sign-in, session refresh, logout, OAuth provider unavailable states, profile update, linked accounts, sessions revoke, API keys, and admin configuration. Tests should drive HTTP requests against the mounted FastAPI app rather than calling route handlers directly.

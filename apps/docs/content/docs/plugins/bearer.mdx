@@ -1,25 +1,23 @@
 ---
 title: "Bearer"
-description: "Resolve Kernia sessions from Authorization headers."
+description: "Authenticate Kernia sessions from an Authorization header instead of a cookie."
 ---
 
-The bearer plugin lets non-browser clients authenticate with an `Authorization: Bearer` header. The token can be the signed session-cookie value, or a raw session token when signature enforcement is explicitly disabled.
+The bearer plugin lets non-browser clients — mobile apps, CLIs, service-to-service
+calls — authenticate with an `Authorization: Bearer <token>` header. The token is
+the same value Kernia would otherwise set in the `better-auth.session_token`
+cookie, so no extra session store is involved.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Add `bearer()` to your Kernia config. Keep signature enforcement on so only
+HMAC-signed tokens are accepted.
 
-~~~python
-from kernia.plugins.bearer import bearer
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
 
 from kernia import KerniaOptions
@@ -32,27 +30,78 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        bearer(require_signature=True),
-    ),
+    plugins=[bearer(require_signature=True)],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Capture and send the token
 
+Bearer needs no client plugin. After any sign-in, read the token from the
+`set-auth-token` response header and store it, then tell the client to send it
+on every request.
 
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
 
-## Schema impact
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  fetchOptions: {
+    auth: {
+      type: "Bearer",
+      token: () => localStorage.getItem("bearer_token") ?? "",
+    },
+  },
+});
+```
+</Step>
+</Steps>
 
-No tables or fields are added. The plugin reads the existing `session` table.
+## Usage
 
-## Behavior and options
+### Store the token after sign-in
 
-- Cookie sessions take precedence over bearer headers.
-- Keep `require_signature=True` unless you have a controlled internal transport and a documented reason.
-- This plugin is useful for mobile clients, CLI tools, and service calls that need to reuse Kernia sessions.
+Kernia mirrors the freshly issued session token back as a `set-auth-token`
+response header (and exposes it via CORS). Grab it in `onSuccess`:
 
-## Test and demo coverage
+```ts
+await authClient.signIn.email(
+  { email: "user@example.com", password: "password" },
+  {
+    onSuccess: (ctx) => {
+      const token = ctx.response.headers.get("set-auth-token");
+      if (token) localStorage.setItem("bearer_token", token);
+    },
+  },
+);
+```
 
-Test signed bearer resolution, invalid signatures, raw token rejection when signatures are required, cookie precedence, and protected route access through the mounted framework app.
+### Send the token per request
+
+With the global `fetchOptions.auth` config above, every call carries the header
+automatically. To override for a single request:
+
+```ts
+await authClient.listSessions({
+  fetchOptions: {
+    headers: { Authorization: `Bearer ${token}` },
+  },
+});
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `require_signature` | `bool` | `False` | When `True`, only HMAC-signed tokens (`<token>.<sig>`) are accepted; raw session tokens are rejected. Recommended for production. |
+
+## Schema
+
+No tables or fields are added. The plugin resolves the existing core `session`
+table from the header.
+
+<Callout>
+A cookie session always takes precedence: if a request carries both a session
+cookie and a bearer header, the cookie wins and the header is ignored.
+</Callout>

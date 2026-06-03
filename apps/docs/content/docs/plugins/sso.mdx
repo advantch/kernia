@@ -1,131 +1,169 @@
 ---
 title: "SSO"
-description: "Add enterprise SSO with OIDC and SAML providers."
+description: "Enterprise single sign-on with OIDC and SAML identity providers."
 ---
 
-The SSO package stores enterprise identity providers, verifies domains, starts OIDC or SAML sign-in, handles callbacks, and provisions users or organizations according to configured policy.
+The SSO plugin registers enterprise identity providers, verifies their email
+domains, and runs OIDC or SAML sign-in flows. Users whose email matches a
+verified domain are routed into the right provider automatically, and accounts
+(or organizations) are provisioned according to your policy.
 
 ## Installation
 
-~~~bash
-uv add kernia-sso
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Install the standalone package, then pass `sso()` to your Kernia config.
 
-~~~python
-from kernia_sso import sso
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
-import os
-
+```python title="auth.py"
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia_sso import sso
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
     base_path="/api/auth",
-    plugins=(
-        sso(),
-    ),
-))
-~~~
-
-## API routes
-
-<APIMethod method="POST" path="/api/auth/sso/provider">
-  Registers an OIDC or SAML provider.
-</APIMethod>
-
-<APIMethod method="PATCH" path="/api/auth/sso/provider/:id">
-  Updates provider configuration.
-</APIMethod>
-
-<APIMethod method="DELETE" path="/api/auth/sso/provider/:id">
-  Deletes a provider.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/sso/providers">
-  Lists configured providers.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/sso/domain">
-  Registers a domain for verification.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/sso/domain/verify">
-  Verifies a registered domain.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/sso/oidc/sign-in/:provider_id">
-  Starts an OIDC SSO flow.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/sso/oidc/callback/:provider_id">
-  Handles the OIDC callback.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/sso/saml/metadata/:provider_id">
-  Returns SAML service provider metadata.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/sso/saml/sign-in/:provider_id">
-  Starts a SAML SSO flow.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/sso/saml/acs/:provider_id">
-  Handles a SAML assertion consumer callback.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/sso/saml/slo/:provider_id">
-  Handles SAML logout when configured.
-</APIMethod>
-
-## Schema impact
-
-Adds SSO provider and domain tables from `kernia_sso.schema`. Run migrations before exposing admin provider setup.
-
-## Behavior and options
-
-- Protect provider CRUD behind admin routes.
-- Domain verification prevents arbitrary tenants from claiming a domain.
-- SAML security checks must cover signatures, audience, recipient, timestamps, request IDs, and replay prevention.
-
-## SAML validation modes
-
-The plugin exposes two validation modes via `advanced["sso"]["saml_validation"]`:
-
-- `"strict"` (default) — runs `python3-saml`'s full XML-DSIG verifier against
-  the IdP's certificate. This is the production-correct setting and works
-  out-of-the-box against the bundled `MockSAMLIdP` test fixture (the fixture
-  canonicalizes via `lxml` exclusive C14N, so its signature value reconstructs
-  byte-for-byte during verification).
-- `"permissive"` — verifies issuer, audience, NotBefore/NotOnOrAfter,
-  InResponseTo, Status, the Reference URI, and that the embedded
-  `X509Certificate` matches the provider's configured PEM, but does NOT verify
-  the XML-DSIG signature value. Use this only for legacy IdPs whose
-  canonicalization isn't libxml2-compatible.
-
-Switch in `auth.py`:
-
-~~~python title="auth.py"
-auth = init(KerniaOptions(
-    ...,
+    plugins=[sso()],
     advanced={"sso": {"saml_validation": "strict"}},
 ))
-~~~
+```
+</Step>
 
-## Test and demo coverage
+<Step>
+### Add the client plugin
 
-Use `MockSAMLIdP` (strict-mode compatible) and `MockIdP` for OIDC. Tests
-cover provider CRUD, domain verification, OIDC callback, SAML metadata, SAML
-ACS, replay rejection, timestamp validation, IdP-initiated flows when
-enabled, and strict-mode signature rejection with a wrong cert.
+Add the `sso` client plugin:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { ssoClient } from "@better-auth/sso/client";
+
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [ssoClient()],
+});
+```
+</Step>
+</Steps>
+
+## Usage
+
+### Register a provider
+
+```ts
+// OIDC
+await authClient.sso.register({
+  providerId: "acme-oidc",
+  issuer: "https://login.acme.com",
+  domain: "acme.com",
+  oidcConfig: {
+    clientId: process.env.ACME_CLIENT_ID,
+    clientSecret: process.env.ACME_CLIENT_SECRET,
+    scopes: ["openid", "email", "profile"],
+  },
+});
+
+// SAML
+await authClient.sso.register({
+  providerId: "acme-saml",
+  issuer: "https://idp.acme.com",
+  domain: "acme.com",
+  samlConfig: {
+    entryPoint: "https://idp.acme.com/sso",
+    cert: process.env.ACME_SAML_CERT,
+    callbackUrl: "https://app.example.com/api/auth/sso/saml/acs/acme-saml",
+  },
+});
+```
+
+Protect provider registration behind your own admin gate — most OIDC endpoints
+auto-discover from the issuer's OpenID configuration.
+
+### Verify a domain
+
+```ts
+await authClient.sso.requestDomainVerification({ providerId: "acme-oidc" });
+await authClient.sso.verifyDomain({ providerId: "acme-oidc" });
+```
+
+Domain verification stops arbitrary tenants from claiming a domain they don't
+control.
+
+### Sign in with SSO
+
+```ts
+await authClient.signIn.sso({
+  domain: "acme.com",          // or providerId / organizationSlug
+  callbackURL: "/dashboard",
+});
+```
+
+Once a domain is verified, an email/password attempt for that domain is also
+redirected into the SSO flow automatically (controlled by `enforce_email_domain`).
+
+## Options
+
+Configure under `advanced["sso"]`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `saml_validation` | `"strict" \| "permissive"` | `"strict"` | SAML assertion validation mode (see below). |
+| `enforce_email_domain` | `bool` | `True` | Redirect `/sign-in/email` into SSO when the email's domain is verified. |
+| `is_admin` | `(user) -> bool` | role check | Decides who may manage providers. |
+| `disable_admin_check` | `bool` | `False` | Skip the admin gate on provider CRUD (testing only). |
+
+### SAML validation modes
+
+- `"strict"` (default) — runs `python3-saml`'s full XML-DSIG verifier against the
+  IdP's certificate. This is the production-correct setting and works
+  out-of-the-box against the bundled `MockSAMLIdP` test fixture (which
+  canonicalizes via `lxml` exclusive C14N, so its signature reconstructs
+  byte-for-byte).
+- `"permissive"` — verifies issuer, audience, `NotBefore`/`NotOnOrAfter`,
+  `InResponseTo`, `Status`, the Reference URI, and that the embedded
+  `X509Certificate` matches the provider's configured PEM, but does **not**
+  verify the XML-DSIG signature value. Use only for legacy IdPs whose
+  canonicalization isn't libxml2-compatible.
+
+## Schema
+
+The plugin adds two tables:
+
+<DatabaseTable
+  title="ssoProvider"
+  fields={[
+    { name: "id", type: "string", description: "Primary key." },
+    { name: "issuer", type: "string", description: "Unique IdP issuer URL." },
+    { name: "kind", type: "string", description: "\"oidc\" or \"saml\"." },
+    { name: "name", type: "string", description: "Display name.", isOptional: true },
+    { name: "domains", type: "text", description: "JSON list of email domains.", isOptional: true },
+    { name: "oidcConfig", type: "text", description: "JSON OIDC config.", isOptional: true },
+    { name: "samlConfig", type: "text", description: "JSON SAML config.", isOptional: true },
+    { name: "userInfoMapping", type: "text", description: "JSON attribute mapping.", isOptional: true },
+    { name: "organizationId", type: "string", description: "Org this provider provisions into.", isOptional: true },
+    { name: "userId", type: "string", description: "Owner of the provider record.", isOptional: true },
+    { name: "createdAt", type: "date", description: "Creation time." },
+    { name: "updatedAt", type: "date", description: "Last update time." },
+  ]}
+/>
+
+<DatabaseTable
+  title="ssoDomain"
+  fields={[
+    { name: "id", type: "string", description: "Primary key." },
+    { name: "domain", type: "string", description: "Unique email domain." },
+    { name: "ssoProviderId", type: "string", description: "References ssoProvider.id." },
+    { name: "verified", type: "boolean", description: "Whether the domain is verified." },
+    { name: "verificationToken", type: "string", description: "Token used to prove domain ownership." },
+    { name: "createdAt", type: "date", description: "Creation time." },
+  ]}
+/>
+
+<Callout>
+Keep `saml_validation` on `"strict"` in production — `"permissive"` skips the
+cryptographic signature check and should only be used for IdPs whose XML
+canonicalization is incompatible with libxml2.
+</Callout>

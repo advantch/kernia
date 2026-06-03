@@ -78,7 +78,3 @@ GRANT USAGE, CREATE ON SCHEMA auth TO app_user;
 - Keep session token, user email, provider account, and API key hash indexes healthy.
 - Use a migration pipeline instead of creating tables from application startup.
 - Use separate database roles for migration and runtime access where possible.
-
-## Test and demo coverage
-
-Run the FastAPI demo and adapter tests against PostgreSQL before treating a plugin as production-ready. Cover sign-up, sign-in, OAuth callback, session refresh, logout, API key usage, organization membership, Stripe webhooks, and admin config writes.

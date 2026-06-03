@@ -60,7 +60,3 @@ BeforeHook(match=is_admin_route, handler=admin_gate)
 ## Context
 
 `EndpointContext` contains the parsed body, query, request headers, cookies, auth context, optional session, response cookies, and shared plugin state. Treat `plugin_state` as per-auth-instance memory, not durable storage.
-
-## Testing
-
-Test hooks through mounted HTTP routes. Direct hook unit tests are useful for edge cases, but route tests prove the order: parse, session, before hooks, handler, after hooks, cookies, response.

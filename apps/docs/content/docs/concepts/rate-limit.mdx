@@ -62,7 +62,3 @@ A blocked request returns a typed auth error with a rate-limit status. Client UI
 ## Admin and security
 
 Admin routes, API key creation, SSO configuration, SCIM token rotation, and Stripe setup should have conservative limits. Rate limits should complement backend authorization, not replace it.
-
-## Testing
-
-Rate-limit tests should hit the public route repeatedly through the mounted framework app. That proves middleware order, path matching, identity extraction, and error serialization.

@@ -85,7 +85,3 @@ GET /api/admin/audit-events?event=auth_method.disabled&limit=50
 ## Retention
 
 Choose retention based on compliance needs. Authentication security events are usually kept longer than request logs. If events include personal data, document deletion behavior and export requirements.
-
-## Test and demo coverage
-
-Tests should prove that config writes, billing syncs, API key changes, SSO changes, SCIM token changes, and session revocations create audit events with redacted metadata. Browser tests should show audit entries after admin actions in the SaaS demo.

@@ -69,17 +69,6 @@ Every major feature page should cover:
 - Troubleshooting.
 - Test and demo coverage.
 
-## Testing
-
-Run the focused tests first, then the broader suite:
-
-```bash
-uv run pytest packages/ e2e/ -q
-cd apps/docs && pnpm docs:quality && pnpm typecheck && pnpm build
-```
-
-If a test cannot run locally because it needs a provider credential, add a mock provider test and document the live-test environment variables.
-
 ## Pull request checklist
 
 - The behavior is implemented, not only described.

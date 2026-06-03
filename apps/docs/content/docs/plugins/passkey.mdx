@@ -78,7 +78,3 @@ Adds a passkey credential table. Generate migrations after installing the standa
 - `rp_id` must match the effective domain. Localhost and production domains need separate settings.
 - `origin` must match the browser origin that calls WebAuthn.
 - Conditional UI requires browser support and frontend feature detection.
-
-## Test and demo coverage
-
-Use `SoftAuthenticator` for route tests. Cover registration start/finish, duplicate credentials, authentication, counter updates, list, delete, bad origin, and unavailable browser states.

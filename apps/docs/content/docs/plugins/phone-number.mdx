@@ -3,74 +3,129 @@ title: "Phone Number"
 description: "Add SMS OTP and phone-number sign-in flows."
 ---
 
-The phone-number plugin stores phone details on the user model, sends OTP codes through an application-provided SMS sender, verifies codes, and supports phone-based password reset.
+The phone-number plugin stores a phone number on the user, sends OTP codes
+through an SMS sender you provide, verifies them, and supports phone-based
+password reset.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `phone_number()` to your Kernia config and supply a `send_sms` callback. It
+receives the destination number and the message text to deliver via your SMS
+provider (Twilio, Vonage, SNS).
 
-~~~python
-from kernia.plugins.phone_number import phone_number
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.phone_number import phone_number
 
-from .db import adapter
+async def send_sms(phone: str, message: str) -> None:
+    await sms_client.messages.create(to=phone, body=message)
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        phone_number(),
-    ),
+    plugins=[phone_number()],
+    advanced={"phone-number": {"send_sms": send_sms}},
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/sign-in/phone-number">
-  Signs in with phone number and password.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `phoneNumber` client plugin:
 
-<APIMethod method="POST" path="/api/auth/phone-number/send-otp">
-  Sends an OTP to a phone number.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { phoneNumberClient } from "better-auth/client/plugins";
 
-<APIMethod method="POST" path="/api/auth/phone-number/verify">
-  Verifies a phone OTP.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [phoneNumberClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/phone-number/request-password-reset">
-  Sends a reset OTP for a phone-number account.
-</APIMethod>
+## Usage
 
-<APIMethod method="POST" path="/api/auth/phone-number/reset-password">
-  Consumes the reset OTP and updates the password.
-</APIMethod>
+### Verify a phone number with an OTP
 
-## Schema impact
+Send a code, then verify it. On a successful verify the number is marked
+`phoneNumberVerified` and a session is issued.
 
-Extends the user schema with phone-number fields through `phone_number_schema` and reuses verification data for OTPs.
+```ts
+await authClient.phoneNumber.sendOtp({
+  phoneNumber: "+15551234567",
+});
 
-## Behavior and options
+await authClient.phoneNumber.verify({
+  phoneNumber: "+15551234567",
+  code: "123456",
+});
+```
 
-- Configure `advanced["phone-number"]` with `send_sms`, `otp_length`, `expires_in`, and `disable_sign_up`.
-- Normalize phone numbers before storage and display.
-- Keep send and verify routes rate-limited.
+### Sign in with phone number and password
 
-## Test and demo coverage
+For accounts that already have a password, sign in directly with the phone
+number.
 
-Test send, verify, sign-in, reset, invalid OTP, expiry, missing sender, normalized phone matching, and frontend unavailable states when SMS is not configured.
+```ts
+await authClient.signIn.phoneNumber({
+  phoneNumber: "+15551234567",
+  password: "the-password",
+  rememberMe: true,
+});
+```
+
+### Reset a password over SMS
+
+```ts
+await authClient.phoneNumber.requestPasswordReset({
+  phoneNumber: "+15551234567",
+});
+
+await authClient.phoneNumber.resetPassword({
+  phoneNumber: "+15551234567",
+  otp: "123456",
+  newPassword: "new-password",
+});
+```
+
+## Options
+
+Configure under `advanced["phone-number"]`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `send_sms` | `async (phone, message) -> None` | — | **Required.** Sends the SMS containing the OTP. |
+| `otp_length` | `int` | `6` | Number of digits in the generated code. |
+| `expires_in` | `int` | `300` | Code lifetime in seconds. |
+| `disable_sign_up` | `bool` | `False` | Reject OTP sign-ins for numbers with no existing account. |
+
+## Schema
+
+The plugin extends the core `user` table:
+
+<DatabaseTable
+  fields={[
+    { name: "phoneNumber", type: "string", description: "The user's phone number (unique, nullable)." },
+    { name: "phoneNumberVerified", type: "boolean", description: "Whether the number has been verified via OTP. Defaults to false." },
+  ]}
+/>
+
+OTP codes themselves live on the core `verification` table — no extra migration
+beyond these two user columns.
+
+<Callout>
+Numbers are stored as supplied, so normalize to a canonical format (e.g. E.164)
+before passing them to the client to keep the `phoneNumber` uniqueness
+constraint meaningful.
+</Callout>

@@ -56,7 +56,3 @@ No database changes. Captcha state lives at the provider and in the request hook
 - Built-in providers include Turnstile, reCAPTCHA v2, reCAPTCHA v3, hCaptcha, and CaptchaFox.
 - Default protected paths are `/sign-in/email`, `/sign-up/email`, and `/forget-password`.
 - Pass `protected_endpoints` to gate additional plugin routes such as OTP or anonymous sign-in.
-
-## Test and demo coverage
-
-Use an injected `httpx` transport to test provider success, provider failure, missing tokens, protected endpoint blocking, and direct verify route behavior.

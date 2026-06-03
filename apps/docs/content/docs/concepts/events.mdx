@@ -49,7 +49,6 @@ before any request comes through.
 from kernia.events import MemberEvent, get_bus
 from kernia.types.context import AuthContext
 
-
 async def init(ctx: AuthContext) -> None:
     bus = get_bus(ctx)
 
@@ -89,24 +88,3 @@ async def handler(ctx):
 There is no schema enforcement on payloads — pass plain dicts or your own
 dataclasses. Keep them small and JSON-serializable so they survive a future
 move to an out-of-process bus.
-
-## Testing
-
-Unit tests can register a sink handler before triggering the action under
-test:
-
-~~~python
-from kernia.events import get_bus
-
-seen = []
-
-async def capture(payload):
-    seen.append(payload)
-
-get_bus(auth.context).on("organization.member.added", capture)
-
-# ...drive the route that should emit...
-
-assert len(seen) == 1
-assert seen[0].user_id == new_member_id
-~~~

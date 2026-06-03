@@ -93,7 +93,3 @@ The implementation should return provider message IDs and raise typed failures f
 - If provider credentials are invalid, the admin page should show a configuration error without exposing the secret.
 - If links point to the wrong host, set the public `base_url` to the mounted auth URL.
 - If messages go to spam, verify SPF, DKIM, DMARC, and provider domain ownership.
-
-## Test and demo coverage
-
-Unit tests should use a recording email client and assert the exact recipient, subject, action URL, and expiration. Admin tests should prove secret redaction on reads and write-only updates. The SaaS demo should show SMTP, Resend, and Postmark states as configured, invalid, or not configured.

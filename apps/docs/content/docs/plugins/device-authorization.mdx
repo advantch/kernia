@@ -1,76 +1,142 @@
 ---
 title: "Device Authorization"
-description: "Support OAuth device-code login for TVs, CLIs, and limited-input clients."
+description: "OAuth 2.0 device-code login (RFC 8628) for TVs, CLIs, and limited-input clients."
 ---
 
-The device authorization plugin implements the device-code pattern. A device asks for a code, the user approves or denies it on another screen, and the device polls until it receives a token or an error.
+The device authorization plugin implements the OAuth 2.0 Device Authorization
+Grant (RFC 8628). A device requests a pair of codes, shows the user a short
+`user_code` to enter on a second screen, and polls until the user approves or
+denies the request.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `device_authorization()` to your Kernia config. `verification_uri` is where
+you tell users to enter their code.
 
-~~~python
-from kernia.plugins.device_authorization import device_authorization
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
-import os
-
+```python title="auth.py"
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.device_authorization import device_authorization
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        device_authorization(verification_uri="https://app.example.com/device"),
-    ),
+    plugins=[
+        device_authorization(
+            expires_in="30m",
+            interval="5s",
+            verification_uri="https://app.example.com/device",
+        ),
+    ],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/device/code">
-  Issues a device code, user code, expiration, polling interval, and verification URI.
-</APIMethod>
+Add the `deviceAuthorization` client plugin:
 
-<APIMethod method="POST" path="/api/auth/device/token">
-  Lets the device poll for approval and receive the final token response.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
 
-<APIMethod method="GET" path="/api/auth/device">
-  Renders or returns the verification landing state for the user code flow.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [deviceAuthorizationClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/device/approve">
-  Approves a pending device code from an authenticated user session.
-</APIMethod>
+## Usage
 
-<APIMethod method="POST" path="/api/auth/device/deny">
-  Denies a pending device code.
-</APIMethod>
+### Request device and user codes (on the device)
 
-## Schema impact
+```ts
+const { data } = await authClient.device.code({
+  client_id: "my-tv-app",
+  scope: "openid profile",
+});
+// data: { device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval }
+```
 
-Uses verification-style persisted state for device codes and approvals. Generate migrations when the plugin contributes a model in your package version.
+Display `user_code` and `verification_uri` to the user.
 
-## Behavior and options
+### Poll for the token (on the device)
 
-- Configure code length, expiration, polling interval, and verification URI.
-- The polling route should return pending, slow-down, expired, denied, or approved states according to the stored device state.
-- Device clients must respect the returned interval.
+```ts
+const { data, error } = await authClient.device.token({
+  grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+  device_code: deviceCode,
+  client_id: "my-tv-app",
+});
+```
 
-## Test and demo coverage
+Poll at the returned `interval`. Until approval you get `AUTHORIZATION_PENDING`;
+back off on `POLLING_TOO_FREQUENTLY`.
 
-Test device code issue, invalid user code, approval, denial, polling before approval, polling after approval, expiration, and interval enforcement.
+### Look up a code (on the approval screen)
+
+```ts
+const res = await authClient.device({ query: { user_code: userCode } });
+```
+
+The user must be signed in. This claims the code for the current session so it
+can be approved or denied.
+
+### Approve or deny
+
+```ts
+await authClient.device.approve({ userCode });
+await authClient.device.deny({ userCode });
+```
+
+Once approved, the device's next poll returns a session.
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `expires_in` | `str \| int` | `"30m"` | Code lifetime. Time string (`"30m"`, `"1h"`) or milliseconds. |
+| `interval` | `str \| int` | `"5s"` | Minimum poll interval enforced server-side. |
+| `user_code_length` | `int` | `8` | Length of the human-entered code. |
+| `device_code_length` | `int` | `40` | Length of the device code. |
+| `verification_uri` | `str \| None` | `/device` | Absolute URL or relative path users visit to enter the code. |
+| `generate_device_code` | `() -> str` | `None` | Custom device-code generator. |
+| `generate_user_code` | `() -> str` | `None` | Custom user-code generator. |
+| `validate_client` | `(client_id) -> bool` | `None` | Gate `/device/code` and `/device/token` by client id. |
+| `on_device_auth_request` | `(client_id, scope) -> None` | `None` | Side effect run when a device requests codes. |
+
+## Schema
+
+The plugin adds a `deviceCode` table:
+
+<DatabaseTable
+  title="deviceCode"
+  fields={[
+    { name: "id", type: "string", description: "Primary key." },
+    { name: "deviceCode", type: "string", description: "Opaque code the device polls with." },
+    { name: "userCode", type: "string", description: "Short code the user enters." },
+    { name: "userId", type: "string", description: "Approving user, set after approval.", isOptional: true },
+    { name: "expiresAt", type: "date", description: "When the codes expire." },
+    { name: "status", type: "string", description: "pending | approved | denied." },
+    { name: "pollingInterval", type: "number", description: "Per-code poll interval.", isOptional: true },
+    { name: "clientId", type: "string", description: "Requesting client id.", isOptional: true },
+    { name: "scope", type: "string", description: "Requested scope.", isOptional: true },
+    { name: "lastPolledAt", type: "date", description: "Last poll time, used for rate limiting.", isOptional: true },
+    { name: "createdAt", type: "date", description: "Row creation time." },
+    { name: "updatedAt", type: "date", description: "Last update time." },
+  ]}
+/>
+
+<Callout>
+A code must be claimed by a signed-in session (via `authClient.device(...)`)
+before it can be approved or denied — approving a code you haven't looked up
+returns `DEVICE_CODE_NOT_CLAIMED`.
+</Callout>

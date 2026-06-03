@@ -54,7 +54,3 @@ Stripe setup belongs in admin config when the SaaS app needs a database-backed s
 ## Public UI config
 
 A login screen can call the public config endpoint to decide which buttons to render. It should still handle server-side disabled errors because admin state may change while the page is open.
-
-## Testing
-
-Tests should cover CRUD, redaction, disabled method failures, admin-only access, and public config reads through mounted HTTP routes.

@@ -16,6 +16,7 @@ JavaScript client, so your existing frontend just works.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Docs](https://img.shields.io/badge/docs-kernia-black.svg)](https://docs-advantch.vercel.app)
 
+[Live demo](https://kernia-demo-delta.vercel.app) ·
 [Documentation](https://docs-advantch.vercel.app) ·
 [Quickstart](#quickstart) ·
 [Plugins](#whats-included) ·

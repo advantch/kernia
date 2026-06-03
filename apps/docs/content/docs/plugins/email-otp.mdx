@@ -3,86 +3,149 @@ title: "Email OTP"
 description: "Send one-time email codes for sign-in, verification, reset, and email changes."
 ---
 
-Email OTP is for flows where the user types a short code into the current screen. Kernia stores the OTP in the verification model, calls your `send_otp` function, and consumes the code during verification.
+The email-OTP plugin emails the user a short numeric code that they type into the
+current screen. Kernia stores the code on the core `verification` table, calls
+your `send_otp` callback to deliver it, and consumes it atomically on verify — no
+links, no redirects.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `email_otp()` to your Kernia config and supply a `send_otp` callback. It
+receives the recipient email, the generated code, and the `purpose`
+(`"sign-in"`, `"email-verification"`, or `"forget-password"`) so you can tailor
+the message.
 
-~~~python
-from kernia.plugins.email_otp import email_otp
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.email_otp import email_otp
 
-from .db import adapter
+async def send_otp(email: str, otp: str, purpose: str) -> None:
+    subject = {
+        "sign-in": "Your sign-in code",
+        "email-verification": "Verify your email",
+        "forget-password": "Reset your password",
+    }.get(purpose, "Your code")
+    await email_client.send(
+        to=email,
+        subject=subject,
+        html=f"<p>Your code is <strong>{otp}</strong>. It expires in 5 minutes.</p>",
+    )
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        email_otp(),
-    ),
+    plugins=[email_otp()],
+    advanced={"email-otp": {"send_otp": send_otp}},
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/sign-in/email-otp">
-  Creates and sends an OTP for sign-in.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `emailOTP` client plugin:
 
-<APIMethod method="POST" path="/api/auth/email-otp/verify">
-  Verifies a sign-in OTP and creates a session.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { emailOTPClient } from "better-auth/client/plugins";
 
-<APIMethod method="POST" path="/api/auth/email-otp/send-verification-otp">
-  Sends an OTP for email verification.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [emailOTPClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/email-otp/verify-email">
-  Consumes a verification OTP for the active user.
-</APIMethod>
+## Usage
 
-<APIMethod method="POST" path="/api/auth/forget-password/email-otp">
-  Sends a password-reset OTP.
-</APIMethod>
+### Sign in with an OTP
 
-<APIMethod method="POST" path="/api/auth/email-otp/reset-password">
-  Consumes the reset OTP and writes the new password hash.
-</APIMethod>
+First request a code, then exchange it for a session.
 
-<APIMethod method="POST" path="/api/auth/email-otp/request-email-change">
-  Sends an OTP to confirm an email change.
-</APIMethod>
+```ts
+// Send the code (purpose: "sign-in")
+await authClient.emailOtp.sendVerificationOtp({
+  email: "user@example.com",
+  type: "sign-in",
+});
 
-<APIMethod method="POST" path="/api/auth/email-otp/change-email">
-  Consumes the email-change OTP and updates the email.
-</APIMethod>
+// User types the code; verify it to create the session
+await authClient.signIn.emailOtp({
+  email: "user@example.com",
+  otp: "123456",
+});
+```
 
-## Schema impact
+### Verify an email address
 
-Reuses the core `verification` table. No plugin table is added.
+```ts
+await authClient.emailOtp.sendVerificationOtp({
+  email: "user@example.com",
+  type: "email-verification",
+});
 
-## Behavior and options
+await authClient.emailOtp.verifyEmail({
+  email: "user@example.com",
+  otp: "123456",
+});
+```
 
-- Configure `advanced["email-otp"]` with `send_otp`, `otp_length`, `expires_in`, and `disable_sign_up`.
-- Rate limits are intentionally tight on send and verify routes.
-- Treat OTP values as secrets and avoid logging them outside test fixtures.
+### Reset a password with an OTP
 
-## Test and demo coverage
+```ts
+await authClient.emailOtp.requestPasswordReset({
+  email: "user@example.com",
+});
 
-Use `MockSMTP` or a fake send function. Cover send, verify, expiry, invalid code, too many attempts, reset password, email change, and disabled sign-up.
+await authClient.emailOtp.resetPassword({
+  email: "user@example.com",
+  otp: "123456",
+  password: "new-password",
+});
+```
+
+### Check a code without consuming it
+
+`checkVerificationOtp` validates a code for a given purpose without spending it —
+useful for a two-screen reset flow where you confirm the code before collecting a
+new password.
+
+```ts
+await authClient.emailOtp.checkVerificationOtp({
+  email: "user@example.com",
+  type: "forget-password",
+  otp: "123456",
+});
+```
+
+## Options
+
+Configure under `advanced["email-otp"]`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `send_otp` | `async (email, otp, purpose) -> None` | — | **Required.** Delivers the code. `purpose` is `"sign-in"`, `"email-verification"`, or `"forget-password"`. |
+| `otp_length` | `int` | `6` | Number of digits in the generated code. |
+| `expires_in` | `int` | `300` | Code lifetime in seconds. |
+| `allowed_attempts` | `int` | `3` | Failed verifications allowed before the code is invalidated. |
+| `disable_sign_up` | `bool` | `False` | Reject sign-in codes for emails with no existing account. |
+
+## Schema
+
+The plugin reuses the core `verification` table, keyed by
+`email-otp:<purpose>:<email>`. No migration beyond the core schema is required.
+
+<Callout>
+Codes are single-use and consumed atomically on verify. After
+`allowed_attempts` failed tries the code is discarded, so the user must request
+a fresh one.
+</Callout>

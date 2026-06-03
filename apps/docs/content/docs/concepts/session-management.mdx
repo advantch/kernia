@@ -68,7 +68,3 @@ The multi-session plugin keeps a signed session list cookie so users can switch 
 ## Secondary storage
 
 Stateless or Redis-backed session strategies can use `secondary_storage`, but the default database-backed session is the reference path for the current Python packages.
-
-## Testing
-
-Session tests should prove that sign-in sets cookies, `/get-session` reads them, revocation removes server state, and a revoked cookie no longer authenticates.

@@ -64,7 +64,3 @@ async def ensure_auth_indexes(db):
 ## Transactions
 
 Use a MongoDB deployment that supports transactions if your application relies on multi-document atomicity. OAuth callbacks, user creation, linked accounts, and organization membership writes are easier to reason about with transaction support.
-
-## Test and demo coverage
-
-Adapter tests should run against a MongoDB service, not an in-memory replacement. Cover sign-up, sign-in, OAuth callback, session revoke, verification token consumption, API keys, organization membership, and any plugin collections you enable.

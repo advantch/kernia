@@ -1,68 +1,93 @@
 ---
 title: "Multi Session"
-description: "Keep and switch between multiple sessions in one browser."
+description: "Keep several accounts signed in at once and switch between them."
 ---
 
-The multi-session plugin maintains a signed session-list cookie containing the browser sessions available for switching. The active session remains the normal session token cookie.
+The multi-session plugin lets one browser hold multiple signed-in accounts at
+the same time. It keeps a signed `session_list` cookie of every session, while
+the normal session-token cookie points at the active one. Users can list,
+switch, and revoke the stored sessions without re-authenticating.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `multi_session()` to your Kernia config. `maximum` caps how many accounts
+the browser keeps.
 
-~~~python
-from kernia.plugins.multi_session import multi_session
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
-import os
-
+```python title="auth.py"
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.multi_session import multi_session
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        multi_session(maximum=5),
-    ),
+    plugins=[multi_session(maximum=5)],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="GET" path="/api/auth/multi-session/list">
-  Returns the sessions available in the signed session-list cookie.
-</APIMethod>
+Add the `multiSession` client plugin:
 
-<APIMethod method="POST" path="/api/auth/multi-session/switch">
-  Switches the active session token to another stored session.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { multiSessionClient } from "better-auth/client/plugins";
 
-<APIMethod method="POST" path="/api/auth/multi-session/revoke">
-  Revokes a stored session and updates the session-list cookie.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [multiSessionClient()],
+});
+```
+</Step>
+</Steps>
 
-## Schema impact
+## Usage
 
-No tables are added. It reads and writes existing `session` rows and the signed session-list cookie.
+### List device sessions
 
-## Behavior and options
+```ts
+const { data } = await authClient.multiSession.listDeviceSessions();
+```
 
-- The `maximum` option limits how many sessions stay in the browser list.
-- Older entries are evicted when the list exceeds the limit.
-- This is browser convenience, not a replacement for server-side session revocation.
+Returns the sessions stored in this browser — render them as an account
+switcher.
 
-## Test and demo coverage
+### Switch the active session
 
-Test list creation after sign-in, switching users, max-list eviction, revocation, invalid token rejection, and cookie updates after sign-out.
+```ts
+await authClient.multiSession.setActive({ sessionToken: "session-token" });
+```
+
+Repoints the session-token cookie at another stored session.
+
+### Revoke a session
+
+```ts
+await authClient.multiSession.revoke({ sessionToken: "session-token" });
+```
+
+Removes that session from the device and updates the `session_list` cookie.
+
+<Callout type="info">
+A new session is added automatically every time a user signs in while already
+signed in — no extra client call is required.
+</Callout>
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maximum` | `int` | `5` | Maximum concurrent sessions kept in the `session_list` cookie. Oldest entries are evicted past this limit. |
+
+## Schema
+
+No tables are added. The plugin reads existing `session` rows and maintains the
+signed `better-auth.session_list` cookie. This is a browser convenience layer —
+server-side revocation still applies.

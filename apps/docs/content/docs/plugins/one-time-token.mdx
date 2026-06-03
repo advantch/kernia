@@ -3,62 +3,93 @@ title: "One Time Token"
 description: "Generate and consume short-lived one-time tokens."
 ---
 
-The one-time-token plugin gives applications a simple authenticated token exchange for flows that need a short-lived, single-use value.
+The one-time-token plugin mints a single-use, short-lived token bound to the
+current session. Exchange it on another surface — a desktop app, a CLI, a
+server-rendered page — to hand that session over without re-authenticating.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `one_time_token()` to your Kernia config. Defaults are usually fine; tune
+`expires_in` (minutes) or `store_token` if needed.
 
-~~~python
-from kernia.plugins.one_time_token import one_time_token
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.one_time_token import one_time_token
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        one_time_token(),
-    ),
+    plugins=[one_time_token()],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/generate-one-time-token">
-  Creates a one-time token for the active user.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `oneTimeToken` client plugin:
 
-<APIMethod method="POST" path="/api/auth/verify-one-time-token">
-  Consumes a token and returns the verification result.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oneTimeTokenClient } from "better-auth/client/plugins";
 
-## Schema impact
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [oneTimeTokenClient()],
+});
+```
+</Step>
+</Steps>
 
-Reuses the core `verification` table.
+## Usage
 
-## Behavior and options
+### Generate a token
 
-- Tokens are single-use and expire.
-- Keep payloads narrow and do not use this as a long-lived API key replacement.
-- Pair with rate limiting when exposed to browsers.
+Call from an authenticated session. Kernia binds the token to that session and
+returns it.
 
-## Test and demo coverage
+```ts
+const { data } = await authClient.oneTimeToken.generate();
+// data.token -> single-use string, valid for 3 minutes by default
+```
 
-Test generation, successful consumption, replay rejection, expiry, unauthenticated generation, and invalid token errors.
+### Verify a token
+
+Pass the token from wherever it landed. On success Kernia returns the session and
+user, and (unless `disable_set_session_cookie` is set) sets the session cookie so
+the caller is signed in.
+
+```ts
+await authClient.oneTimeToken.verify({ token: "the-token" });
+```
+
+## Options
+
+Pass these as keyword arguments to `one_time_token(...)`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `expires_in` | `int` | `3` | Token lifetime in **minutes**. |
+| `store_token` | `"plain" \| "hashed" \| object` | `"plain"` | How the token is stored. Use `"hashed"` or a custom hasher to avoid storing plaintext. |
+| `generate_token` | `async (session, ctx) -> str` | — | Custom token generator. |
+| `disable_client_request` | `bool` | `False` | Block the client-facing `/one-time-token/generate` endpoint. |
+| `disable_set_session_cookie` | `bool` | `False` | On verify, return the session without setting the cookie. |
+| `set_ott_header_on_new_session` | `bool` | `False` | Emit a `set-ott` response header carrying a fresh token whenever a new session is created. |
+
+## Schema
+
+The plugin reuses the core `verification` table, keyed by
+`one-time-token:<token>`. No migration beyond the core schema is required.
+
+<Callout>
+Tokens are single-use and consumed atomically on verify, even if expired. Keep
+`expires_in` short — these are handoff tokens, not API keys.
+</Callout>

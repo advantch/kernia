@@ -82,7 +82,3 @@ advanced={
 ## Admin-configured clients
 
 The admin config plugin stores SMTP, Resend, and Postmark configuration in the database. Secret fields are write-only and redacted on read. This is for SaaS admin UX; production systems should still keep provider credentials restricted at the infrastructure layer.
-
-## Testing
-
-Use `kernia_test_utils.MockSMTP` for deterministic tests. Assert that the public HTTP route triggered the email and that the token can be consumed exactly once.

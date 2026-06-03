@@ -61,7 +61,3 @@ No MCP-specific table. It reads OAuth clients and uses JWT signing keys.
 - `MCPOptions.issuer` should match the public auth base URL.
 - Tokens include `sub`, `iss`, `aud`, `client_id`, `scope`, `jti`, and optional `resource`.
 - Downstream MCP servers should verify the token and expected resource with `introspect_mcp_token`.
-
-## Test and demo coverage
-
-Test unknown clients, unauthenticated requests, scope validation, resource audience, JWKS verification, discovery metadata, and downstream resource mismatch failures.

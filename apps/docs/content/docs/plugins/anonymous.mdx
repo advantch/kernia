@@ -3,58 +3,115 @@ title: "Anonymous"
 description: "Create temporary users and upgrade them to real accounts later."
 ---
 
-Anonymous auth creates a user row without credentials so first-time visitors can save state before registering. When the visitor later signs in or signs up with a real method, the plugin can merge application data and delete the anonymous user.
+The anonymous plugin issues an account-less session so first-time visitors can
+save state before registering. When the visitor later signs in or signs up with
+a real method, Kernia runs your `on_link` callback to migrate their data, then
+deletes the anonymous user.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `anonymous()` to your Kernia config. Supply an `on_link` callback to move
+domain data (carts, drafts, preferences) from the anonymous user onto the real
+user during conversion.
 
-~~~python
-from kernia.plugins.anonymous import anonymous
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.anonymous import anonymous
 
-from .db import adapter
+async def on_link(anonymous_user, new_user, ctx) -> None:
+    await db.carts.reassign(
+        from_user=anonymous_user["id"],
+        to_user=new_user["id"],
+    )
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        anonymous(),
-    ),
+    plugins=[anonymous(on_link=on_link)],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/sign-in/anonymous">
-  Creates an anonymous user, creates a session, and marks the user as anonymous.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `anonymous` client plugin:
 
-## Schema impact
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { anonymousClient } from "better-auth/client/plugins";
 
-Extends `user` with `isAnonymous`. No separate anonymous table is required.
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [anonymousClient()],
+});
+```
+</Step>
+</Steps>
 
-## Behavior and options
+## Usage
 
-- The optional `on_link` callback receives the anonymous user, the new user, and the endpoint context.
-- Upgrade hooks run around email, username, magic-link, and passkey sign-in paths.
-- Applications should move product data before the anonymous user is deleted.
+### Start an anonymous session
 
-## Test and demo coverage
+```ts
+await authClient.signIn.anonymous();
+```
 
-Test anonymous sign-in, a second anonymous sign-in rejection, upgrade through email sign-up, `on_link` data migration, old session cleanup, and frontend display of anonymous state.
+Kernia creates a user row flagged `isAnonymous`, opens a session, and sets the
+cookie. From here the visitor is authenticated like any other user.
+
+### Convert to a real account
+
+There is no separate "link" call. When the anonymous user signs in or signs up
+with a real method, the plugin's hooks fire automatically:
+
+```ts
+// Same browser session, now graduating to a real account
+await authClient.signUp.email({
+  email: "user@example.com",
+  name: "Ada",
+  password: "the-password",
+});
+```
+
+On success Kernia calls `on_link(anonymous_user, new_user, ctx)`, then (unless
+`disable_delete_anonymous_user` is set) deletes the anonymous user and its
+sessions. Conversion hooks cover the email, username, magic-link, and passkey
+sign-in paths.
+
+## Options
+
+Pass these as keyword arguments to `anonymous(...)`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `on_link` | `async (anonymous_user, new_user, ctx) -> None` | — | Migrates data before the anonymous user is deleted. |
+| `email_domain_name` | `str` | generated | Domain used for the placeholder email assigned to anonymous users. |
+| `generate_name` | `(ctx) -> str` | — | Custom display-name generator for anonymous users. |
+| `generate_random_email` | `() -> str` | — | Custom placeholder-email generator. |
+| `disable_delete_anonymous_user` | `bool` | `False` | Keep the anonymous row after conversion and disable `/delete-anonymous-user`. |
+
+## Schema
+
+The plugin extends the core `user` table with a single flag:
+
+<DatabaseTable
+  fields={[
+    { name: "isAnonymous", type: "boolean", description: "Marks an account-less user. Defaults to false." },
+  ]}
+/>
+
+No separate anonymous table is required.
+
+<Callout>
+Always do your data migration inside `on_link` — once conversion succeeds the
+anonymous user and its sessions are deleted, and the original `id` is gone.
+</Callout>

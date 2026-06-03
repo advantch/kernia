@@ -1,58 +1,99 @@
 ---
 title: "Last Login Method"
-description: "Remember the last successful sign-in method for login UI hints."
+description: "Remember and highlight the auth method a user signed in with last."
 ---
 
-The last-login-method plugin writes a non-HTTP-only cookie after successful sign-in so the frontend can highlight the method a user last used. It only writes after a session cookie is emitted.
+On every successful sign-in, Kernia writes a browser-readable cookie naming the
+method that was used (`email`, `google`, `github`, `passkey`, …). Your sign-in
+page reads it on the next visit to surface a "Last used" badge on the right
+button. It can optionally persist the method on the `user` row.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `last_login_method()` to your Kernia config.
 
-~~~python
-from kernia.plugins.last_login_method import last_login_method
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
-import os
-
+```python title="auth.py"
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.last_login_method import last_login_method
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        last_login_method(),
-    ),
+    plugins=[last_login_method()],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
+Add the `lastLoginMethod` client plugin so the helpers can read the cookie:
 
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { lastLoginMethodClient } from "better-auth/client/plugins";
 
-## Schema impact
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [lastLoginMethodClient()],
+});
+```
+</Step>
+</Steps>
 
-No database changes. The plugin writes a browser-readable cookie named `better-auth.last_login_method` by default.
+## Usage
 
-## Behavior and options
+### Read the last used method
 
-- The default cookie max age is 30 days.
-- The plugin recognizes email, social callback, SIWE, passkey, and magic-link paths.
-- Because the cookie is only a UI hint, do not use it for authorization.
+```ts
+const method = authClient.getLastUsedLoginMethod();   // "google" | "email" | null
+```
 
-## Test and demo coverage
+Use the result to render a "Last used" badge on your sign-in page.
 
-Test that failed sign-ins do not write the cookie, successful email/social sign-ins write the expected method, custom cookie names work, and logout does not affect authorization.
+### Check a specific method
+
+```ts
+if (authClient.isLastUsedLoginMethod("google")) {
+  // highlight the "Continue with Google" button
+}
+```
+
+### Clear the stored method
+
+```ts
+authClient.clearLastUsedLoginMethod();
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `cookie_name` | `str` | `"better-auth.last_used_login_method"` | Cookie that stores the method. Must match the client `cookieName`. |
+| `max_age` | `int` | `2592000` (30 days) | Cookie lifetime in seconds. |
+| `store_in_database` | `bool` | `False` | Also persist the method on `user.lastLoginMethod`. |
+| `custom_resolve_method` | `(ctx) -> str \| None` | `None` | Override how the method is derived from the request. Returning `None` falls back to the default resolver. |
+
+The default resolver recognises email sign-in/up, OAuth callbacks, SIWE,
+passkey, and magic-link paths.
+
+## Schema
+
+By default the plugin only sets a cookie — no migration required. When
+`store_in_database=True`, it extends the `user` table:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `lastLoginMethod` | `string` (nullable) | The method used on the most recent successful sign-in. |
+
+<Callout>
+The cookie is intentionally **not** HTTP-only so your front-end can read it to
+highlight a button. It carries only a method name, never a token — never use it
+for authorization.
+</Callout>

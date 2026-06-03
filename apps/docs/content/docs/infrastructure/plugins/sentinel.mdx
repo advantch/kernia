@@ -102,7 +102,3 @@ Most teams add:
 | `rate_limit_bucket` | Shared counters when Redis is not used. |
 | `trusted_device` | Device identity for unknown-device notifications. |
 | `session_risk` | Risk score and reason attached to active sessions. |
-
-## Test and demo coverage
-
-Tests should exercise the public auth route and prove that repeated failures trigger challenge or block behavior before the route creates a session. The SaaS demo should show security state in the admin area, including recent blocks, captcha failures, high-risk sessions, and revocation actions.

@@ -1,30 +1,33 @@
 ---
 title: "OIDC Provider"
-description: "Expose OpenID Connect issuer behavior through the OAuth provider package."
+description: "Turn Kernia into an OpenID Connect / OAuth 2.1 identity provider for your own apps."
 ---
 
-The OIDC provider entry point is an alias over the standalone OAuth provider package. Use it when the docs or codebase prefer OIDC naming, but install and configure the same issuer package.
+The OIDC provider turns your Kernia instance into an identity provider: other
+applications register as clients, your users authorize them, and Kernia issues
+ID, access, and refresh tokens. It implements OAuth 2.1 with PKCE, refresh-token
+rotation, RFC 7662 introspection, RFC 7009 revocation, and OIDC discovery.
+
+<Callout>
+The in-tree `kernia.plugins.oidc_provider` import is a deprecated shim. New code
+should install and import the standalone `kernia_oauth_provider` package shown
+below — both expose the same OIDC issuer.
+</Callout>
 
 ## Installation
 
-~~~bash
-uv add kernia-oauth-provider
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Install `kernia-oauth-provider` and pass `oauth_provider()` your issuer URL.
 
-~~~python
-from kernia.plugins.oidc_provider import OAuthProviderOptions, oidc_provider
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
 
 from kernia import KerniaOptions
 from kernia.auth import init
-from kernia.plugins.oidc_provider import OAuthProviderOptions, oidc_provider
+from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
 
 from .db import adapter
 
@@ -32,41 +35,95 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        oidc_provider(OAuthProviderOptions(issuer=os.environ["KERNIA_BASE_URL"])),
-    ),
+    plugins=[
+        oauth_provider(OAuthProviderOptions(
+            issuer=os.environ["KERNIA_BASE_URL"],
+            supported_scopes=("openid", "profile", "email", "offline_access"),
+        )),
+    ],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="GET" path="/api/auth/.well-known/openid-configuration">
-  Publishes issuer, authorization endpoint, token endpoint, JWKS URI, scopes, and response types.
-</APIMethod>
+Relying-party apps that talk to your issuer use the OIDC client plugin.
 
-<APIMethod method="GET" path="/api/auth/oauth2/authorize">
-  Starts the OIDC authorization-code flow.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oidcClient } from "better-auth/client/plugins";
 
-<APIMethod method="POST" path="/api/auth/oauth2/token">
-  Returns access, refresh, and ID tokens when allowed.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [oidcClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="GET" path="/api/auth/oauth2/userinfo">
-  Returns userinfo claims for a valid access token.
-</APIMethod>
+## Usage
 
-## Schema impact
+### Discover the issuer
 
-Uses the OAuth provider schema. Generate the same migrations as `/docs/plugins/oauth-provider`.
+Clients read the OIDC metadata to find the authorization, token, JWKS, and
+userinfo endpoints:
 
-## Behavior and options
+```
+GET /api/auth/.well-known/openid-configuration
+```
 
-- Prefer the OAuth provider page for complete option details.
-- OIDC clients must validate issuer, audience, expiration, nonce, and signature.
-- Keep dynamic client registration disabled unless your product explicitly needs it.
+The authorization-code flow then runs against `/api/auth/oauth2/authorize` and
+`/api/auth/oauth2/token`, with claims available at `/api/auth/oauth2/userinfo`.
 
-## Test and demo coverage
+### Handle consent
 
-Run the OAuth provider test suite plus OIDC-specific ID token, nonce, discovery, JWKS, and userinfo checks.
+When a client requests scopes a user hasn't granted, Kernia shows your consent
+page. Submit the user's decision with:
+
+```ts
+await authClient.oauth2.consent({ accept: true });
+```
+
+### Register a client dynamically
+
+With `enable_dynamic_registration=True`, apps can self-register (RFC 7591):
+
+```ts
+await authClient.oauth2.register({
+  client_name: "My App",
+  redirect_uris: ["https://app.example.com/callback"],
+  grant_types: ["authorization_code"],
+  scope: "openid profile email",
+});
+```
+
+## Options
+
+Set on `OAuthProviderOptions`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `issuer` | `str` | — | **Required.** Issuer URL advertised in tokens and metadata. |
+| `supported_scopes` | `tuple[str, ...]` | `("openid", "profile", "email", "offline_access")` | Scopes the issuer offers. |
+| `access_token_ttl` | `int` | `3600` | Access-token lifetime in seconds. |
+| `refresh_token_ttl` | `int` | `2592000` | Refresh-token lifetime in seconds. |
+| `code_ttl` | `int` | `600` | Authorization-code lifetime in seconds. |
+| `enable_dynamic_registration` | `bool` | `False` | Allow RFC 7591 self-registration of clients. |
+| `require_pkce_for_public` | `bool` | `True` | Require PKCE for public clients. |
+| `jwt_access_token` | `bool` | `True` | Issue self-contained JWT access tokens vs. opaque reference tokens. |
+| `store_client_secret` | `str` | `"hashed"` | How client secrets are kept at rest: `"hashed"` or `"plain"`. |
+| `store_tokens` | `str` | `"hashed"` | How refresh tokens are kept at rest: `"hashed"` or `"plain"`. |
+| `pairwise_secret` | `str` | `None` | Secret (min 32 chars) for pairwise `sub` identifiers. |
+| `grant_types` | `tuple[str, ...]` | `authorization_code, client_credentials, refresh_token` | Grant types the token endpoint accepts. |
+
+## Schema
+
+Adds the OAuth provider tables (registered clients, authorization codes, access
+and refresh tokens, consent grants). Generate migrations from the
+`kernia_oauth_provider` package after installing it.
+
+<Callout>
+Keep `enable_dynamic_registration` off unless your product genuinely needs open
+client registration — it lets any caller create a client.
+</Callout>

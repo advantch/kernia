@@ -3,62 +3,114 @@ title: "Username"
 description: "Add username sign-up and username/password sign-in."
 ---
 
-The username plugin stores a normalized username for uniqueness and an optional display username for preserving user-preferred casing. It shares the password storage path with email/password accounts.
+The username plugin lets users sign up and sign in with a username instead of an
+email. Kernia stores a normalized (lower-cased) `username` for uniqueness plus an
+optional `displayUsername` that preserves the casing the user typed.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `username()` to your Kernia config. Length bounds and validators are
+optional constructor arguments.
 
-~~~python
-from kernia.plugins.username import username
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins.username import username
-
-from .db import adapter
 
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
-        username(),
-    ),
+    plugins=[username(min_username_length=3, max_username_length=30)],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="POST" path="/api/auth/sign-up/username">
-  Creates a user with username, display username, email, and password.
-</APIMethod>
+Kernia speaks the Better Auth wire protocol, so the official JavaScript client
+works unchanged. Add the `username` client plugin:
 
-<APIMethod method="POST" path="/api/auth/sign-in/username">
-  Signs in with username and password and sets the session cookie.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { usernameClient } from "better-auth/client/plugins";
 
-## Schema impact
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [usernameClient()],
+});
+```
+</Step>
+</Steps>
 
-Extends `user` with `username` and `displayUsername` fields. Generate a migration before enabling it in a persistent database.
+## Usage
 
-## Behavior and options
+### Sign up with a username
 
-- Usernames are normalized for uniqueness.
-- Display usernames preserve casing for UI.
-- Combine with admin config if username should be toggled at runtime.
+Sign-up attaches the username to a standard account. Pass `username` (and
+optionally `displayUsername`) alongside the usual fields.
 
-## Test and demo coverage
+```ts
+await authClient.signUp.email({
+  email: "user@example.com",
+  name: "Ada",
+  password: "the-password",
+  username: "ada",
+  displayUsername: "Ada",
+});
+```
 
-Test normalization, duplicate usernames, invalid length, invalid characters, sign-in, wrong password, migration fields, and login-screen availability.
+### Sign in with a username
+
+```ts
+await authClient.signIn.username({
+  username: "ada",
+  password: "the-password",
+});
+```
+
+### Check whether a username is available
+
+Useful for inline validation on a sign-up form before submitting.
+
+```ts
+const { data } = await authClient.isUsernameAvailable({ username: "ada" });
+// data.available -> boolean
+```
+
+## Options
+
+Pass these as keyword arguments to `username(...)`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `min_username_length` | `int` | `3` | Minimum allowed username length. |
+| `max_username_length` | `int` | `30` | Maximum allowed username length. |
+| `username_validator` | `(str) -> bool` | — | Custom check; return `False` to reject a username. |
+| `display_username_validator` | `(str) -> bool` | — | Custom check for the display username. |
+| `username_normalization` | `(str) -> str \| bool` | lowercase | Normalizer applied before storage; pass `False` to keep casing. |
+| `display_username_normalization` | `(str) -> str \| bool` | — | Normalizer for the display username. |
+
+## Schema
+
+The plugin extends the core `user` table:
+
+<DatabaseTable
+  fields={[
+    { name: "username", type: "string", description: "Normalized, unique username used for lookup (nullable)." },
+    { name: "displayUsername", type: "string", description: "Original-casing username for display (nullable)." },
+  ]}
+/>
+
+Generate a migration before enabling it against a persistent database.
+
+<Callout>
+Lookups use the normalized `username`, so `Ada` and `ada` collide. Keep
+`displayUsername` for presentation and never query against it for uniqueness.
+</Callout>

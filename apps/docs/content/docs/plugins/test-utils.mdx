@@ -41,8 +41,6 @@ auth = init(KerniaOptions(
 
 ## API routes
 
-
-
 ## Schema impact
 
 No application schema changes. Some fixtures create temporary adapter state or containers during tests.
@@ -54,7 +52,3 @@ No application schema changes. Some fixtures create temporary adapter state or c
 - `MockSMTP` and `MockSMS` capture outbound messages.
 - `MockStripe` verifies webhooks and mocks Stripe REST calls.
 - `SoftAuthenticator` drives passkey tests.
-
-## Test and demo coverage
-
-Use these fixtures to exercise public HTTP routes. The goal is to prove cookies, redirects, database writes, provider callbacks, and webhooks, not only isolated helper functions.

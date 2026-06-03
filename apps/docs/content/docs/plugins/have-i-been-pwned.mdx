@@ -41,8 +41,6 @@ auth = init(KerniaOptions(
 
 ## API routes
 
-
-
 ## Schema impact
 
 No schema changes. Optional cache entries can be stored in `secondary_storage`.
@@ -52,7 +50,3 @@ No schema changes. Optional cache entries can be stored in `secondary_storage`.
 - Default gated paths are `/sign-up/email` and `/reset-password`.
 - `count_threshold` allows policy tuning.
 - Range API responses are cached for six hours when secondary storage is configured.
-
-## Test and demo coverage
-
-Use an injected HTTP transport to test safe passwords, compromised passwords, provider failure, cache hits, custom paths, disabled mode, and the `PASSWORD_COMPROMISED` error payload.

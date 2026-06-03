@@ -121,7 +121,3 @@ async def overview(session=Depends(require_session)):
 - If dashboard numbers differ from production, check whether background workers and webhooks write to the same database.
 - If admin routes are visible to normal users, fix backend authorization first. Hiding navigation is not access control.
 - If activity writes create too much load, throttle updates by session and move aggregation to a worker.
-
-## Test and demo coverage
-
-Tests should assert that admin-only endpoints reject normal users, dashboard counters are database-backed, secret fields are redacted, and audit events are written for admin actions. The demo should show real unavailable states for optional SSO, SCIM, and Stripe setup instead of rendering fake success.

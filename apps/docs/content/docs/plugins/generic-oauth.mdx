@@ -1,25 +1,24 @@
 ---
 title: "Generic OAuth"
-description: "Register custom OAuth or OIDC providers without writing a provider module."
+description: "Add any OAuth 2.0 or OIDC provider by URL, without writing a provider module."
 ---
 
-Generic OAuth is for providers that are not exposed as first-class constructors. You define authorization, token, userinfo, scopes, and profile mapping, then Kernia registers provider-specific sign-in and callback routes.
+Generic OAuth registers sign-in and callback routes for any provider you can
+describe with URLs and scopes. Point it at the provider's endpoints — or a single
+discovery URL — and Kernia handles the redirect, code exchange, and profile
+mapping.
 
 ## Installation
 
-~~~bash
-uv add kernia
-~~~
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Import path
+Pass `generic_oauth()` a tuple of `GenericOAuthConfig` entries. Each needs a
+unique `provider_id`, credentials, and either a `discovery_url` or the explicit
+`authorization_url` + `token_url` pair.
 
-~~~python
-from kernia.plugins.generic_oauth import GenericOAuthConfig, generic_oauth
-~~~
-
-## Server configuration
-
-~~~python title="auth.py"
+```python title="auth.py"
 import os
 
 from kernia import KerniaOptions
@@ -32,54 +31,89 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    base_path="/api/auth",
-    plugins=(
+    plugins=[
         generic_oauth((
             GenericOAuthConfig(
                 provider_id="acme",
                 client_id=os.environ["ACME_CLIENT_ID"],
                 client_secret=os.environ["ACME_CLIENT_SECRET"],
-                authorization_endpoint="https://idp.example.com/oauth/authorize",
-                token_endpoint="https://idp.example.com/oauth/token",
-                userinfo_endpoint="https://idp.example.com/oauth/userinfo",
+                discovery_url="https://idp.example.com/.well-known/openid-configuration",
+                scopes=("openid", "email", "profile"),
+                pkce=True,
             ),
         )),
-    ),
+    ],
 ))
-~~~
+```
+</Step>
 
-## API routes
+<Step>
+### Add the client plugin
 
-<APIMethod method="GET" path="/api/auth/oauth2/sign-in/:provider_id">
-  Starts a provider-specific OAuth redirect flow.
-</APIMethod>
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { genericOAuthClient } from "better-auth/client/plugins";
 
-<APIMethod method="GET" path="/api/auth/oauth2/callback/:provider_id">
-  Handles standard query callback responses.
-</APIMethod>
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [genericOAuthClient()],
+});
+```
+</Step>
+</Steps>
 
-<APIMethod method="POST" path="/api/auth/oauth2/callback/:provider_id">
-  Handles form-post callback responses.
-</APIMethod>
+## Usage
 
-<APIMethod method="POST" path="/api/auth/sign-in/oauth2">
-  Starts OAuth from a JSON API call.
-</APIMethod>
+### Sign in with a provider
 
-<APIMethod method="POST" path="/api/auth/oauth2/link">
-  Links a provider account to the active user.
-</APIMethod>
+Call `signIn.oauth2` with the `providerId` you configured. The browser is
+redirected to the provider and back through `/api/auth/oauth2/callback/:providerId`,
+where Kernia exchanges the code and sets the session cookie.
 
-## Schema impact
+```ts
+await authClient.signIn.oauth2({
+  providerId: "acme",
+  callbackURL: "/dashboard",
+});
+```
 
-No new tables. Generic OAuth writes linked accounts to the core `account` table.
+### Link a provider to the current user
 
-## Behavior and options
+For an already signed-in user, link an additional provider account:
 
-- Provider IDs must be unique.
-- Use issuer validation for OIDC providers that return an issuer.
-- Profile mapping must provide a stable external id and an email strategy appropriate for the provider.
+```ts
+await authClient.oauth2.link({
+  providerId: "acme",
+  callbackURL: "/settings/connections",
+});
+```
 
-## Test and demo coverage
+## Options
 
-Test duplicate provider IDs at startup, redirect URL creation, callback state validation, userinfo normalization, account linking, form-post callback, and unknown provider errors.
+Set per provider on `GenericOAuthConfig`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `provider_id` | `str` | — | **Required.** Unique id used in client calls and route paths. |
+| `client_id` | `str` | — | **Required.** OAuth client id. |
+| `client_secret` | `str` | — | **Required.** OAuth client secret. |
+| `discovery_url` | `str` | `None` | OIDC discovery doc. Required unless `authorization_url` + `token_url` are set. |
+| `authorization_url` | `str` | `None` | Authorization endpoint (if not using discovery). |
+| `token_url` | `str` | `None` | Token endpoint (if not using discovery). |
+| `user_info_url` | `str` | `None` | Userinfo endpoint. |
+| `scopes` | `tuple[str, ...]` | `()` | Scopes to request. |
+| `pkce` | `bool` | `False` | Enable PKCE for the authorization-code flow. |
+| `issuer` | `str` | `None` | Expected issuer for OIDC validation. |
+| `require_issuer_validation` | `bool` | `False` | Reject tokens whose issuer does not match. |
+| `authentication` | `str` | `"post"` | Client auth at the token endpoint: `"post"` or `"basic"`. |
+| `map_profile_to_user` | `(profile) -> dict` | `None` | Map provider claims onto the Kernia user. |
+| `disable_sign_up` | `bool` | `False` | Reject sign-ins for users with no existing account. |
+| `override_user_info` | `bool` | `False` | Refresh stored user fields from the provider on each sign-in. |
+
+Several providers ship as ready-made config factories — `auth0`, `keycloak`,
+`okta`, `microsoft_entra_id`, `hubspot`, `patreon`, `gumroad`, `slack_generic`,
+and `line_generic` — importable from `kernia.plugins.generic_oauth`.
+
+## Schema
+
+No new tables. Linked provider accounts are written to the core `account` table.

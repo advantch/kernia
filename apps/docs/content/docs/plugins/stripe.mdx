@@ -3,24 +3,24 @@ title: "Stripe"
 description: "Stripe checkout, subscriptions, catalog sync, entitlements, and usage tracking."
 ---
 
-The Stripe plugin connects Kernia users or organizations to Stripe customers and subscriptions. It keeps the compatible checkout, portal, cancel, resume, list, and webhook surfaces, and adds a Kernia billing layer for imported products and prices, feature entitlements, usage events, `check`, and `track`.
+The Stripe plugin links Kernia users or organizations to Stripe customers and
+subscriptions. It exposes the Better Auth-compatible checkout, billing-portal,
+cancel, restore, and list surfaces, plus a Kernia billing layer for imported
+products, feature entitlements, usage events, `check`, and `track`.
 
 ## Installation
 
-```bash
-uv add kernia-stripe
-```
+<Steps>
+<Step>
+### Add the plugin to your server
 
-## Server configuration
+Install the standalone package, then pass `stripe()` to your Kernia config with
+a `StripeClient` and your plans.
 
 ```python title="auth.py"
-import os
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia_stripe import StripeClient, StripeOptions, StripePlan, stripe
-
-from .db import adapter
 
 stripe_client = StripeClient(api_key=os.environ["STRIPE_SECRET_KEY"])
 
@@ -28,7 +28,7 @@ auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
     base_url=os.environ["KERNIA_BASE_URL"],
-    plugins=(
+    plugins=[
         stripe(StripeOptions(
             stripe_client=stripe_client,
             webhook_secret=os.environ["STRIPE_WEBHOOK_SECRET"],
@@ -47,104 +47,162 @@ auth = init(KerniaOptions(
                 ),
             },
         )),
-    ),
+    ],
 ))
 ```
 
-<Callout type="info" title="Import-first catalog">
-  Kernia imports Stripe products and prices into local billing tables first. You can then map imported prices to internal plans, features, entitlements, and UI copy without pretending Stripe is the only billing source of truth.
+Point your Stripe webhook at `https://api.example.com/api/auth/stripe/webhook`
+and enable at least: `checkout.session.completed`,
+`customer.subscription.{created,updated,deleted}`, `invoice.paid`, and
+`invoice.payment_failed`.
+</Step>
+
+<Step>
+### Add the client plugin
+
+Add the `stripe` client plugin:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { stripeClient } from "@better-auth/stripe/client";
+
+export const authClient = createAuthClient({
+  baseURL: "/api/auth",
+  plugins: [stripeClient({ subscription: true })],
+});
+```
+</Step>
+</Steps>
+
+## Usage
+
+### Start checkout / upgrade a plan
+
+```ts
+await authClient.subscription.upgrade({
+  plan: "pro",
+  successUrl: "/billing/success",
+  cancelUrl: "/billing",
+  annual: true,
+  referenceId: "org_123",   // required when subscription_for="organization"
+  seats: 5,                 // seat-based plans
+});
+```
+
+Redirects to Stripe Checkout and persists the resulting subscription locally.
+
+### List subscriptions
+
+```ts
+const { data } = await authClient.subscription.list({
+  query: { referenceId: "org_123" },
+});
+```
+
+### Cancel and restore
+
+```ts
+await authClient.subscription.cancel({ subscriptionId: "sub_123", returnUrl: "/billing" });
+await authClient.subscription.restore({ subscriptionId: "sub_123" });
+```
+
+### Open the billing portal
+
+```ts
+await authClient.subscription.billingPortal({ returnUrl: "/billing" });
+```
+
+### Check and track entitlements
+
+The Kernia billing layer adds metered/quota features on top of subscriptions,
+served at `/api/auth/billing/*`:
+
+```ts
+// Is the caller allowed one more "projects" unit?
+await authClient.$fetch("/billing/check", {
+  method: "POST",
+  body: { feature: "projects", referenceId: "org_123", required: 1 },
+});
+
+// Record usage and decrement remaining balance.
+await authClient.$fetch("/billing/track", {
+  method: "POST",
+  body: { feature: "projects", referenceId: "org_123", quantity: 1, properties: { project_id: "prj_123" } },
+});
+```
+
+`billing/check` returns allowance, included quantity, used quantity, remaining
+balance, and overage state. `billing/customer`, `billing/portal`, and
+`billing/usage` round out the layer.
+
+### Import the Stripe catalog
+
+```ts
+await authClient.$fetch("/stripe/catalog/sync", { method: "POST" });
+```
+
+Imports Stripe products into `billingProduct` and prices into `billingPrice`,
+then writes a `billingSyncState` row. Read them back at `/stripe/products` and
+`/stripe/prices`.
+
+<Callout type="info">
+Kernia imports Stripe products and prices into local billing tables first, so you
+can map imported prices to internal plans, features, and entitlements without
+treating Stripe as the only source of truth.
 </Callout>
 
-## Checkout and subscription routes
+## Options
 
-<APIMethod method="POST" path="/api/auth/stripe/checkout-session">
-  Requires a session. Body: `{ "plan": "pro", "successUrl": "https://app.example.com/billing/success", "cancelUrl": "https://app.example.com/billing", "referenceId": "org_123", "seats": 5 }`. Returns `{ "url", "id" }`.
-</APIMethod>
+`StripeOptions`:
 
-<APIMethod method="POST" path="/api/auth/stripe/billing-portal">
-  Requires a session. Body: `{ "returnUrl": "https://app.example.com/billing", "referenceId": "org_123" }`. Returns `{ "url" }`.
-</APIMethod>
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `stripe_client` | `StripeClient` | — | **Required.** Configured Stripe client. |
+| `webhook_secret` | `str` | — | **Required.** Stripe webhook signing secret. |
+| `plans` | `Mapping[str, StripePlan]` | `{}` | Named plans referenced by checkout. |
+| `subscription_for` | `"user" \| "organization"` | `"user"` | Whether subscriptions attach to users or organizations. |
+| `create_customer_on_sign_up` | `bool` | `True` | Create a Stripe customer when a user signs up. |
+| `require_email_verification` | `bool` | `False` | Block checkout until the email is verified. |
+| `authorize_reference` | `callable` | `None` | Authorize a `referenceId` for organization subscriptions. |
+| `on_event` / `on_subscription_*` | `callable` | `None` | Lifecycle hooks for events and subscription transitions. |
 
-<APIMethod method="POST" path="/api/auth/stripe/cancel-subscription">
-  Requires a session. Body: `{ "subscriptionId": "sub_123", "cancelAtPeriodEnd": true }`.
-</APIMethod>
+`StripePlan` highlights:
 
-<APIMethod method="POST" path="/api/auth/stripe/resume-subscription">
-  Requires a session. Body: `{ "subscriptionId": "sub_123" }`.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/stripe/list-subscriptions">
-  Requires a session. Optional query: `referenceId=org_123`. Returns local subscription rows.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/stripe/webhook">
-  Verifies the `Stripe-Signature` header, persists subscription lifecycle changes, updates status on invoice events, and calls `on_event` when configured.
-</APIMethod>
-
-## Catalog sync
-
-<APIMethod method="POST" path="/api/auth/stripe/catalog/sync">
-  Requires a session. Imports Stripe products into `billingProduct`, prices into `billingPrice`, and writes a `billingSyncState` row for the `stripe` source.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/stripe/products">
-  Requires a session. Returns `{ "products": [...] }` from the local `billingProduct` table.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/stripe/prices">
-  Requires a session. Returns `{ "prices": [...] }` from the local `billingPrice` table.
-</APIMethod>
-
-## Billing and entitlements
-
-<APIMethod method="POST" path="/api/auth/billing/check">
-  Requires a session. Body: `{ "feature": "projects", "referenceId": "org_123", "required": 1 }`. Returns allowance, included quantity, used quantity, remaining balance, and overage state.
-</APIMethod>
-
-<APIMethod method="POST" path="/api/auth/billing/track">
-  Requires a session. Body: `{ "feature": "projects", "referenceId": "org_123", "quantity": 1, "properties": { "project_id": "prj_123" } }`. Creates a usage event and updates entitlement usage.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/billing/customer">
-  Requires a session. Ensures a Stripe customer exists for the active user and mirrors it into `billingCustomer`.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/billing/portal">
-  Requires a session. Query: `returnUrl=https://app.example.com/billing`. Returns a Stripe Billing Portal URL.
-</APIMethod>
-
-<APIMethod method="GET" path="/api/auth/billing/usage">
-  Requires a session. Optional query: `referenceId=org_123`. Returns usage events for the billing reference.
-</APIMethod>
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `str` | Plan key. |
+| `price_id` | `str` | Stripe price for the base subscription. |
+| `annual_price_id` | `str` | Price used when `annual: true`. |
+| `seats` | `bool` | Seat-based plan; quantity tracks membership in org mode. |
+| `seat_price_id` | `str` | Per-seat price. |
+| `metered` | `bool` | Bill by reported usage (omits `quantity` on the line item). |
+| `proration_behavior` | `str` | `create_prorations` / `always_invoice` / `none` on upgrade. |
 
 ## Feature types
 
 | Type | Model behavior |
-|---|---|
-| Boolean | Represented by an entitlement with `unlimited=True` or an included grant. |
+| --- | --- |
+| Boolean | Entitlement with `unlimited=True` or an included grant. |
 | Metered consumable | `billingUsageEvent` rows increase `billingEntitlement.used`. |
 | Quantity | `included` grants a non-consumable allowance. |
-| Seat-style | `StripePlan(seats=True)` lets organization seat-sync update Stripe quantity when wired with the organization plugin. |
-| Overage | `overageAllowed=True` lets `billing/check` allow usage beyond included balance. |
+| Seat-style | `StripePlan(seats=True)` lets organization seat-sync update Stripe quantity. |
+| Overage | `overageAllowed=True` lets `billing/check` permit usage past the included balance. |
 
 ## Organization seat-sync
 
-When the plugin runs with `subscription_for="organization"` and any plan declares
-`seats=True`, it subscribes to the in-process [event bus](/docs/concepts/events)
-on init. Every time the organization plugin emits
-`organization.member.added` or `organization.member.removed`, the Stripe
+When the plugin runs with `subscription_for="organization"` and any plan
+declares `seats=True`, it subscribes to the in-process
+[event bus](/docs/concepts/events) on init. Every time the organization plugin
+emits `organization.member.added` or `organization.member.removed`, the Stripe
 subscription quantity is updated to match the new member count and the local
-`subscription.seats` field is rewritten. No cron, no polling — the change lands
-in the same request that mutated membership.
+`subscription.seats` field is rewritten — in the same request that mutated
+membership. No cron, no polling.
 
-If no plan declares `seats=True`, or the plugin is in user-billing mode, the
-listener is not registered and there is zero per-request overhead.
-
-~~~python title="auth.py" hl_lines="6-13"
+```python title="auth.py" hl_lines="5-12"
 auth = init(KerniaOptions(
     database=adapter,
     secret=os.environ["KERNIA_SECRET"],
-    plugins=(
+    plugins=[
         organization(),
         stripe(StripeOptions(
             stripe_client=stripe_client,
@@ -154,38 +212,23 @@ auth = init(KerniaOptions(
                 "team": StripePlan(name="team", price_id="price_team", seats=True),
             },
         )),
-    ),
+    ],
 ))
-~~~
-
-## Schema changes
-
-The plugin contributes these tables: `subscription`, `billingProduct`, `billingPrice`, `billingFeature`, `billingPlan`, `billingPlanFeature`, `billingEntitlement`, `billingUsageEvent`, `billingCustomer`, and `billingSyncState`. It also extends `user` with `stripeCustomerId`.
-
-## Webhooks
-
-Configure Stripe to send events to:
-
-```text
-https://api.example.com/api/auth/stripe/webhook
 ```
 
-At minimum, enable:
+If no plan declares `seats=True`, or the plugin is in user-billing mode, the
+listener is not registered and there is zero per-request overhead.
 
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.paid`
-- `invoice.payment_failed`
+## Schema
 
-## Current limits
+The plugin contributes `subscription`, `billingProduct`, `billingPrice`,
+`billingFeature`, `billingPlan`, `billingPlanFeature`, `billingEntitlement`,
+`billingUsageEvent`, `billingCustomer`, and `billingSyncState`. It extends
+`user` (and `organization` in org mode) with `stripeCustomerId`.
 
-The billing layer has import, check, track, portal, customer, and usage primitives. Plan-feature mapping and entitlement grants should be wired by your admin UI or backend job before a production SaaS claims Autumn-style billing parity end to end.
-
-## Troubleshooting
-
-- `PLAN_NOT_FOUND`: the checkout `plan` is not present in `StripeOptions.plans`.
-- `REFERENCE_REQUIRED`: `subscription_for="organization"` requires `referenceId`.
-- `INVALID_SIGNATURE`: the webhook secret does not match the Stripe endpoint secret or the payload was modified before verification.
-- Usage is tracked but still denied: create or update a `billingEntitlement` row for that `referenceId` and `featureKey` before calling `track`.
+<Callout>
+`PLAN_NOT_FOUND` means the checkout `plan` is not in `StripeOptions.plans`;
+`REFERENCE_REQUIRED` means an organization subscription was requested without a
+`referenceId`; `INVALID_SIGNATURE` means the webhook secret does not match the
+Stripe endpoint.
+</Callout>
