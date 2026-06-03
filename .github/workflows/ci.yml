@@ -5,33 +5,82 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  lint:
+    name: Lint + type check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
+          enable-cache: true
+      - run: uv python install 3.12
+      - name: Install
+        run: |
+          uv sync
+          uv pip install ruff mypy
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format --check
+        run: uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy packages/core/src
 
-      - name: Install Python
-        run: uv python install 3.11
+  layout-audit:
+    name: Layout audit (parity gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - run: uv python install 3.12
+      - name: Audit Kernia layout against pinned Better Auth source
+        run: uv run python scripts/audit_layout.py
 
+  test:
+    name: Tests (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+      - run: uv python install ${{ matrix.python }}
       - name: Install workspace + dev deps
         run: |
           uv sync
-          uv pip install -e packages/core -e packages/memory_adapter
-          uv pip install pytest pytest-asyncio anyio ruff mypy
-
-      - name: Layout audit (no shortcuts gate)
-        run: uv run python scripts/audit_layout.py
-
-      - name: Lint
-        run: uv run ruff check .
-
-      - name: Type check
-        run: uv run mypy packages/core/src
-
-      - name: Tests
-        run: uv run pytest e2e/ -v
+          uv pip install -e packages/core \
+            -e packages/memory_adapter \
+            -e packages/sqlalchemy_adapter \
+            -e packages/mongo_adapter \
+            -e packages/redis_storage \
+            -e packages/api_key \
+            -e packages/passkey \
+            -e packages/sso \
+            -e packages/oauth_provider \
+            -e packages/scim \
+            -e packages/stripe \
+            -e packages/mcp \
+            -e packages/fastapi_integration \
+            -e packages/starlette_integration \
+            -e packages/django_integration \
+            -e packages/cli \
+            -e packages/test_utils
+          uv pip install pytest pytest-asyncio anyio
+      - name: e2e suite (memory + sqlite; docker suites skip)
+        run: uv run pytest e2e/ -q
+      - name: Adapter conformance
+        run: uv run pytest e2e/adapter/ -q
+      - name: Package unit tests
+        run: uv run pytest packages/*/tests -q

@@ -1,0 +1,93 @@
+name: Publish Python packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only, skip upload"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build sdists + wheels
+    runs-on: ubuntu-latest
+    outputs:
+      dists: ${{ steps.collect.outputs.dists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Build every workspace package
+        run: |
+          set -euo pipefail
+          for pkg in \
+            kernia \
+            kernia-cli \
+            kernia-test-utils \
+            kernia-memory-adapter \
+            kernia-sqlalchemy \
+            kernia-mongo \
+            kernia-redis-storage \
+            kernia-api-key \
+            kernia-passkey \
+            kernia-sso \
+            kernia-oauth-provider \
+            kernia-scim \
+            kernia-stripe \
+            kernia-mcp \
+            kernia-fastapi \
+            kernia-starlette \
+            kernia-django \
+          ; do
+            echo "::group::build $pkg"
+            uv build --package "$pkg" --out-dir dist/
+            echo "::endgroup::"
+          done
+
+      - id: collect
+        run: |
+          echo "dists=$(ls dist | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          ls -la dist/
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+          retention-days: 14
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: ${{ github.event_name == 'release' || inputs.dry_run == false }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kernia/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+
+      - name: Publish to PyPI (trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true

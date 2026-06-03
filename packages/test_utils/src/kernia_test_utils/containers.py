@@ -15,8 +15,22 @@ from collections.abc import Iterator
 import pytest
 
 
+def _testcontainers_installed() -> bool:
+    """True if the optional `testcontainers` package is importable."""
+    import importlib.util
+
+    return importlib.util.find_spec("testcontainers") is not None
+
+
 def docker_available() -> bool:
-    """Best-effort check for a reachable Docker daemon."""
+    """Best-effort check that container-backed tests can actually run.
+
+    Requires BOTH a reachable Docker daemon AND the `testcontainers` package.
+    If either is missing, the gated suites skip cleanly instead of erroring —
+    a Docker daemon with no `testcontainers` install is a common local setup.
+    """
+    if not _testcontainers_installed():
+        return False
     if shutil.which("docker") is None:
         return False
     try:

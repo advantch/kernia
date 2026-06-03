@@ -1,0 +1,79 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, Monday 06:00 UTC — catch newly-disclosed CVEs in deps.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Resolve + export the full dependency set
+        run: |
+          uv sync --all-extras || uv sync
+          uv pip freeze > requirements-frozen.txt
+
+      - name: Audit dependencies for known CVEs
+        run: |
+          uvx pip-audit -r requirements-frozen.txt --strict --progress-spinner off
+
+  bandit:
+    name: Static analysis (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Run bandit on first-party source
+        run: |
+          # Skip B101 (assert) — pytest + internal invariants use asserts heavily.
+          # Skip tests/ — fixtures legitimately use weak crypto / hardcoded secrets.
+          uvx bandit -r packages/*/src -ll --skip B101 -x '**/tests/**'
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  dependency-review:
+    name: Dependency review (PRs only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
