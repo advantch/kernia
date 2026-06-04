@@ -1,9 +1,13 @@
 ./api/_wheels/kernia-0.0.0-py3-none-any.whl
 ./api/_wheels/kernia_memory_adapter-0.0.0-py3-none-any.whl
+./api/_wheels/kernia_sqlalchemy-0.0.0-py3-none-any.whl
 ./api/_wheels/kernia_fastapi-0.0.0-py3-none-any.whl
 ./api/_wheels/kernia_api_key-0.0.0-py3-none-any.whl
 ./api/_wheels/kernia_stripe-0.0.0-py3-none-any.whl
 ./api/_wheels/kernia_test_utils-0.0.0-py3-none-any.whl
+sqlalchemy>=2.0
+asyncpg>=0.29
+greenlet>=3.0
 fastapi>=0.110
 pydantic>=2.10
 argon2-cffi>=23

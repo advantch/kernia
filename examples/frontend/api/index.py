@@ -1,23 +1,27 @@
 """Vercel Python serverless entry for the Kernia demo backend.
 
 Vercel detects the module-level `app` (an ASGI FastAPI app) and serves it. All
-`/api/*` requests are routed here by `examples/vercel.json`; the FastAPI app
-mounts Kernia at `/api/auth/*` and adds a few demo helper routes.
+`/api/*` requests are routed here by `vercel.json`; the FastAPI app mounts
+Kernia at `/api/auth/*` and adds a few demo helper routes.
 
-This demo uses the in-memory adapter, so data resets when the serverless
-instance goes cold. That's fine for a click-through demo — do not deploy this
-configuration for real use.
+Storage: if `DATABASE_URL` is set (the Prisma Postgres provisioned for this
+project), Kernia runs on the SQLAlchemy adapter against that Postgres and data
+persists. Otherwise it falls back to the in-memory adapter (local dev only).
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
+import re
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from kernia import KerniaOptions
 from kernia.auth import init
+from kernia.db.migrations import resolve_full_schema
+from kernia.db.schema import CORE_MODELS
 from kernia.events import get_bus
 from kernia.plugins import email_and_password
 from kernia.plugins.admin import admin
@@ -37,6 +41,54 @@ try:
     from kernia_test_utils import MockStripe
 except Exception:  # pragma: no cover
     MockStripe = None  # type: ignore[assignment]
+
+
+def _postgres_adapter(plugins: list) -> object:
+    """Build a SQLAlchemy adapter against DATABASE_URL and materialize the full
+    schema (core tables + every plugin's tables/extensions). Returns the adapter.
+    """
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
+
+    raw = os.environ["DATABASE_URL"]
+    # postgres://...?sslmode=require  ->  postgresql+asyncpg://...  (+ ssl via connect_args)
+    url = re.sub(r"^postgres(ql)?://", "postgresql+asyncpg://", raw)
+    url = re.sub(r"[?&]sslmode=\w+", "", url)
+
+    models = resolve_full_schema(CORE_MODELS, plugins)
+    metadata = build_metadata(models)
+    # NullPool: serverless functions can't keep a pool warm and asyncpg
+    # connections are loop-bound — open one per request, in that request's loop.
+    engine = create_async_engine(
+        url, poolclass=NullPool, connect_args={"ssl": True}, future=True
+    )
+    adapter = SQLAlchemyAdapter(engine=engine, metadata=metadata, models=models)
+
+    async def _create_tables() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(metadata.create_all)  # idempotent (checkfirst)
+
+    # Run in a dedicated thread so `asyncio.run` works regardless of whether the
+    # importing thread already has a running event loop (Vercel cold start vs.
+    # in-process reload). The thread has no loop of its own.
+    import threading
+
+    error: list[BaseException] = []
+
+    def _runner() -> None:
+        try:
+            asyncio.run(_create_tables())
+        except BaseException as exc:  # noqa: BLE001
+            error.append(exc)
+
+    t = threading.Thread(target=_runner)
+    t.start()
+    t.join()
+    if error:
+        raise error[0]
+    return adapter
 
 
 def build_app() -> FastAPI:
@@ -63,41 +115,47 @@ def build_app() -> FastAPI:
         transport=mock.mock_transport() if mock is not None else None,
     )
 
+    plugins = [
+        admin_config(AdminConfigOptions(allow_any_authenticated=True)),
+        email_and_password(),
+        magic_link(),
+        email_otp(),
+        organization(),
+        admin(),
+        api_key(),
+        stripe(
+            StripeOptions(
+                stripe_client=stripe_client,
+                webhook_secret="whsec_demo",
+                subscription_for="organization",
+                plans={
+                    "starter": StripePlan(name="starter", price_id="price_starter"),
+                    "team": StripePlan(
+                        name="team",
+                        price_id="price_team_base",
+                        seats=True,
+                        seat_price_id="price_team_seat",
+                    ),
+                },
+            )
+        ),
+        open_api(),
+    ]
+
+    # Real Postgres when DATABASE_URL is present (persistent); else in-memory.
+    if os.environ.get("DATABASE_URL"):
+        database = _postgres_adapter(plugins)
+    else:
+        database = memory_adapter()
+
     auth = init(
         KerniaOptions(
-            database=memory_adapter(),
+            database=database,
             secret=secret,
             base_url=base_url,
             base_path="/api/auth",
             trusted_origins=[base_url],
-            plugins=[
-                admin_config(AdminConfigOptions(allow_any_authenticated=True)),
-                email_and_password(),
-                magic_link(),
-                email_otp(),
-                organization(),
-                admin(),
-                api_key(),
-                stripe(
-                    StripeOptions(
-                        stripe_client=stripe_client,
-                        webhook_secret="whsec_demo",
-                        subscription_for="organization",
-                        plans={
-                            "starter": StripePlan(
-                                name="starter", price_id="price_starter"
-                            ),
-                            "team": StripePlan(
-                                name="team",
-                                price_id="price_team_base",
-                                seats=True,
-                                seat_price_id="price_team_seat",
-                            ),
-                        },
-                    )
-                ),
-                open_api(),
-            ],
+            plugins=plugins,
             advanced={
                 "magic-link": {"send_magic_link": _log_magic_link},
                 "email-otp": {"send_otp": _log_otp},

@@ -21,7 +21,9 @@ examples/
         └── wire-check.mjs  # headless protocol check driven by the JS client
 ```
 
-The backend wires the Stripe plugin with `subscription_for="organization"`
+The deployed demo at https://kernia-demo-delta.vercel.app runs on a real
+Prisma Postgres database (provisioned via the Vercel marketplace), so sign-ups
+persist. The backend wires the Stripe plugin with `subscription_for="organization"`
 and a `team` plan flagged `seats=True`, so the in-process event bus carries
 `organization.member.{added,removed}` payloads to the Stripe seat-sync hook
 on every membership mutation. The frontend Events tab polls
