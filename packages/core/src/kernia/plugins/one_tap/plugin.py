@@ -15,9 +15,9 @@ a backwards-compatible alias.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -70,7 +70,9 @@ def _to_bool(v: Any) -> bool:
     return bool(v)
 
 
-async def _verify_token(opts: OneTapOptions, ctx: EndpointContext, id_token: str) -> Mapping[str, Any]:
+async def _verify_token(
+    opts: OneTapOptions, ctx: EndpointContext, id_token: str
+) -> Mapping[str, Any]:
     audience = opts.client_id
     if audience is None:
         google = ctx.auth.options.social_providers.get("google")
@@ -85,7 +87,7 @@ async def _verify_token(opts: OneTapOptions, ctx: EndpointContext, id_token: str
             return await verify_id_token(
                 id_token=id_token,
                 jwks_url=opts.jwks_url,
-                audience=audience,
+                audience=cast("str", audience),
                 issuer=iss,
                 http_client=http_client,
             )
@@ -94,7 +96,9 @@ async def _verify_token(opts: OneTapOptions, ctx: EndpointContext, id_token: str
     raise APIError(400, "BAD_REQUEST", message=f"invalid id token: {last_error}")
 
 
-def _make_callback(opts: OneTapOptions):
+def _make_callback(
+    opts: OneTapOptions,
+) -> Callable[[EndpointContext], Awaitable[dict[str, object]]]:
     async def _callback(ctx: EndpointContext) -> dict[str, object]:
         body: OneTapCallbackBody = ctx.body
         claims = await _verify_token(opts, ctx, body.id_token)
@@ -249,4 +253,4 @@ def one_tap(options: OneTapOptions | None = None) -> KerniaPlugin:
     return _OneTapPlugin(opts=opts, endpoints=endpoints)  # type: ignore[return-value]
 
 
-__all__ = ["one_tap", "OneTapOptions"]
+__all__ = ["OneTapOptions", "one_tap"]

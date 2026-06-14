@@ -204,9 +204,7 @@ async def test_get_session_accepts_disable_refresh_query() -> None:
     )
     assert r.status == 200, r.json()
 
-    r = await driver.request(
-        "GET", "/get-session", query="disableRefresh=true"
-    )
+    r = await driver.request("GET", "/get-session", query="disableRefresh=true")
     assert r.status == 200, r.json()
     assert r.json() is not None
     assert r.json()["newData"] == {"message": "Hello, World!"}
@@ -221,9 +219,7 @@ async def test_list_device_sessions_custom_shape() -> None:
             plugins=[
                 email_and_password(),
                 multi_session(maximum=5),
-                custom_session(
-                    _transform, should_mutate_list_device_sessions=True
-                ),
+                custom_session(_transform, should_mutate_list_device_sessions=True),
             ],
         )
     )
@@ -269,9 +265,7 @@ def _max_age(cookie_str: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-async def _cookie_cache_driver(
-    *, expires_in: int = 86400, cache_max_age: int = 300
-) -> ASGIDriver:
+async def _cookie_cache_driver(*, expires_in: int = 86400, cache_max_age: int = 300) -> ASGIDriver:
     auth = init(
         KerniaOptions(
             database=memory_adapter(),
@@ -331,14 +325,10 @@ async def test_get_session_does_not_double_encode_session_token() -> None:
 async def test_get_session_preserves_individual_cookie_max_age() -> None:
     """Upstream: 'should preserve individual cookie Max-Age when cookieCache on'."""
     expires_in, cache_max_age = 86400, 300
-    driver = await _cookie_cache_driver(
-        expires_in=expires_in, cache_max_age=cache_max_age
-    )
+    driver = await _cookie_cache_driver(expires_in=expires_in, cache_max_age=cache_max_age)
     r = await driver.request("GET", "/get-session")
     set_cookies = _set_cookie_headers(r)
-    token_cookie = next(
-        c for c in set_cookies if "better-auth.session_token" in c
-    )
+    token_cookie = next(c for c in set_cookies if "better-auth.session_token" in c)
     data_cookie = next(c for c in set_cookies if "better-auth.session_data" in c)
     token_max_age = _max_age(token_cookie)
     data_max_age = _max_age(data_cookie)

@@ -65,7 +65,8 @@ async def exchange_code(
             headers={"accept": "application/json"},
         )
         r.raise_for_status()
-        return r.json()
+        payload: dict[str, Any] = r.json()
+        return payload
     finally:
         if own_client:
             await client.aclose()
@@ -86,7 +87,8 @@ async def fetch_userinfo(
             headers={"authorization": f"Bearer {access_token}", "accept": "application/json"},
         )
         r.raise_for_status()
-        return r.json()
+        payload: dict[str, Any] = r.json()
+        return payload
     finally:
         if own_client:
             await client.aclose()
@@ -139,7 +141,7 @@ async def verify_id_token(
         e_b64=key["e"],
     )
 
-    claims = json.loads(_b64decode(payload_b64))
+    claims: dict[str, Any] = json.loads(_b64decode(payload_b64))
     _verify_claims(claims, audience=audience, issuer=issuer, now=now or int(time.time()))
     return claims
 
@@ -183,13 +185,29 @@ def _verify_rs256(*, signing_input: bytes, signature: bytes, n_b64: str, e_b64: 
     # Expected PKCS#1 v1.5 envelope: 0x00 || 0x01 || PS || 0x00 || T
     # T = DER(DigestInfo) || H(M)
     digest = hashlib.sha256(signing_input).digest()
-    sha256_der = bytes([
-        0x30, 0x31,
-        0x30, 0x0D,
-        0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
-        0x05, 0x00,
-        0x04, 0x20,
-    ])
+    sha256_der = bytes(
+        [
+            0x30,
+            0x31,
+            0x30,
+            0x0D,
+            0x06,
+            0x09,
+            0x60,
+            0x86,
+            0x48,
+            0x01,
+            0x65,
+            0x03,
+            0x04,
+            0x02,
+            0x01,
+            0x05,
+            0x00,
+            0x04,
+            0x20,
+        ]
+    )
     t = sha256_der + digest
     ps_len = k - 3 - len(t)
     if ps_len < 8:

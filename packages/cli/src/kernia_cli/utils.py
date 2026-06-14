@@ -10,7 +10,6 @@ from types import ModuleType
 from typing import Any
 
 import click
-
 from kernia.auth import Kernia
 from kernia.db.migrations.codegen import resolve_full_schema
 from kernia.db.schema import CORE_MODELS

@@ -52,9 +52,7 @@ class MockSAMLIdP:
 
     def __post_init__(self) -> None:
         self._key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        subject = issuer = x509.Name(
-            [x509.NameAttribute(NameOID.COMMON_NAME, "mock-saml-idp")]
-        )
+        subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "mock-saml-idp")])
         self._cert = (
             x509.CertificateBuilder()
             .subject_name(subject)
@@ -90,8 +88,8 @@ class MockSAMLIdP:
             '<md:KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">'
             f"<ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data>"
             "</ds:KeyInfo></md:KeyDescriptor>"
-            '<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>'
-            '<md:SingleSignOnService'
+            "<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>"
+            "<md:SingleSignOnService"
             ' Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"'
             f' Location="{_xml_escape(self.sso_url)}"/>'
             "</md:IDPSSODescriptor></md:EntityDescriptor>"
@@ -118,12 +116,9 @@ class MockSAMLIdP:
         response_id = "_" + uuid.uuid4().hex
         session_index = "_" + secrets.token_hex(8)
 
-        attr_xml = "".join(
-            self._attribute_xml(name, value) for name, value in attrs.items()
-        )
+        attr_xml = "".join(self._attribute_xml(name, value) for name, value in attrs.items())
         subject_confirmation_data = (
-            f'Recipient="{_xml_escape(recipient)}"'
-            f' NotOnOrAfter="{_iso(not_on_or_after)}"'
+            f'Recipient="{_xml_escape(recipient)}" NotOnOrAfter="{_iso(not_on_or_after)}"'
         )
         if in_response_to:
             subject_confirmation_data += f' InResponseTo="{_xml_escape(in_response_to)}"'
@@ -176,9 +171,7 @@ class MockSAMLIdP:
         inner = "".join(
             f"<saml:AttributeValue>{_xml_escape(str(v))}</saml:AttributeValue>" for v in values
         )
-        return (
-            f'<saml:Attribute Name="{_xml_escape(name)}">{inner}</saml:Attribute>'
-        )
+        return f'<saml:Attribute Name="{_xml_escape(name)}">{inner}</saml:Attribute>'
 
     def _sign(self, assertion_xml: str, *, ref_id: str) -> str:
         """Wrap `assertion_xml` with a strict XML-DSIG enveloped signature.

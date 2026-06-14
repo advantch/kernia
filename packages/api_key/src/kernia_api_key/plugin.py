@@ -57,12 +57,8 @@ API_KEY_ERROR_CODES: Mapping[str, str] = {
     "KEY_EXPIRED": "API Key has expired",
     "USAGE_EXCEEDED": "API Key has reached its usage limit",
     "KEY_NOT_RECOVERABLE": "API Key is not recoverable",
-    "EXPIRES_IN_IS_TOO_SMALL": (
-        "The expiresIn is smaller than the predefined minimum value."
-    ),
-    "EXPIRES_IN_IS_TOO_LARGE": (
-        "The expiresIn is larger than the predefined maximum value."
-    ),
+    "EXPIRES_IN_IS_TOO_SMALL": ("The expiresIn is smaller than the predefined minimum value."),
+    "EXPIRES_IN_IS_TOO_LARGE": ("The expiresIn is larger than the predefined maximum value."),
     "INVALID_REMAINING": "The remaining count is either too large or too small.",
     "INVALID_PREFIX_LENGTH": "The prefix length is either too large or too small.",
     "INVALID_NAME_LENGTH": "The name length is either too large or too small.",
@@ -77,23 +73,18 @@ API_KEY_ERROR_CODES: Mapping[str, str] = {
         "API Key getter returned an invalid key type. Expected string."
     ),
     "SERVER_ONLY_PROPERTY": (
-        "The property you're trying to set can only be set from the server auth "
-        "instance only."
+        "The property you're trying to set can only be set from the server auth instance only."
     ),
     "FAILED_TO_UPDATE_API_KEY": "Failed to update API key",
     "NAME_REQUIRED": "API Key name is required.",
-    "ORGANIZATION_ID_REQUIRED": (
-        "Organization ID is required for organization-owned API keys."
-    ),
+    "ORGANIZATION_ID_REQUIRED": ("Organization ID is required for organization-owned API keys."),
     "USER_NOT_MEMBER_OF_ORGANIZATION": (
         "You are not a member of the organization that owns this API key."
     ),
     "INSUFFICIENT_API_KEY_PERMISSIONS": (
         "You do not have permission to perform this action on organization API keys."
     ),
-    "NO_DEFAULT_API_KEY_CONFIGURATION_FOUND": (
-        "No default api-key configuration found."
-    ),
+    "NO_DEFAULT_API_KEY_CONFIGURATION_FOUND": ("No default api-key configuration found."),
     "ORGANIZATION_PLUGIN_REQUIRED": (
         "Organization plugin is required for organization-owned API keys. Please "
         "install and configure the organization plugin."
@@ -136,8 +127,17 @@ def generate_api_key(length: int = 64, prefix: str | None = None) -> tuple[str, 
 
 
 def parse_api_key(raw: str) -> str | None:
-    """Return the leading characters of a key, or None for empty input."""
+    """Return the leading characters of a well-formed key, else ``None``.
+
+    A valid key is a ``<prefix>_<body>`` pair where the body carries the random
+    secret. Empty, prefix-only, or otherwise malformed input (no ``_`` separator,
+    or a body shorter than the 6-character ``start`` display length) is not a real
+    key, so we return ``None`` rather than leaking a truncated slice of garbage.
+    """
     if not raw:
+        return None
+    prefix, sep, body = raw.partition("_")
+    if not sep or not prefix or len(body) < 6:
         return None
     return raw[:6]
 
@@ -510,9 +510,7 @@ def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def _migrate_metadata_row(
-    ctx: EndpointContext, row: dict[str, Any]
-) -> dict[str, Any]:
+async def _migrate_metadata_row(ctx: EndpointContext, row: dict[str, Any]) -> dict[str, Any]:
     """Repair a row whose ``metadata`` was stored double-stringified.
 
     Rewrites the column to the correct single-stringified form so subsequent
@@ -702,9 +700,7 @@ class _ApiKeyPlugin:
     on_request: Any = None
     on_response: None = None
     rate_limit: None = None
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(API_KEY_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(API_KEY_ERROR_CODES))
     init: None = None
 
 
@@ -796,14 +792,12 @@ def api_key(
         if len(configurations) > 0:
             if not all(c.config_id for c in configurations):
                 raise ValueError(
-                    "configId is required for each API key configuration in the "
-                    "api-key plugin."
+                    "configId is required for each API key configuration in the api-key plugin."
                 )
             ids = [c.config_id for c in configurations]
             if len(set(ids)) != len(ids):
                 raise ValueError(
-                    "configId must be unique for each API key configuration in the "
-                    "api-key plugin."
+                    "configId must be unique for each API key configuration in the api-key plugin."
                 )
             resolved = [_resolved_from_config(c) for c in configurations]
         else:
@@ -944,9 +938,7 @@ def api_key(
 
         now = _now_ms()
         rate_limit_enabled = (
-            cfg.rate_limit.enabled
-            if body.rate_limit_enabled is None
-            else body.rate_limit_enabled
+            cfg.rate_limit.enabled if body.rate_limit_enabled is None else body.rate_limit_enabled
         )
         data: dict[str, Any] = {
             "configId": cfg.config_id,
@@ -1017,9 +1009,7 @@ def api_key(
     ) -> None:
         """Raise if ``session``'s user may not perform ``action`` on ``row``."""
         if cfg.references == "organization":
-            await _check_org_permission(
-                ctx, session.user_id, row.get("referenceId"), action
-            )
+            await _check_org_permission(ctx, session.user_id, row.get("referenceId"), action)
         elif row.get("referenceId") != session.user_id:
             raise APIError(404, "KEY_NOT_FOUND")
 
@@ -1194,11 +1184,7 @@ def api_key(
             # Hide keys whose config references "organization" from user listing.
             org_config_ids = {c.config_id for c in resolved if c.references == "organization"}
             if org_config_ids:
-                rows = [
-                    r
-                    for r in rows
-                    if (r.get("configId") or "default") not in org_config_ids
-                ]
+                rows = [r for r in rows if (r.get("configId") or "default") not in org_config_ids]
 
         sort_by = q.get("sortBy")
         if sort_by:
@@ -1213,7 +1199,7 @@ def api_key(
         offset = q.get("offset")
         limit = q.get("limit")
         if offset is not None:
-            rows = rows[int(offset):]
+            rows = rows[int(offset) :]
         if limit is not None:
             rows = rows[: int(limit)]
 
@@ -1274,9 +1260,7 @@ def api_key(
     )
 
     # ------------------------------------------------- enableSessionForAPIKeys
-    def _key_from_config(
-        ctx: EndpointContext, cfg: _ResolvedConfig
-    ) -> str | None:
+    def _key_from_config(ctx: EndpointContext, cfg: _ResolvedConfig) -> str | None:
         headers = cfg.api_key_headers
         if isinstance(headers, tuple | list):
             for h in headers:
@@ -1309,9 +1293,7 @@ def api_key(
         if len(key) < cfg.default_key_length:
             raise APIError(403, "INVALID_API_KEY")
         hashed = _hash(key, cfg)
-        row = await validate_api_key(
-            ctx, hashed, cfg, expected_config_id=cfg.config_id
-        )
+        row = await validate_api_key(ctx, hashed, cfg, expected_config_id=cfg.config_id)
         # Session mocking only works for user-owned API keys.
         if cfg.references != "user":
             raise APIError(401, "INVALID_REFERENCE_ID_FROM_API_KEY")
@@ -1324,11 +1306,7 @@ def api_key(
         ctx.session = Session(
             id=row["id"],
             user_id=row["referenceId"],
-            expires_at=(
-                int(row["expiresAt"])
-                if row.get("expiresAt")
-                else _now_ms() + 7 * _DAY_MS
-            ),
+            expires_at=(int(row["expiresAt"]) if row.get("expiresAt") else _now_ms() + 7 * _DAY_MS),
             token=key,
         )
 

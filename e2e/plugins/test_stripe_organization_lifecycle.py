@@ -32,8 +32,8 @@ from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -47,9 +47,7 @@ WEBHOOK_SECRET = "whsec_test_secret"
 def _plans() -> dict[str, StripePlan]:
     return {
         "starter": StripePlan(name="starter", price_id="price_starter"),
-        "premium": StripePlan(
-            name="premium", price_id="price_premium", lookup_key="lk_premium"
-        ),
+        "premium": StripePlan(name="premium", price_id="price_premium", lookup_key="lk_premium"),
     }
 
 
@@ -92,9 +90,7 @@ async def _signup(driver: ASGIDriver, email: str) -> str:
 
 
 async def _create_org(driver: ASGIDriver, *, name: str, slug: str) -> str:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()["id"]
 
@@ -111,9 +107,7 @@ def _sign(body: bytes) -> dict[str, str]:
 
 async def _post_webhook(driver: ASGIDriver, event: dict[str, Any]) -> Any:
     body = _json.dumps(event).encode("utf-8")
-    return await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=_sign(body)
-    )
+    return await driver.request("POST", "/stripe/webhook", json_body=event, headers=_sign(body))
 
 
 def _event(event_type: str, obj: dict[str, Any]) -> dict[str, Any]:
@@ -348,9 +342,7 @@ async def test_org_customer_lookup_excludes_user_customer() -> None:
     await _signup(driver, "user-a@email.com")
     user_b_id = await _signup(driver, "user-b@email.com")  # noqa: F841
 
-    org_id = await _create_org(
-        driver, name="Test Org", slug="customer-type-filter-org"
-    )
+    org_id = await _create_org(driver, name="Test Org", slug="customer-type-filter-org")
 
     # User A (now the active session is user-b after the second sign-up); to make
     # User A active again we sign in.

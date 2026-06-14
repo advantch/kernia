@@ -93,7 +93,7 @@ def better_fetch(url: str, timeout: int = DEFAULT_DISCOVERY_TIMEOUT) -> FetchRes
 # URL helpers
 # --------------------------------------------------------------------------- #
 class _ParsedURL:
-    __slots__ = ("scheme", "netloc", "path", "_raw")
+    __slots__ = ("_raw", "netloc", "path", "scheme")
 
     def __init__(self, scheme: str, netloc: str, path: str, raw: str) -> None:
         self.scheme = scheme
@@ -145,10 +145,7 @@ def _parse_url(name: str, endpoint: str, base: str | None = None) -> _ParsedURL:
         if split.scheme:
             raise DiscoveryError(
                 "discovery_invalid_url",
-                (
-                    f'The url "{name}" must use the http or https supported '
-                    f"protocols: {endpoint}"
-                ),
+                (f'The url "{name}" must use the http or https supported protocols: {endpoint}'),
                 {"url": endpoint, "protocol": f"{split.scheme}:"},
             )
         raise DiscoveryError(
@@ -195,9 +192,7 @@ def compute_discovery_url(issuer: str) -> str:
     return f"{base_url}/.well-known/openid-configuration"
 
 
-def validate_discovery_url(
-    url: str, is_trusted_origin: Callable[[str], bool]
-) -> None:
+def validate_discovery_url(url: str, is_trusted_origin: Callable[[str], bool]) -> None:
     """Validate the main discovery URL before fetching."""
     discovery_endpoint = _parse_url("discoveryEndpoint", url).to_string()
     if not is_trusted_origin(discovery_endpoint):
@@ -211,9 +206,7 @@ def validate_discovery_url(
         )
 
 
-def fetch_discovery_document(
-    url: str, timeout: int = DEFAULT_DISCOVERY_TIMEOUT
-) -> dict[str, Any]:
+def fetch_discovery_document(url: str, timeout: int = DEFAULT_DISCOVERY_TIMEOUT) -> dict[str, Any]:
     """Fetch + parse the discovery document, mapping failures to DiscoveryError."""
     try:
         response = better_fetch(url, timeout=timeout)
@@ -292,9 +285,7 @@ def validate_discovery_document(doc: dict[str, Any], configured_issuer: str) -> 
         discovered_issuer[:-1] if discovered_issuer.endswith("/") else discovered_issuer
     )
     expected_issuer = (
-        configured_issuer[:-1]
-        if configured_issuer.endswith("/")
-        else configured_issuer
+        configured_issuer[:-1] if configured_issuer.endswith("/") else configured_issuer
     )
 
     if discovered_issuer != expected_issuer:
@@ -355,9 +346,7 @@ def normalize_discovery_urls(
     return doc
 
 
-def select_token_endpoint_auth_method(
-    doc: dict[str, Any], existing: str | None = None
-) -> str:
+def select_token_endpoint_auth_method(doc: dict[str, Any], existing: str | None = None) -> str:
     """Pick the token endpoint auth method (basic preferred; basic fallback)."""
     if existing:
         return existing
@@ -418,9 +407,7 @@ def discover_oidc_config(
     existing = existing_config or {}
 
     discovery_url = (
-        discovery_endpoint
-        or existing.get("discoveryEndpoint")
-        or compute_discovery_url(issuer)
+        discovery_endpoint or existing.get("discoveryEndpoint") or compute_discovery_url(issuer)
     )
 
     validate_discovery_url(discovery_url, is_trusted_origin)
@@ -447,15 +434,9 @@ def discover_oidc_config(
         ),
         "tokenEndpoint": pick("tokenEndpoint", normalized_doc["token_endpoint"]),
         "jwksEndpoint": pick("jwksEndpoint", normalized_doc["jwks_uri"]),
-        "userInfoEndpoint": pick(
-            "userInfoEndpoint", normalized_doc.get("userinfo_endpoint")
-        ),
-        "tokenEndpointAuthentication": pick(
-            "tokenEndpointAuthentication", token_endpoint_auth
-        ),
-        "scopesSupported": pick(
-            "scopesSupported", normalized_doc.get("scopes_supported")
-        ),
+        "userInfoEndpoint": pick("userInfoEndpoint", normalized_doc.get("userinfo_endpoint")),
+        "tokenEndpointAuthentication": pick("tokenEndpointAuthentication", token_endpoint_auth),
+        "scopesSupported": pick("scopesSupported", normalized_doc.get("scopes_supported")),
     }
 
 

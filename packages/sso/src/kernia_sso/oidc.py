@@ -17,7 +17,6 @@ from collections.abc import Mapping
 from typing import Any
 
 import httpx
-
 from kernia.oauth2 import exchange_code, fetch_userinfo, verify_id_token
 
 
@@ -92,9 +91,7 @@ async def complete_signin(
     caller should wrap into an `APIError` with `SSO_OIDC_EXCHANGE_FAILED`).
     """
     token_endpoint = config.get("tokenEndpoint") or discovery["token_endpoint"]
-    userinfo_endpoint = (
-        config.get("userInfoEndpoint") or discovery.get("userinfo_endpoint")
-    )
+    userinfo_endpoint = config.get("userInfoEndpoint") or discovery.get("userinfo_endpoint")
     jwks_uri = config.get("jwksEndpoint") or discovery["jwks_uri"]
 
     tokens = await exchange_code(
@@ -131,9 +128,7 @@ async def complete_signin(
     return claims
 
 
-def apply_mapping(
-    claims: Mapping[str, Any], mapping: Mapping[str, str] | None
-) -> dict[str, Any]:
+def apply_mapping(claims: Mapping[str, Any], mapping: Mapping[str, str] | None) -> dict[str, Any]:
     """Translate IdP claims onto our user fields using `mapping`.
 
     `mapping` maps *our* field names to *their* claim names, so:

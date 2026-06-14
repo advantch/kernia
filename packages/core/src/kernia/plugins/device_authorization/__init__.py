@@ -6,4 +6,3 @@ from kernia.plugins.device_authorization.plugin import (
 )
 
 __all__ = ["DEVICE_AUTHORIZATION_ERROR_CODES", "device_authorization"]
-

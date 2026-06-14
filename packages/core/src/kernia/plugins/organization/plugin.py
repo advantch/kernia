@@ -35,8 +35,8 @@ from kernia.types.context import AuthContext
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import PluginHooks
 from kernia.types.plugin import (
-    KerniaPlugin,
     InitResult,
+    KerniaPlugin,
     PluginSchema,
     RateLimitRule,
 )
@@ -59,9 +59,7 @@ class _OrganizationPlugin:
         RateLimitRule(path="/organization/invite-member", window=60, max=20),
         RateLimitRule(path="/organization/accept-invitation", window=60, max=20),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(ORGANIZATION_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(ORGANIZATION_ERROR_CODES))
     init: Callable[[AuthContext], Awaitable[InitResult | None]] | None = None
     # Stash the constructor args so init can mirror them onto options.advanced.
     _config: Mapping[str, Any] = field(default_factory=dict)

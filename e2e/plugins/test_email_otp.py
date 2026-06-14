@@ -66,9 +66,7 @@ async def test_email_otp_sign_in_happy_path(adapter_factory) -> None:
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp)
 
-    r = await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "alice@example.com"}
-    )
+    r = await driver.request("POST", "/sign-in/email-otp", json_body={"email": "alice@example.com"})
     assert r.status == 200, r.json()
     assert r.json()["success"] is True
     otp = smtp.sent[0].meta["otp"]
@@ -91,9 +89,7 @@ async def test_email_otp_wrong_code(adapter_factory) -> None:
     adapter = await adapter_factory()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp)
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "x@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "x@example.com"})
     r = await driver.request(
         "POST",
         "/email-otp/verify",
@@ -108,9 +104,7 @@ async def test_email_otp_expired(adapter_factory) -> None:
     adapter = await adapter_factory()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp, expires_in=-10)  # already expired
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "expired@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "expired@example.com"})
     otp = smtp.sent[0].meta["otp"]
     r = await driver.request(
         "POST",
@@ -199,9 +193,7 @@ async def test_too_many_attempts() -> None:
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, allowed_attempts=2)
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "attempts@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "attempts@example.com"})
     for _ in range(2):
         bad = await driver.request(
             "POST",
@@ -227,9 +219,7 @@ async def test_custom_generate_otp() -> None:
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, generate_otp=generate)
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "custom@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "custom@example.com"})
     assert smtp.sent[0].meta["otp"] == "135790"
     r = await driver.request(
         "POST",
@@ -248,9 +238,7 @@ async def test_store_otp_hashed_round_trip() -> None:
     adapter = memory_adapter()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp, store_otp="hashed")
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "hashed@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "hashed@example.com"})
     otp = smtp.sent[0].meta["otp"]
 
     # Stored value is the hash, never the plain code.
@@ -277,13 +265,9 @@ async def test_resend_reuse_returns_same_otp() -> None:
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp, resend_strategy="reuse")
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "reuse@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "reuse@example.com"})
     first = smtp.sent[0].meta["otp"]
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "reuse@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "reuse@example.com"})
     second = smtp.sent[1].meta["otp"]
     assert first == second
 
@@ -296,18 +280,14 @@ async def test_resend_rotate_returns_new_otp() -> None:
     adapter = memory_adapter()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp)
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "rotate@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "rotate@example.com"})
     # Only the latest OTP row survives rotation.
     rows = await adapter.find_many(
         model="verification",
         where=(Where(field="identifier", value="email-otp:sign-in:rotate@example.com"),),
     )
     assert len(rows) == 1
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "rotate@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "rotate@example.com"})
     rows = await adapter.find_many(
         model="verification",
         where=(Where(field="identifier", value="email-otp:sign-in:rotate@example.com"),),
@@ -323,9 +303,7 @@ async def test_verify_email_round_trip() -> None:
     driver, _ = _build_driver(memory_adapter(), smtp)
 
     # Sign in via OTP (creates the user + a session).
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "verify@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "verify@example.com"})
     sign_in_otp = smtp.sent[-1].meta["otp"]
     r = await driver.request(
         "POST",
@@ -468,9 +446,7 @@ async def test_store_otp_encrypted_round_trip() -> None:
     adapter = memory_adapter()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp, store_otp="encrypted")
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "enc@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "enc@example.com"})
     otp = smtp.sent[0].meta["otp"]
 
     rec = await adapter.find_one(
@@ -557,9 +533,7 @@ async def test_change_email_round_trip() -> None:
     driver, _ = _build_change_email_driver(adapter, smtp)
 
     # Establish a session via OTP sign-in.
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "old@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "old@example.com"})
     sign_in_otp = smtp.sent[-1].meta["otp"]
     await driver.request(
         "POST",
@@ -619,9 +593,7 @@ async def test_change_email_disabled() -> None:
 
     smtp = MockSMTP()
     driver, _ = _build_driver(memory_adapter(), smtp)  # changeEmail not enabled
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "u@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "u@example.com"})
     otp = smtp.sent[-1].meta["otp"]
     await driver.request(
         "POST", "/email-otp/verify", json_body={"email": "u@example.com", "otp": otp}
@@ -641,9 +613,7 @@ async def test_change_email_same_as_current() -> None:
 
     smtp = MockSMTP()
     driver, _ = _build_change_email_driver(memory_adapter(), smtp)
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "same@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "same@example.com"})
     otp = smtp.sent[-1].meta["otp"]
     await driver.request(
         "POST",
@@ -685,11 +655,7 @@ async def test_request_password_reset_alias() -> None:
         json_body={"email": "alias@example.com"},
     )
     assert r.status == 200, r.json()
-    otp = next(
-        e.meta["otp"]
-        for e in smtp.sent
-        if e.meta.get("purpose") == "forget-password"
-    )
+    otp = next(e.meta["otp"] for e in smtp.sent if e.meta.get("purpose") == "forget-password")
     r = await driver.request(
         "POST",
         "/email-otp/reset-password",
@@ -731,11 +697,7 @@ async def test_on_password_reset_callback() -> None:
     await driver.request(
         "POST", "/forget-password/email-otp", json_body={"email": "cb@example.com"}
     )
-    otp = next(
-        e.meta["otp"]
-        for e in smtp.sent
-        if e.meta.get("purpose") == "forget-password"
-    )
+    otp = next(e.meta["otp"] for e in smtp.sent if e.meta.get("purpose") == "forget-password")
     r = await driver.request(
         "POST",
         "/email-otp/reset-password",
@@ -762,9 +724,7 @@ async def test_store_otp_custom_encryptor_round_trip() -> None:
 
     adapter = memory_adapter()
     smtp = MockSMTP()
-    driver, _ = _build_driver(
-        adapter, smtp, store_otp={"encrypt": encrypt, "decrypt": decrypt}
-    )
+    driver, _ = _build_driver(adapter, smtp, store_otp={"encrypt": encrypt, "decrypt": decrypt})
     await driver.request(
         "POST",
         "/email-otp/send-verification-otp",
@@ -865,9 +825,7 @@ async def test_verify_email_with_last_otp() -> None:
     driver, _ = _build_driver(memory_adapter(), smtp)
 
     # Create the user + session via OTP sign-in.
-    await driver.request(
-        "POST", "/sign-in/email-otp", json_body={"email": "last@example.com"}
-    )
+    await driver.request("POST", "/sign-in/email-otp", json_body={"email": "last@example.com"})
     sign_in_otp = smtp.sent[-1].meta["otp"]
     await driver.request(
         "POST",
@@ -1017,9 +975,7 @@ async def test_delete_otp_after_successful_password_reset() -> None:
     await driver.request(
         "POST", "/email-otp/request-password-reset", json_body={"email": "rr@example.com"}
     )
-    otp = next(
-        e.meta["otp"] for e in smtp.sent if e.meta.get("purpose") == "forget-password"
-    )
+    otp = next(e.meta["otp"] for e in smtp.sent if e.meta.get("purpose") == "forget-password")
     r = await driver.request(
         "POST",
         "/email-otp/reset-password",
@@ -1030,11 +986,7 @@ async def test_delete_otp_after_successful_password_reset() -> None:
 
     rec = await adapter.find_one(
         model="verification",
-        where=(
-            Where(
-                field="identifier", value="email-otp:forget-password:rr@example.com"
-            ),
-        ),
+        where=(Where(field="identifier", value="email-otp:forget-password:rr@example.com"),),
     )
     assert rec is None
 
@@ -1053,9 +1005,7 @@ async def test_reuse_but_hashed_generates_new_otp() -> None:
     from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
-    driver, _ = _build_driver(
-        memory_adapter(), smtp, resend_strategy="reuse", store_otp="hashed"
-    )
+    driver, _ = _build_driver(memory_adapter(), smtp, resend_strategy="reuse", store_otp="hashed")
     await driver.request(
         "POST",
         "/email-otp/send-verification-otp",
@@ -1103,9 +1053,7 @@ async def test_reuse_generates_fresh_otp_when_attempts_exhausted() -> None:
     from kernia_memory_adapter import memory_adapter
 
     smtp = MockSMTP()
-    driver, _ = _build_driver(
-        memory_adapter(), smtp, resend_strategy="reuse", allowed_attempts=2
-    )
+    driver, _ = _build_driver(memory_adapter(), smtp, resend_strategy="reuse", allowed_attempts=2)
 
     # Establish the user so email-verification OTPs are actually sent.
     await driver.request(

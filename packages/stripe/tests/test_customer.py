@@ -23,8 +23,8 @@ from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -73,9 +73,7 @@ class _FakeCtx:
         self.adapter = adapter
 
 
-async def _run_create_hook(
-    options: StripeOptions, user: dict[str, Any]
-) -> _FakeAdapter:
+async def _run_create_hook(options: StripeOptions, user: dict[str, Any]) -> _FakeAdapter:
     hooks = build_customer_database_hooks(options)
     after = hooks["user"].create.after
     adapter = _FakeAdapter(user)
@@ -94,9 +92,7 @@ async def test_create_customer_on_signup_stamps_metadata() -> None:
     adapter = await _run_create_hook(options, user)
 
     assert adapter.user.get("stripeCustomerId")
-    create_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.create"
-    )
+    create_event = next(e for e in mock.capture_events if e["type"] == "customer.create")
     meta = create_event["object"]["metadata"]
     assert meta["userId"] == "u1"
     assert meta["customerType"] == "user"
@@ -116,9 +112,7 @@ async def test_get_customer_create_params_merges_metadata() -> None:
     await _run_create_hook(options, user)
 
     assert captured["user"]["id"] == "u2"
-    create_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.create"
-    )
+    create_event = next(e for e in mock.capture_events if e["type"] == "customer.create")
     meta = create_event["object"]["metadata"]
     assert meta["userId"] == "u2"
     assert meta["customField"] == "customValue"
@@ -143,9 +137,7 @@ async def test_get_customer_create_params_adds_address() -> None:
 
     await _run_create_hook(options, user)
 
-    create_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.create"
-    )
+    create_event = next(e for e in mock.capture_events if e["type"] == "customer.create")
     obj = create_event["object"]
     # MockStripe collects flattened metadata only; assert the address was sent
     # by inspecting the create call's effect — the customer was created.
@@ -160,9 +152,7 @@ async def test_works_without_get_customer_create_params() -> None:
 
     await _run_create_hook(options, user)
 
-    create_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.create"
-    )
+    create_event = next(e for e in mock.capture_events if e["type"] == "customer.create")
     meta = create_event["object"]["metadata"]
     assert meta == {"userId": "u4", "customerType": "user"}
 
@@ -288,9 +278,7 @@ async def test_updates_stripe_customer_email_on_user_email_change() -> None:
     )
     await after(adapter.user, _FakeCtx(adapter))  # type: ignore[arg-type]
 
-    update_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.update"
-    )
+    update_event = next(e for e in mock.capture_events if e["type"] == "customer.update")
     assert update_event["object"]["email"] == "newemail@example.com"
 
 

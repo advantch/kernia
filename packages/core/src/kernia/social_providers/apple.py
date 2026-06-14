@@ -124,9 +124,7 @@ def apple(
     scopes: tuple[str, ...] = ("name", "email"),
 ) -> OAuthProvider:
     """Construct an Apple Sign-In provider."""
-    return _AppleProvider(
-        client_id=client_id, client_secret=client_secret, scopes=scopes
-    )
+    return _AppleProvider(client_id=client_id, client_secret=client_secret, scopes=scopes)
 
 
 __all__ = ["apple"]

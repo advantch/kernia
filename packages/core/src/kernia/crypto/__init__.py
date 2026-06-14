@@ -16,6 +16,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+from typing import cast
 
 try:
     from argon2 import PasswordHasher
@@ -24,7 +25,8 @@ try:
     _ARGON2 = PasswordHasher()
     _HAS_ARGON2 = True
 except ImportError:  # pragma: no cover — argon2-cffi is a hard dep in pyproject
-    _ARGON2 = None
+    # Typed as PasswordHasher for the checker; every use is gated on _HAS_ARGON2.
+    _ARGON2 = cast("PasswordHasher", None)
     _HAS_ARGON2 = False
 
 # Legacy scrypt parameters — used only for verification of pre-existing hashes.

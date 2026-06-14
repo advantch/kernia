@@ -86,9 +86,7 @@ def device_authorization(
     generate_device_code: Callable[[], str | Awaitable[str]] | None = None,
     generate_user_code: Callable[[], str | Awaitable[str]] | None = None,
     validate_client: Callable[[str], bool | Awaitable[bool]] | None = None,
-    on_device_auth_request: (
-        Callable[[str, str | None], None | Awaitable[None]] | None
-    ) = None,
+    on_device_auth_request: (Callable[[str, str | None], None | Awaitable[None]] | None) = None,
 ) -> KerniaPlugin:
     """Construct the device-authorization plugin (RFC 8628).
 

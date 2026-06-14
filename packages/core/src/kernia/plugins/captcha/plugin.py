@@ -59,9 +59,7 @@ def _client_ip(ctx: EndpointContext) -> str | None:
     return headers.get("x-real-ip") or None
 
 
-def _build_before_hook(
-    provider: CaptchaProvider, protected: tuple[str, ...]
-) -> BeforeHook:
+def _build_before_hook(provider: CaptchaProvider, protected: tuple[str, ...]) -> BeforeHook:
     paths = set(protected)
 
     def matcher(ctx: EndpointContext) -> bool:
@@ -144,4 +142,4 @@ def captcha(
     )
 
 
-__all__ = ["captcha", "CAPTCHA_ERROR_CODES", "DEFAULT_PROTECTED_ENDPOINTS"]
+__all__ = ["CAPTCHA_ERROR_CODES", "DEFAULT_PROTECTED_ENDPOINTS", "captcha"]

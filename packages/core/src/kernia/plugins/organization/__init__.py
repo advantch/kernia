@@ -30,10 +30,10 @@ from kernia.plugins.organization.errors import ORGANIZATION_ERROR_CODES
 from kernia.plugins.organization.plugin import SendInvitation, organization
 
 __all__ = [
-    "AccessControl",
     "DEFAULT_ROLES",
     "DEFAULT_STATEMENTS",
     "ORGANIZATION_ERROR_CODES",
+    "AccessControl",
     "Role",
     "SendInvitation",
     "Statement",

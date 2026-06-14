@@ -3,4 +3,3 @@
 from kernia.plugins.last_login_method.plugin import last_login_method
 
 __all__ = ["last_login_method"]
-

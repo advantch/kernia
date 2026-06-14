@@ -12,7 +12,6 @@ exercised in `packages/redis_storage/tests/` when docker is up.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.auth.rate_limit import InMemoryRateLimitStore
 from kernia.plugins import email_and_password

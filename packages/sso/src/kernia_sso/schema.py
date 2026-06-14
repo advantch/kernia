@@ -24,9 +24,9 @@ SSO_PROVIDER_MODEL = ModelDef(
         FieldDef("issuer", "string", unique=True),
         FieldDef("kind", "string"),  # "saml" | "oidc"
         FieldDef("name", "string", required=False),
-        FieldDef("domains", "text", required=False),       # JSON list[str]
-        FieldDef("oidcConfig", "text", required=False),    # JSON dict
-        FieldDef("samlConfig", "text", required=False),    # JSON dict
+        FieldDef("domains", "text", required=False),  # JSON list[str]
+        FieldDef("oidcConfig", "text", required=False),  # JSON dict
+        FieldDef("samlConfig", "text", required=False),  # JSON dict
         FieldDef("userInfoMapping", "text", required=False),  # JSON dict
         # Link a provider to an organization. When set (and the organization
         # plugin is installed) SSO sign-ins through this provider auto-provision

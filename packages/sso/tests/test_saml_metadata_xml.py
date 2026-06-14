@@ -9,7 +9,6 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 import pytest
-
 from kernia_sso.saml import SAMLPlan, sp_metadata_xml
 
 
@@ -24,9 +23,7 @@ def plan() -> SAMLPlan:
         idp_entity_id="https://idp.example",
         idp_sso_url="https://idp.example/sso",
         idp_slo_url="https://idp.example/slo",
-        idp_cert=(
-            "MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1234567890ABCDEFGH"
-        ),
+        idp_cert=("MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1234567890ABCDEFGH"),
     )
 
 

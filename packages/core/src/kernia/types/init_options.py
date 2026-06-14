@@ -165,7 +165,5 @@ class KerniaOptions:
     def __post_init__(self) -> None:
         # Mirror account.encrypt_oauth_tokens onto advanced["encrypt_oauth_tokens"]
         # so existing call sites (link_account.py, account.py) keep working.
-        if self.account.encrypt_oauth_tokens and not self.advanced.get(
-            "encrypt_oauth_tokens"
-        ):
+        if self.account.encrypt_oauth_tokens and not self.advanced.get("encrypt_oauth_tokens"):
             self.advanced["encrypt_oauth_tokens"] = True

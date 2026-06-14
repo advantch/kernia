@@ -33,8 +33,8 @@ from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -97,9 +97,7 @@ async def _post_webhook(driver: ASGIDriver, event: dict[str, Any]) -> Any:
 
 async def _seed_sub(auth: object, **extra: Any) -> dict[str, Any]:
     adapter = auth.context.adapter  # type: ignore[attr-defined]
-    user = await adapter.create(
-        model="user", data={"email": extra.pop("email", "wh@test.com")}
-    )
+    user = await adapter.create(model="user", data={"email": extra.pop("email", "wh@test.com")})
     data = {
         "referenceId": user["id"],
         "status": "active",

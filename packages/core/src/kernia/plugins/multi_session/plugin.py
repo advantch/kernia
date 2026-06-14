@@ -37,9 +37,7 @@ class _MultiSessionPlugin:
     on_request: None = None
     on_response: Any = None
     rate_limit: tuple[RateLimitRule, ...] = ()
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(MULTI_SESSION_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(MULTI_SESSION_ERROR_CODES))
     init: None = None
     options: routes.MultiSessionOptions = field(
         default_factory=lambda: routes.MultiSessionOptions()

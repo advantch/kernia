@@ -84,14 +84,8 @@ class TestGetAuthTables:
             },
         )
         account = _fields_by_name(tables["account"])
-        assert (
-            account["refreshTokenExpiresAt"].field_name
-            == "custom_refresh_token_expires_at"
-        )
-        assert (
-            account["accessTokenExpiresAt"].field_name
-            == "custom_access_token_expires_at"
-        )
+        assert account["refreshTokenExpiresAt"].field_name == "custom_refresh_token_expires_at"
+        assert account["accessTokenExpiresAt"].field_name == "custom_access_token_expires_at"
         assert (
             account["refreshTokenExpiresAt"].field_name
             != account["accessTokenExpiresAt"].field_name
@@ -106,17 +100,13 @@ class TestGetAuthTables:
         # logical name. Assert the effective physical name equals the logical name.
         assert (refresh.field_name or refresh.name) == "refreshTokenExpiresAt"
         assert (access.field_name or access.name) == "accessTokenExpiresAt"
-        assert (refresh.field_name or refresh.name) != (
-            access.field_name or access.name
-        )
+        assert (refresh.field_name or refresh.name) != (access.field_name or access.name)
 
     def test_should_merge_additional_fields_into_verification_table_metadata(self):
         tables = resolve_tables(
             [],
             additional_fields={
-                "verification": [
-                    FieldDef("newField", "string", field_name="new_field")
-                ]
+                "verification": [FieldDef("newField", "string", field_name="new_field")]
             },
         )
         new_field = _fields_by_name(tables["verification"]).get("newField")
@@ -136,9 +126,7 @@ class TestGetAuthTables:
 
     def test_should_include_verification_table_when_store_in_database_is_true(self):
         # upstream: verification.storeInDatabase forces the table back in.
-        tables = resolve_tables(
-            [], secondary_storage=True, store_verification_in_database=True
-        )
+        tables = resolve_tables([], secondary_storage=True, store_verification_in_database=True)
         assert "verification" in tables
         assert "session" not in tables  # session still excluded
 
@@ -158,7 +146,7 @@ class TestDb:
     @pytest.mark.asyncio
     async def test_db_hooks(self):
         # upstream: create.before patches image="test-image"; create.after sets a flag.
-        raw, ctx = _auth()
+        _raw, ctx = _auth()
         callback = {"fired": False}
 
         async def before(user, _c):
@@ -264,9 +252,7 @@ class TestDb:
         # upstream (mongo): HTTP query params arrive as strings; the adapter coerces
         # them to the field's schema type. The memory adapter does not silently cast,
         # so this exercises TransformAdapter._transform_where coercion directly.
-        raw, ctx = _auth(
-            additional_fields={"user": [FieldDef("age", "number", required=False)]}
-        )
+        _raw, ctx = _auth(additional_fields={"user": [FieldDef("age", "number", required=False)]})
         await ctx.adapter.create(model="user", data=_user_row(age=25))
 
         # boolean: "false" -> False
@@ -277,9 +263,7 @@ class TestDb:
         assert all(u["emailVerified"] is False for u in verified_false)
 
         # number: "25" -> 25
-        by_age = await ctx.adapter.find_many(
-            model="user", where=[Where(field="age", value="25")]
-        )
+        by_age = await ctx.adapter.find_many(model="user", where=[Where(field="age", value="25")])
         assert len(by_age) == 1
         assert by_age[0]["age"] == 25
 

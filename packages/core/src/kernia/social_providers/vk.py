@@ -15,7 +15,8 @@ def _vk_profile(raw: Mapping[str, Any]) -> OAuthUserProfile:
         id=str(user.get("user_id") or user.get("id")),
         email=user.get("email"),
         email_verified=bool(user.get("verified", False)),
-        name=user.get("first_name") and f"{user.get('first_name')} {user.get('last_name') or ''}".strip(),
+        name=user.get("first_name")
+        and f"{user.get('first_name')} {user.get('last_name') or ''}".strip(),
         image=user.get("avatar"),
         raw=raw,
     )

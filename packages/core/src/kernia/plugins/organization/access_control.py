@@ -36,9 +36,7 @@ class Role:
     name: str
     statement: Statement
 
-    def authorize(
-        self, request: Mapping[str, Iterable[str]], *, connector: str = "AND"
-    ) -> bool:
+    def authorize(self, request: Mapping[str, Iterable[str]], *, connector: str = "AND") -> bool:
         """Return True if the role grants the requested permissions.
 
         ``request`` maps resource -> required actions. ``connector`` of ``"AND"``
@@ -212,14 +210,14 @@ def merge_dynamic_roles(
 
 
 __all__ = [
-    "AccessControl",
     "DEFAULT_ROLES",
     "DEFAULT_STATEMENTS",
+    "AccessControl",
     "Role",
     "Statement",
     "admin_role",
-    "create_access_control",
     "createAccessControl",
+    "create_access_control",
     "default_ac",
     "defineRole",
     "define_role",

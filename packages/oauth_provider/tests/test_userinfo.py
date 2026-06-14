@@ -96,5 +96,4 @@ async def test_scoped_email_only(confidential) -> None:
     "signing the user out does not invalidate an already-issued access token "
     "(upstream uses opaque DB-backed tokens for the logged-out cases)."
 )
-async def test_userinfo_with_logged_out_user() -> None:
-    ...
+async def test_userinfo_with_logged_out_user() -> None: ...

@@ -30,8 +30,6 @@ async def _memory_factory() -> Any:
 
 
 async def _sqlite_factory() -> Any:
-    from kernia_sqlalchemy import sqlalchemy_adapter
-
     # Each call gets its own in-memory database — they're isolated even when
     # several tests run concurrently because the URL contains a fresh secret.
     import secrets
@@ -89,30 +87,46 @@ def all_adapters_param() -> tuple[str, list[Any]]:
                 marks=pytest.mark.skipif(not has_docker, reason="Docker required"),
             ),
             pytest.param(
-                _mongo_factory_placeholder,
+                _mongo_url_factory(),
                 id="mongo",
-                marks=pytest.mark.skipif(
-                    not has_docker, reason="Docker required for mongo"
-                ),
+                marks=pytest.mark.skipif(not has_docker, reason="Docker required for mongo"),
             ),
         ],
     )
 
 
-async def _mongo_factory_placeholder() -> Any:
-    """Placeholder until `kernia_mongo.mongo_adapter` lands.
+def _mongo_url_factory() -> Callable[[], Awaitable[Any]]:
+    """Return an adapter-factory bound to a single MongoDB container.
 
-    Tests that hit this path will see a clean skip when the adapter package
-    hasn't shipped yet (`pytest.skip` from inside the factory body).
+    Mirrors `_postgres_url_factory`: the container starts lazily on first use
+    and is stopped via an atexit handler, so it outlives each test body (a
+    `with` block here would tear the container down before the test runs).
+    Each call gets a fresh database name on the shared container, keeping
+    parametrized tests isolated.
     """
-    try:
-        from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
-    except ImportError:
-        pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
-    from kernia_test_utils.containers import mongodb_container
+    state: dict[str, Any] = {}
 
-    with mongodb_container() as url:
-        return await mongo_adapter(url=url)
+    async def factory() -> Any:
+        try:
+            from kernia_mongo import mongo_adapter
+        except ImportError:
+            pytest.skip("kernia_mongo is not installed")
+
+        if "url" not in state:
+            import atexit
+
+            from kernia_test_utils.containers import mongodb_container
+
+            ctx = mongodb_container()
+            state["ctx"] = ctx
+            state["url"] = ctx.__enter__()
+            atexit.register(lambda: ctx.__exit__(None, None, None))
+
+        import secrets
+
+        return await mongo_adapter(url=state["url"], db_name=f"kernia_test_{secrets.token_hex(4)}")
+
+    return factory
 
 
 @pytest.fixture(autouse=False)

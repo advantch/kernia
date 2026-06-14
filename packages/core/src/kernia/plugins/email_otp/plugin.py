@@ -59,9 +59,7 @@ class _EmailOTPPlugin:
         RateLimitRule(path="/email-otp/request-email-change", window=60, max=3),
         RateLimitRule(path="/email-otp/change-email", window=60, max=5),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(EMAIL_OTP_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(EMAIL_OTP_ERROR_CODES))
     init: None = None
 
 

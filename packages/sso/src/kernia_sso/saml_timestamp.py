@@ -87,12 +87,7 @@ def validate_saml_timestamp(
                 400,
                 "BAD_REQUEST",
                 "SAML assertion missing required timestamp conditions",
-                {
-                    "details": (
-                        "Assertions must include NotBefore and/or "
-                        "NotOnOrAfter conditions"
-                    )
-                },
+                {"details": ("Assertions must include NotBefore and/or NotOnOrAfter conditions")},
             )
         if opts.logger is not None:
             opts.logger.warn(
@@ -101,8 +96,7 @@ def validate_saml_timestamp(
             )
         else:
             logger.warning(
-                "SAML assertion accepted without timestamp conditions "
-                "(hasConditions=%s)",
+                "SAML assertion accepted without timestamp conditions (hasConditions=%s)",
                 conditions is not None,
             )
         return

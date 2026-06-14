@@ -10,7 +10,7 @@ Mirrors `reference/packages/better-auth/src/plugins/last-login-method/index.ts`.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -72,7 +72,9 @@ def _emitted_session_token(ctx: EndpointContext, secret: str) -> str | None:
     return None
 
 
-def _make_on_response(opts: LastLoginMethodOptions):
+def _make_on_response(
+    opts: LastLoginMethodOptions,
+) -> Callable[[EndpointContext, object], Awaitable[None]]:
     async def on_response(ctx: EndpointContext, result: object) -> None:
         method = _resolve_method(opts, ctx)
         if not method:
@@ -141,11 +143,7 @@ def last_login_method(
         custom_resolve_method=custom_resolve_method,
         store_in_database=store_in_database,
     )
-    schema = (
-        PluginSchema(extend={"user": _LAST_LOGIN_USER_FIELDS})
-        if store_in_database
-        else None
-    )
+    schema = PluginSchema(extend={"user": _LAST_LOGIN_USER_FIELDS}) if store_in_database else None
     return _LastLoginMethodPlugin(
         on_response=_make_on_response(opts),
         schema=schema,

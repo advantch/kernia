@@ -169,27 +169,15 @@ def _extract_encryption_algorithms(xml: str) -> dict[str, str | None]:
         parsed = parse_xml(xml)
         encrypted_key = find_node(parsed, "EncryptedKey")
         key_enc_method = (
-            encrypted_key.get("EncryptionMethod")
-            if isinstance(encrypted_key, dict)
-            else None
+            encrypted_key.get("EncryptionMethod") if isinstance(encrypted_key, dict) else None
         )
-        key_alg = (
-            key_enc_method.get("@_Algorithm")
-            if isinstance(key_enc_method, dict)
-            else None
-        )
+        key_alg = key_enc_method.get("@_Algorithm") if isinstance(key_enc_method, dict) else None
 
         encrypted_data = find_node(parsed, "EncryptedData")
         data_enc_method = (
-            encrypted_data.get("EncryptionMethod")
-            if isinstance(encrypted_data, dict)
-            else None
+            encrypted_data.get("EncryptionMethod") if isinstance(encrypted_data, dict) else None
         )
-        data_alg = (
-            data_enc_method.get("@_Algorithm")
-            if isinstance(data_enc_method, dict)
-            else None
-        )
+        data_alg = data_enc_method.get("@_Algorithm") if isinstance(data_enc_method, dict) else None
         return {"key_encryption": key_alg or None, "data_encryption": data_alg or None}
     except Exception:
         return {"key_encryption": None, "data_encryption": None}
@@ -203,9 +191,7 @@ def _has_encrypted_assertion(xml: str) -> bool:
         return False
 
 
-def _handle_deprecated_algorithm(
-    message: str, behavior: str, error_code: str
-) -> None:
+def _handle_deprecated_algorithm(message: str, behavior: str, error_code: str) -> None:
     if behavior == "reject":
         raise APIError(400, error_code, message=message)
     if behavior == "warn":
@@ -257,10 +243,7 @@ def _validate_encryption_algorithms(
                 raise APIError(
                     400,
                     "SAML_ALGORITHM_NOT_ALLOWED",
-                    message=(
-                        "SAML key encryption algorithm not in allow-list: "
-                        f"{key_encryption}"
-                    ),
+                    message=(f"SAML key encryption algorithm not in allow-list: {key_encryption}"),
                 )
         elif key_encryption in _DEPRECATED_KEY_ENCRYPTION_ALGORITHMS:
             _handle_deprecated_algorithm(
@@ -277,8 +260,7 @@ def _validate_encryption_algorithms(
                     400,
                     "SAML_ALGORITHM_NOT_ALLOWED",
                     message=(
-                        "SAML data encryption algorithm not in allow-list: "
-                        f"{data_encryption}"
+                        f"SAML data encryption algorithm not in allow-list: {data_encryption}"
                     ),
                 )
         elif data_encryption in _DEPRECATED_DATA_ENCRYPTION_ALGORITHMS:
@@ -316,26 +298,20 @@ def validate_config_algorithms(
 ) -> None:
     """Validate the signature/digest algorithms declared in a provider config."""
     opts = _coerce_config_options(options)
-    signature_algorithm = config.get(
-        "signatureAlgorithm", config.get("signature_algorithm")
-    )
+    signature_algorithm = config.get("signatureAlgorithm", config.get("signature_algorithm"))
     digest_algorithm = config.get("digestAlgorithm", config.get("digest_algorithm"))
 
     if signature_algorithm:
         normalized = _normalize_signature_algorithm(signature_algorithm)
         if opts.allowed_signature_algorithms is not None:
             normalized_allow = [
-                _normalize_signature_algorithm(a)
-                for a in opts.allowed_signature_algorithms
+                _normalize_signature_algorithm(a) for a in opts.allowed_signature_algorithms
             ]
             if normalized not in normalized_allow:
                 raise APIError(
                     400,
                     "SAML_ALGORITHM_NOT_ALLOWED",
-                    message=(
-                        "SAML signature algorithm not in allow-list: "
-                        f"{signature_algorithm}"
-                    ),
+                    message=(f"SAML signature algorithm not in allow-list: {signature_algorithm}"),
                 )
         elif normalized in _DEPRECATED_SIGNATURE_ALGORITHMS:
             _handle_deprecated_algorithm(
@@ -348,9 +324,7 @@ def validate_config_algorithms(
             raise APIError(
                 400,
                 "SAML_UNKNOWN_ALGORITHM",
-                message=(
-                    f"SAML signature algorithm not recognized: {signature_algorithm}"
-                ),
+                message=(f"SAML signature algorithm not recognized: {signature_algorithm}"),
             )
 
     if digest_algorithm:

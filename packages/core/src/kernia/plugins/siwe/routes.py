@@ -105,7 +105,7 @@ async def _default_verify_message(args: Mapping[str, Any]) -> bool:
 
 def _to_checksum(addr: str) -> str:
     """EIP-55 checksum address (uses eth_utils via eth_account)."""
-    from eth_utils import to_checksum_address
+    from eth_utils.address import to_checksum_address
 
     return to_checksum_address(addr)
 
@@ -143,7 +143,9 @@ class _NonceBody:
     chainId: int = 1
 
 
-async def _issue_nonce(ctx: EndpointContext, raw_address: str | None, chain_id: int) -> dict[str, object]:
+async def _issue_nonce(
+    ctx: EndpointContext, raw_address: str | None, chain_id: int
+) -> dict[str, object]:
     address = _to_checksum(_validate_address(raw_address))
     opts = _options()
     get_nonce = opts.get_nonce or _default_get_nonce

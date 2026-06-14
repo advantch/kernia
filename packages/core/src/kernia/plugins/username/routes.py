@@ -113,9 +113,7 @@ async def _sign_up_username(ctx: EndpointContext) -> dict[str, object]:
 
     normalized = opts.normalize(body.username)
     to_validate = (
-        normalized
-        if opts.username_validation_order == "post-normalization"
-        else body.username
+        normalized if opts.username_validation_order == "post-normalization" else body.username
     )
     _validate(opts, to_validate, status=422)
 
@@ -218,9 +216,8 @@ async def _sign_in_username(ctx: EndpointContext) -> dict[str, object]:
     if not verify_password(body.password, account["password"]):
         raise APIError(401, "INVALID_USERNAME_OR_PASSWORD")
 
-    if (
-        ctx.auth.options.email_and_password.require_email_verification
-        and not user.get("emailVerified")
+    if ctx.auth.options.email_and_password.require_email_verification and not user.get(
+        "emailVerified"
     ):
         raise APIError(403, "EMAIL_NOT_VERIFIED")
 

@@ -28,11 +28,11 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from webauthn.helpers import bytes_to_base64url
 
 # WebAuthn authenticator-data flags
-_FLAG_UP = 0x01   # user present
-_FLAG_UV = 0x04   # user verified
-_FLAG_AT = 0x40   # attested credential data included (registration only)
-_FLAG_BE = 0x08   # backup eligible
-_FLAG_BS = 0x10   # backup state
+_FLAG_UP = 0x01  # user present
+_FLAG_UV = 0x04  # user verified
+_FLAG_AT = 0x40  # attested credential data included (registration only)
+_FLAG_BE = 0x08  # backup eligible
+_FLAG_BS = 0x10  # backup state
 
 
 @dataclass
@@ -85,12 +85,7 @@ class SoftAuthenticator:
         # AAGUID || credentialIdLength(2) || credentialId || credentialPublicKey(COSE)
         cose_key = _ec_public_key_to_cose(pub)
         cose_cbor = cbor2.dumps(cose_key)
-        attested = (
-            self.aaguid
-            + struct.pack(">H", len(cred_id))
-            + cred_id
-            + cose_cbor
-        )
+        attested = self.aaguid + struct.pack(">H", len(cred_id)) + cred_id + cose_cbor
 
         # 4. authData
         flags = _FLAG_UP * int(user_present) | _FLAG_UV * int(user_verified) | _FLAG_AT

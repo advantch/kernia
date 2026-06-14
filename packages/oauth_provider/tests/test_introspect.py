@@ -150,9 +150,7 @@ async def test_access_token_sid_dropped_for_logged_out_user(confidential) -> Non
             driver, client, code, verifier, scope="openid profile email offline_access"
         )
     ).json()
-    await auth.context.adapter.delete(
-        model="session", where=(Where(field="id", value=sid),)
-    )
+    await auth.context.adapter.delete(model="session", where=(Where(field="id", value=sid),))
     r = await _introspect(driver, client, tokens["access_token"], "access_token")
     assert r.status == 200, r.json()
     assert r.json()["active"] is True
@@ -163,9 +161,7 @@ async def test_refresh_token_sid_dropped_for_logged_out_user(confidential) -> No
     auth, driver, client = confidential
     sid = await _session_id(driver)
     tokens = await get_tokens(driver, client)
-    await auth.context.adapter.delete(
-        model="session", where=(Where(field="id", value=sid),)
-    )
+    await auth.context.adapter.delete(model="session", where=(Where(field="id", value=sid),))
     r = await _introspect(driver, client, tokens["refresh_token"], "refresh_token")
     assert r.status == 200, r.json()
     assert r.json()["active"] is True

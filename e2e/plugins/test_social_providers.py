@@ -16,11 +16,9 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.social_providers._helpers import make_provider
-from kernia.types.adapter import Where
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver

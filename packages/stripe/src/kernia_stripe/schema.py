@@ -27,9 +27,7 @@ class FreeTrial:
     days: int
     on_trial_start: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
     on_trial_end: Callable[[dict[str, Any], Any], Awaitable[None] | None] | None = None
-    on_trial_expired: (
-        Callable[[dict[str, Any], Any], Awaitable[None] | None] | None
-    ) = None
+    on_trial_expired: Callable[[dict[str, Any], Any], Awaitable[None] | None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,9 +155,7 @@ SUBSCRIPTION_MODEL = ModelDef(
 
 
 _USER_EXTENSION = (FieldDef(name="stripeCustomerId", type="string", required=False),)
-_ORGANIZATION_EXTENSION = (
-    FieldDef(name="stripeCustomerId", type="string", required=False),
-)
+_ORGANIZATION_EXTENSION = (FieldDef(name="stripeCustomerId", type="string", required=False),)
 
 # Static view of every column the plugin may contribute, used by tests/introspection.
 USER_EXTENSIONS: Mapping[str, tuple[FieldDef, ...]] = {

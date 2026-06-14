@@ -19,8 +19,8 @@ from kernia.types.context import AuthContext, EndpointContext
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import AfterHook, PluginHooks
 from kernia.types.plugin import (
-    KerniaPlugin,
     InitResult,
+    KerniaPlugin,
     PluginSchema,
     RateLimitRule,
 )
@@ -28,9 +28,7 @@ from kernia.types.plugin import (
 # The custom-session transform: receives ``{"user": ..., "session": ...}`` and
 # the endpoint context, returns the replacement get-session payload. Mirrors the
 # ``fn`` argument of upstream ``customSession(fn, options?, config?)``.
-CustomSessionFn = Callable[
-    [dict[str, Any], EndpointContext], Awaitable[dict[str, Any] | None]
-]
+CustomSessionFn = Callable[[dict[str, Any], EndpointContext], Awaitable[dict[str, Any] | None]]
 
 
 @runtime_checkable
@@ -115,9 +113,7 @@ def custom_session(
     response, matching the JS plugin's behavior.
     """
 
-    async def get_session_after(
-        ctx: EndpointContext, result: object
-    ) -> object | None:
+    async def get_session_after(ctx: EndpointContext, result: object) -> object | None:
         # ``/get-session`` returns None when unauthenticated; mirror upstream and
         # leave the null response untouched.
         if not isinstance(result, dict):
@@ -128,9 +124,7 @@ def custom_session(
         session = result.get("session")
         return await fn({"user": user, "session": session}, ctx)
 
-    after_hooks: list[AfterHook] = [
-        AfterHook(match="/get-session", handler=get_session_after)
-    ]
+    after_hooks: list[AfterHook] = [AfterHook(match="/get-session", handler=get_session_after)]
 
     if should_mutate_list_device_sessions:
 
@@ -153,9 +147,7 @@ def custom_session(
 
         # The Python multi-session plugin exposes the device-session list at
         # ``/multi-session/list`` (upstream: ``/multi-session/list-device-sessions``).
-        after_hooks.append(
-            AfterHook(match="/multi-session/list", handler=list_after)
-        )
+        after_hooks.append(AfterHook(match="/multi-session/list", handler=list_after))
 
     return _TransformCustomSessionPlugin(  # type: ignore[return-value]
         hooks=PluginHooks(after=tuple(after_hooks))

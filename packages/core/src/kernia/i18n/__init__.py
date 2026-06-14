@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 DetectionStrategy = Literal["header", "cookie", "user"]
 
@@ -89,14 +89,14 @@ class _I18nPlugin:
             result["message"] = translated
         return None
 
-    def _detect(self, ctx) -> str:  # type: ignore[no-untyped-def]
+    def _detect(self, ctx: Any) -> str:
         for strategy in self.detection:
             if strategy == "header":
                 for loc in parse_accept_language(ctx.request.headers.get("accept-language")):
                     if loc in self.translations:
                         return loc
             elif strategy == "cookie":
-                cookie_val = ctx.request.cookies.get(self.locale_cookie)
+                cookie_val: str | None = ctx.request.cookies.get(self.locale_cookie)
                 if cookie_val and cookie_val in self.translations:
                     return cookie_val
             elif strategy == "user":
@@ -114,7 +114,7 @@ def i18n(
     detection: Sequence[DetectionStrategy] = ("header",),
     locale_cookie: str = "locale",
     user_locale_field: str = "locale",
-):
+) -> _I18nPlugin:
     """Construct the i18n plugin. See module docstring for usage."""
     if not translations:
         raise ValueError("i18n: at least one locale must be supplied")

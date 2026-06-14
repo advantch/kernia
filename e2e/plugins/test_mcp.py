@@ -94,9 +94,7 @@ async def test_mcp_introspect_rejects_wrong_resource(setup) -> None:
     )
     token = r.json()["access_token"]
     with pytest.raises(ValueError, match="resource mismatch"):
-        await introspect_mcp_token(
-            auth.context, token, expected_resource="https://different/mcp"
-        )
+        await introspect_mcp_token(auth.context, token, expected_resource="https://different/mcp")
 
 
 async def test_mcp_well_known(setup) -> None:
@@ -161,7 +159,7 @@ async def test_mcp_rejects_disallowed_scope(setup) -> None:
 
 
 async def test_mcp_authorize_requires_user(setup) -> None:
-    _, _, client, _ = setup
+    _, _, _client, _ = setup
     # Build a fresh driver with no session
     fresh_auth = init(
         KerniaOptions(

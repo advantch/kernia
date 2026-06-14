@@ -18,7 +18,6 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 import pytest
-
 from kernia.types.secondary_storage import SecondaryStorage
 from kernia.utils.in_memory_storage import InMemorySecondaryStorage
 from kernia_redis_storage import redis_storage

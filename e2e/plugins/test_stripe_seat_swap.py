@@ -26,8 +26,8 @@ from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -74,9 +74,7 @@ async def _signup(driver: ASGIDriver, email: str) -> str:
 
 
 async def _create_org(driver: ASGIDriver, *, name: str, slug: str) -> str:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()["id"]
 
@@ -179,9 +177,7 @@ async def test_swaps_seat_item_for_different_seat_pricing() -> None:
     assert r.status == 200, r.json()
 
     # No billing-portal session; the seat price change goes through update().
-    assert not [
-        e for e in mock.capture_events if e["type"] == "billing_portal.session.create"
-    ]
+    assert not [e for e in mock.capture_events if e["type"] == "billing_portal.session.create"]
     event = _update_event(mock)
     assert event["object"]["id"] == "sub_team"
     items = _items_by_id(event)
@@ -224,9 +220,7 @@ async def test_keeps_shared_seat_item_when_pricing_unchanged() -> None:
         "basic": StripePlan(
             name="basic", price_id="price_basic_base", seat_price_id="price_shared_seat"
         ),
-        "pro": StripePlan(
-            name="pro", price_id="price_pro_base", seat_price_id="price_shared_seat"
-        ),
+        "pro": StripePlan(name="pro", price_id="price_pro_base", seat_price_id="price_shared_seat"),
     }
     driver, mock, auth = _build(plans)
     await _signup(driver, "same-seat@test.com")
@@ -265,15 +259,11 @@ async def test_no_duplicate_item_between_seat_only_plans() -> None:
         "starter": StripePlan(
             name="starter", price_id="price_starter", seat_price_id="price_starter"
         ),
-        "growth": StripePlan(
-            name="growth", price_id="price_growth", seat_price_id="price_growth"
-        ),
+        "growth": StripePlan(name="growth", price_id="price_growth", seat_price_id="price_growth"),
     }
     driver, mock, auth = _build(plans)
     await _signup(driver, "seat-only-upgrade@test.com")
-    org_id = await _create_org(
-        driver, name="Seat Only Upgrade Org", slug="seat-only-upgrade-org"
-    )
+    org_id = await _create_org(driver, name="Seat Only Upgrade Org", slug="seat-only-upgrade-org")
     await _seed_active_org_sub(
         auth,
         mock,

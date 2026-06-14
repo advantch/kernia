@@ -28,8 +28,8 @@ from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -119,11 +119,7 @@ def _update_event(mock: MockStripe) -> dict[str, Any]:
 
 
 def _sched_update_event(mock: MockStripe) -> dict[str, Any]:
-    return next(
-        e
-        for e in mock.capture_events
-        if e["type"] == "subscription_schedule.update"
-    )
+    return next(e for e in mock.capture_events if e["type"] == "subscription_schedule.update")
 
 
 def _parse_bracket_items(params: dict[str, str], prefix: str) -> list[dict[str, Any]]:
@@ -149,9 +145,7 @@ def _payload_items(mock: MockStripe) -> list[dict[str, Any]]:
 
 
 def _phase2_items(mock: MockStripe) -> list[dict[str, Any]]:
-    return _parse_bracket_items(
-        _sched_update_event(mock)["params"], "phases[1][items]"
-    )
+    return _parse_bracket_items(_sched_update_event(mock)["params"], "phases[1][items]")
 
 
 def _by_id(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -203,9 +197,7 @@ async def test_swaps_line_item_prices_when_upgrading_immediately() -> None:
     r = await _upgrade(driver, plan="pro")
     assert r.status == 200, r.json()
 
-    assert not [
-        e for e in mock.capture_events if e["type"] == "billing_portal.session.create"
-    ]
+    assert not [e for e in mock.capture_events if e["type"] == "billing_portal.session.create"]
     event = _update_event(mock)
     assert event["object"]["id"] == "sub_lineitem"
 
@@ -239,9 +231,7 @@ async def test_swaps_line_item_prices_in_scheduled_phase() -> None:
     r = await _upgrade(driver, plan="starter", schedule=True)
     assert r.status == 200, r.json()
 
-    assert [
-        e for e in mock.capture_events if e["type"] == "subscription_schedule.create"
-    ]
+    assert [e for e in mock.capture_events if e["type"] == "subscription_schedule.create"]
     phase2 = _phase2_items(mock)
     # Multiset diff: base in-place, old line items removed, new added.
     assert len(phase2) == 3
@@ -362,9 +352,7 @@ async def test_does_not_duplicate_present_line_item_immediate() -> None:
     items = _payload_items(mock)
     # si_stale already carries price_premium_security, so it must NOT be re-added.
     security_adds = [
-        it
-        for it in items
-        if not it.get("id") and it.get("price") == "price_premium_security"
+        it for it in items if not it.get("id") and it.get("price") == "price_premium_security"
     ]
     assert security_adds == []
 

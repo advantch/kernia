@@ -7,6 +7,7 @@ extra columns materialized upfront so we build a local factory matrix.
 from __future__ import annotations
 
 import secrets
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -25,13 +26,13 @@ def _extended_user_model() -> ModelDef:
     return ModelDef(name="user", fields=tuple(user.fields) + tuple(_USERNAME_USER_FIELDS))
 
 
-async def _memory_factory() -> Any:
+async def _memory_factory() -> AsyncIterator[Any]:
     from kernia_memory_adapter import memory_adapter
 
-    return memory_adapter()
+    yield memory_adapter()
 
 
-async def _sqlite_factory() -> Any:
+async def _sqlite_factory() -> AsyncIterator[Any]:
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -44,34 +45,43 @@ async def _sqlite_factory() -> Any:
     adapter = SQLAlchemyAdapter(engine=engine, metadata=metadata, models=models)
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
-    return adapter
+    yield adapter
 
 
-def _adapters() -> tuple[str, list[Any]]:
-    has_docker = docker_available()
-    return (
-        "adapter_factory",
-        [
-            pytest.param(_memory_factory, id="memory"),
-            pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
-            pytest.param(
-                _mongo_placeholder,
-                id="mongo",
-                marks=pytest.mark.skipif(not has_docker, reason="Docker required"),
-            ),
-        ],
-    )
-
-
-async def _mongo_placeholder() -> Any:
+async def _mongo_factory() -> AsyncIterator[Any]:
     try:
         from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
     except ImportError:
         pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
     from kernia_test_utils.containers import mongodb_container
 
+    # Yield inside the `with` so the container stays alive for the test body.
     with mongodb_container() as url:
-        return await mongo_adapter(url=url)
+        # Each test gets its own random db so parametrize doesn't leak state.
+        yield await mongo_adapter(
+            url=url,
+            db_name=f"kernia_test_{secrets.token_hex(4)}",
+        )
+
+
+def _adapter_params() -> list[Any]:
+    has_docker = docker_available()
+    return [
+        pytest.param(_memory_factory, id="memory"),
+        pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
+        pytest.param(
+            _mongo_factory,
+            id="mongo",
+            marks=pytest.mark.skipif(not has_docker, reason="Docker required"),
+        ),
+    ]
+
+
+@pytest.fixture(params=_adapter_params())
+async def adapter(request: pytest.FixtureRequest) -> AsyncIterator[Any]:
+    """Parametrized adapter fixture; backing containers stay alive per test."""
+    async for a in request.param():
+        yield a
 
 
 def _build(adapter: Any, username_plugin: Any = None) -> ASGIDriver:
@@ -85,11 +95,7 @@ def _build(adapter: Any, username_plugin: Any = None) -> ASGIDriver:
     return ASGIDriver(app=auth.router.mount())
 
 
-@pytest.mark.parametrize(*_adapters())
-async def test_username_sign_up_then_case_insensitive_sign_in(
-    adapter_factory: Any,
-) -> None:
-    adapter = await adapter_factory()
+async def test_username_sign_up_then_case_insensitive_sign_in(adapter: Any) -> None:
     driver = _build(adapter)
 
     r = await driver.request(
@@ -263,9 +269,7 @@ async def test_custom_normalization() -> None:
 
     plugin = username(
         min_username_length=4,
-        username_normalization=lambda u: u.replace("0", "o")
-        .replace("4", "a")
-        .lower(),
+        username_normalization=lambda u: u.replace("0", "o").replace("4", "a").lower(),
     )
     driver = _build(memory_adapter(), plugin)
     r = await driver.request(
@@ -310,9 +314,7 @@ async def test_display_username_validator_rejects() -> None:
 
     from kernia_memory_adapter import memory_adapter
 
-    plugin = username(
-        display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
-    )
+    plugin = username(display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d)))
     driver = _build(memory_adapter(), plugin)
     ok = await driver.request(
         "POST",
@@ -389,15 +391,11 @@ async def test_is_username_available_validation_errors() -> None:
     assert invalid.status == 422
     assert invalid.json()["code"] == "INVALID_USERNAME"
 
-    short = await driver.request(
-        "POST", "/is-username-available", json_body={"username": "ab"}
-    )
+    short = await driver.request("POST", "/is-username-available", json_body={"username": "ab"})
     assert short.status == 422
     assert short.json()["code"] == "USERNAME_TOO_SHORT"
 
-    long = await driver.request(
-        "POST", "/is-username-available", json_body={"username": "a" * 31}
-    )
+    long = await driver.request("POST", "/is-username-available", json_body={"username": "a" * 31})
     assert long.status == 422
     assert long.json()["code"] == "USERNAME_TOO_LONG"
 
@@ -456,9 +454,7 @@ async def test_update_username() -> None:
 
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "new_username", "new-password")
-    r = await driver.request(
-        "POST", "/update-user", json_body={"username": "new_username_2.1"}
-    )
+    r = await driver.request("POST", "/update-user", json_body={"username": "new_username_2.1"})
     assert r.status == 200, r.json()
     user = await _session_user(driver)
     assert user["username"] == "new_username_2.1"
@@ -472,9 +468,7 @@ async def test_update_user_duplicate_different_user_400() -> None:
     await _signed_up_keep_session(driver, "duplicate_user", "new_password1")
     driver.cookies.clear()
     await _signed_up_keep_session(driver, "second_user", "new_password1")
-    r = await driver.request(
-        "POST", "/update-user", json_body={"username": "duplicate_user"}
-    )
+    r = await driver.request("POST", "/update-user", json_body={"username": "duplicate_user"})
     assert r.status == 400, r.json()
     assert r.json()["code"] == "USERNAME_IS_ALREADY_TAKEN"
 
@@ -487,9 +481,7 @@ async def test_update_user_duplicate_different_casing_400() -> None:
     await _signed_up_keep_session(driver, "casetestuser", "new_password1")
     driver.cookies.clear()
     await _signed_up_keep_session(driver, "another_user", "new_password1")
-    r = await driver.request(
-        "POST", "/update-user", json_body={"username": "CaseTestUser"}
-    )
+    r = await driver.request("POST", "/update-user", json_body={"username": "CaseTestUser"})
     assert r.status == 400, r.json()
     assert r.json()["code"] == "USERNAME_IS_ALREADY_TAKEN"
 
@@ -500,9 +492,7 @@ async def test_update_user_duplicate_same_user_succeeds() -> None:
     driver = _build(memory_adapter())
     await _signed_up_keep_session(driver, "new_username_2.1", "new-password")
     # Re-applying a differently-cased form of the SAME user's username is allowed.
-    r = await driver.request(
-        "POST", "/update-user", json_body={"username": "New_username_2.1"}
-    )
+    r = await driver.request("POST", "/update-user", json_body={"username": "New_username_2.1"})
     assert r.status == 200, r.json()
     user = await _session_user(driver)
     assert user["username"] == "new_username_2.1"
@@ -532,9 +522,7 @@ async def test_update_display_username_valid() -> None:
 
     from kernia_memory_adapter import memory_adapter
 
-    plugin = username(
-        display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
-    )
+    plugin = username(display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d)))
     driver = _build(memory_adapter(), plugin)
     await _signed_up_keep_session(driver, "initial_name", "test-password")
     r = await driver.request(
@@ -552,9 +540,7 @@ async def test_update_display_username_invalid_rejected() -> None:
 
     from kernia_memory_adapter import memory_adapter
 
-    plugin = username(
-        display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d))
-    )
+    plugin = username(display_username_validator=lambda d: bool(re.match(r"^[a-zA-Z0-9_-]+$", d)))
     driver = _build(memory_adapter(), plugin)
     await _signed_up_keep_session(driver, "valid_name", "test-password")
     r = await driver.request(
@@ -571,9 +557,7 @@ def _build_verify(adapter: Any) -> ASGIDriver:
         KerniaOptions(
             database=adapter,
             secret="test-secret-key",
-            email_and_password=EmailPasswordOptions(
-                enabled=True, require_email_verification=True
-            ),
+            email_and_password=EmailPasswordOptions(enabled=True, require_email_verification=True),
             plugins=[email_and_password(), username()],
         )
     )

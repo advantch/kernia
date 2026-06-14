@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.plugins.access import (
     Role,
     create_access_control,
@@ -62,9 +61,7 @@ def test_authorize_or_outer_connector_short_circuits_on_first_hit() -> None:
 
 def test_authorize_or_inner_connector() -> None:
     role = _ac().new_role({"post": ("read",)})
-    r = role.authorize(
-        {"post": {"actions": ("read", "delete"), "connector": "OR"}}
-    )
+    r = role.authorize({"post": {"actions": ("read", "delete"), "connector": "OR"}})
     assert r.success is True
 
 

@@ -18,12 +18,9 @@ from http.cookies import SimpleCookie
 from typing import Any, ClassVar
 
 from asgiref.sync import async_to_sync
-from kernia.auth import Kernia
-from kernia.integrations.session import strip_base_path
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from django.views import View
-
 from kernia.auth import Kernia
 from kernia.integrations.session import strip_base_path
 
@@ -133,9 +130,7 @@ class KerniaView(View):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if self.auth is None:
-            raise RuntimeError(
-                "KerniaView requires an `auth` kwarg passed via .as_view()"
-            )
+            raise RuntimeError("KerniaView requires an `auth` kwarg passed via .as_view()")
         # ``rest`` is captured by the URL pattern; rebuild the full path because
         # the inner router decides routing from scope["path"].
         rest = kwargs.get("rest", "")
@@ -180,7 +175,15 @@ class KerniaView(View):
             jar.load(line)
             for morsel in jar.values():
                 resp.cookies[morsel.key] = morsel.value
-                for attr in ("expires", "path", "domain", "secure", "httponly", "samesite", "max-age"):
+                for attr in (
+                    "expires",
+                    "path",
+                    "domain",
+                    "secure",
+                    "httponly",
+                    "samesite",
+                    "max-age",
+                ):
                     if morsel[attr]:
                         resp.cookies[morsel.key][attr] = morsel[attr]
         return resp
@@ -206,4 +209,3 @@ def setup(
             KerniaView.as_view(auth=auth, base_path="/" + prefix),
         ),
     ]
-

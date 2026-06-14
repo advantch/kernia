@@ -67,9 +67,7 @@ class Router:
                 )
             self._endpoints[key] = ep
 
-    def match(
-        self, method: str, path: str
-    ) -> tuple[AuthEndpoint, dict[str, str]] | None:
+    def match(self, method: str, path: str) -> tuple[AuthEndpoint, dict[str, str]] | None:
         """Resolve a (method, path) → (endpoint, path_params).
 
         Static routes hit the O(1) dict; dynamic routes are matched by template.
@@ -106,7 +104,9 @@ class Router:
         not `/api/auth/sign-in/email`).
         """
 
-        async def app(scope: dict, receive: Callable, send: Callable) -> None:
+        async def app(
+            scope: dict[str, Any], receive: Callable[..., Any], send: Callable[..., Any]
+        ) -> None:
             if scope["type"] != "http":
                 # Lifespan + websocket are forwarded as no-ops here.
                 if scope["type"] == "lifespan":
@@ -121,7 +121,7 @@ class Router:
 # --------------------------------------------------------------------------- helpers
 
 
-async def _drain_lifespan(receive: Callable, send: Callable) -> None:
+async def _drain_lifespan(receive: Callable[..., Any], send: Callable[..., Any]) -> None:
     while True:
         msg = await receive()
         if msg["type"] == "lifespan.startup":
@@ -133,9 +133,9 @@ async def _drain_lifespan(receive: Callable, send: Callable) -> None:
 
 async def _handle_http(
     router: Router,
-    scope: dict,
-    receive: Callable,
-    send: Callable,
+    scope: dict[str, Any],
+    receive: Callable[..., Any],
+    send: Callable[..., Any],
 ) -> None:
     headers = headers_from_asgi(scope.get("headers", []))
     cookies = parse_cookie_header(headers.get("cookie", ""))
@@ -167,6 +167,7 @@ async def _handle_http(
 
     ctx = EndpointContext(request=request, auth=router.auth, path_params=path_params)
 
+    response: HTMLResponse | RedirectResponse | JSONResponse
     try:
         # Trusted-origins / CSRF check on state-changing requests.
         from kernia.auth.trusted_origins import is_state_changing, is_trusted
@@ -254,11 +255,17 @@ async def _handle_http(
         )
 
     if isinstance(response, HTMLResponse):
-        await _send_html(send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers)
+        await _send_html(
+            send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers
+        )
     elif isinstance(response, RedirectResponse):
-        await _send_redirect(send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers)
+        await _send_redirect(
+            send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers
+        )
     else:
-        await _send_json(send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers)
+        await _send_json(
+            send, response, set_cookies=ctx.set_cookies, extra_headers=ctx.response_headers
+        )
 
 
 def _construct_body(body_type: type, raw: Any) -> Any:
@@ -332,7 +339,19 @@ def _hook_matches(matcher: Any, ctx: EndpointContext) -> bool:
 
 
 async def _attach_session(ctx: EndpointContext) -> None:
-    """Resolve a session from the Better Auth-compatible session_token cookie."""
+    """Resolve a session from the Better Auth-compatible session_token cookie.
+
+    Mirrors upstream's `getSessionFromCtx`/`internalAdapter`: an expired session
+    is treated as *no* session — its row is eagerly deleted and the session
+    cookies are cleared, exactly like upstream's `deleteSessionCookie(ctx)` +
+    `deleteSession(token)` on the `session.expiresAt < new Date()` path (see
+    `reference/.../api/routes/session.ts`). `expiresAt` is stored as Unix epoch
+    seconds (UTC; see `context.create_session`), so the comparison is against
+    `time.time()` and is free of naive/aware `datetime` pitfalls.
+    """
+    import time
+
+    from kernia.context import revoke_session
     from kernia.cookies import verify
     from kernia.types.adapter import Where
     from kernia.types.context import Session
@@ -353,17 +372,34 @@ async def _attach_session(ctx: EndpointContext) -> None:
         )
     if not row:
         return
+
+    # Enforce session expiry at this single chokepoint so *every* route — both
+    # `requires_session=True` endpoints and `/get-session` — sees an expired
+    # session as absent. Without this, a session whose `expiresAt` is in the past
+    # still authenticates (a library-wide auth bypass).
+    expires_at = int(row["expiresAt"])
+    if expires_at < int(time.time()):
+        # Clean up the stale row and tell the client to drop the dead cookies,
+        # matching Better Auth's `deleteSession` + `deleteSessionCookie` on the
+        # expired path. `revoke_session` routes the delete through the session
+        # provider when one is installed (custom-session plugin) so external
+        # stores are kept consistent too, and returns the same cookie-clearing
+        # instructions sign-out uses (`session_token` + `dont_remember`,
+        # Max-Age=0).
+        ctx.set_cookies.extend(await revoke_session(ctx.auth, token=row["token"]))
+        return
+
     ctx.session = Session(
         id=row["id"],
         user_id=row["userId"],
-        expires_at=int(row["expiresAt"]),
+        expires_at=expires_at,
         token=row["token"],
         ip_address=row.get("ipAddress"),
         user_agent=row.get("userAgent"),
     )
 
 
-async def _drain_body(receive: Callable) -> bytes:
+async def _drain_body(receive: Callable[..., Any]) -> bytes:
     chunks: list[bytes] = []
     more = True
     while more:
@@ -377,7 +413,7 @@ async def _drain_body(receive: Callable) -> bytes:
 
 
 async def _send_json(
-    send: Callable,
+    send: Callable[..., Any],
     response: JSONResponse,
     *,
     set_cookies: list[tuple[str, str, Any]] | None = None,
@@ -392,19 +428,23 @@ async def _send_json(
         headers.append((b"set-cookie", render_set_cookie(name, value, attrs).encode("latin-1")))
 
     body_bytes = response.to_bytes()
-    await send({
-        "type": "http.response.start",
-        "status": response.status,
-        "headers": headers,
-    })
-    await send({
-        "type": "http.response.body",
-        "body": body_bytes,
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": response.status,
+            "headers": headers,
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": body_bytes,
+        }
+    )
 
 
 async def _send_html(
-    send: Callable,
+    send: Callable[..., Any],
     response: HTMLResponse,
     *,
     set_cookies: list[tuple[str, str, Any]] | None = None,
@@ -420,16 +460,18 @@ async def _send_html(
     for name, value, attrs in set_cookies or ():
         headers.append((b"set-cookie", render_set_cookie(name, value, attrs).encode("latin-1")))
     body_bytes = response.to_bytes()
-    await send({
-        "type": "http.response.start",
-        "status": response.status,
-        "headers": headers,
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": response.status,
+            "headers": headers,
+        }
+    )
     await send({"type": "http.response.body", "body": body_bytes})
 
 
 async def _send_redirect(
-    send: Callable,
+    send: Callable[..., Any],
     response: RedirectResponse,
     *,
     set_cookies: list[tuple[str, str, Any]] | None = None,
@@ -442,11 +484,13 @@ async def _send_redirect(
         headers.append((k.encode("latin-1"), v.encode("latin-1")))
     for name, value, attrs in set_cookies or ():
         headers.append((b"set-cookie", render_set_cookie(name, value, attrs).encode("latin-1")))
-    await send({
-        "type": "http.response.start",
-        "status": response.status,
-        "headers": headers,
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": response.status,
+            "headers": headers,
+        }
+    )
     await send({"type": "http.response.body", "body": b""})
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins.additional_fields import additional_fields
 from kernia.plugins.email_password import email_and_password

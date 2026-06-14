@@ -6,7 +6,6 @@ Demonstrates that swapping adapters changes zero application code.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.init_options import KerniaOptions

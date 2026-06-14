@@ -44,7 +44,9 @@ def create_adapter(
             raise ValueError(f"Model {m.name!r} has no fields")
         seen.add(m.name)
 
-    model_names: dict[str, str] = {m.name: (rename_models or {}).get(m.name, m.name) for m in models}
+    model_names: dict[str, str] = {
+        m.name: (rename_models or {}).get(m.name, m.name) for m in models
+    }
     field_names: dict[str, dict[str, str]] = {}
     for m in models:
         per = (rename_fields or {}).get(m.name, {})

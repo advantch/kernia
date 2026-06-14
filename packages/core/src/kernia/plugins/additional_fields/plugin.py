@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kernia.error import APIError
-from kernia.types.adapter import FieldDef, FieldType, Where
+from kernia.types.adapter import FieldDef, Where
 from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import AfterHook, PluginHooks
@@ -39,7 +39,7 @@ def _to_field_defs(spec: Mapping[str, Mapping[str, Any]]) -> tuple[FieldDef, ...
         out.append(
             FieldDef(
                 name=name,
-                type=ty,  # type: ignore[arg-type]
+                type=ty,
                 required=bool(attrs.get("required", False)),
                 unique=bool(attrs.get("unique", False)),
                 default=attrs.get("default"),
@@ -115,10 +115,14 @@ def additional_fields(config: AdditionalFieldsConfig) -> KerniaPlugin:
             update=updates,
         )
         if updated is not None:
-            result["user"] = updated  # type: ignore[index]
+            result["user"] = updated
         return result
 
-    hooks = PluginHooks(after=(AfterHook(match=lambda ctx: ctx.request.path in _SIGN_UP_PATHS, handler=after_signup),))
+    hooks = PluginHooks(
+        after=(
+            AfterHook(match=lambda ctx: ctx.request.path in _SIGN_UP_PATHS, handler=after_signup),
+        )
+    )
 
     return _AdditionalFieldsPlugin(  # type: ignore[return-value]
         schema=PluginSchema(extend={k: tuple(v) for k, v in extend.items()}),

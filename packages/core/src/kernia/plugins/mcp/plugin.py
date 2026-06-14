@@ -148,9 +148,7 @@ async def introspect_mcp_token(
     claims = await verify_local_jwt(auth, token, issuer=opts.issuer)
     if expected_resource is not None:
         aud = claims.get("aud")
-        if aud != expected_resource and not (
-            isinstance(aud, list) and expected_resource in aud
-        ):
+        if aud != expected_resource and not (isinstance(aud, list) and expected_resource in aud):
             raise ValueError("resource mismatch")
     return claims
 
@@ -193,4 +191,4 @@ def mcp(options: MCPOptions) -> KerniaPlugin:
     return _MCPPlugin(opts=options)  # type: ignore[return-value]
 
 
-__all__ = ["mcp", "MCPOptions", "introspect_mcp_token"]
+__all__ = ["MCPOptions", "introspect_mcp_token", "mcp"]

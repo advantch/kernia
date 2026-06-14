@@ -27,8 +27,8 @@ from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -93,9 +93,7 @@ async def _signup(driver: ASGIDriver, email: str) -> str:
 
 
 async def _create_org(driver: ASGIDriver, *, name: str, slug: str) -> str:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()["id"]
 
@@ -151,9 +149,7 @@ async def test_creates_stripe_customer_for_organization_on_upgrade() -> None:
     assert obj["metadata"]["organizationId"] == org_id
     assert obj["metadata"]["customerType"] == "organization"
 
-    org_row = await adapter.find_one(
-        model="organization", where=(Where(field="id", value=org_id),)
-    )
+    org_row = await adapter.find_one(model="organization", where=(Where(field="id", value=org_id),))
     assert org_row["stripeCustomerId"] == obj["id"]
 
     assert seen, "on_customer_create was not called"
@@ -186,7 +182,7 @@ async def test_calls_get_customer_create_params_for_org() -> None:
         received.append(org)
         return {"email": "billing@org.com", "description": "Custom org description"}
 
-    driver, mock, auth = _build(
+    driver, mock, _auth = _build(
         OrganizationStripeOptions(enabled=True, get_customer_create_params=get_params)
     )
     await _signup(driver, "org-params-test@email.com")
@@ -238,9 +234,7 @@ async def test_creates_billing_portal_for_organization() -> None:
     assert r.status == 200, r.json()
     assert r.json()["url"] is not None
 
-    portals = [
-        e for e in mock.capture_events if e["type"] == "billing_portal.session.create"
-    ]
+    portals = [e for e in mock.capture_events if e["type"] == "billing_portal.session.create"]
     assert portals, "expected a billing portal session"
     assert portals[-1]["object"]["customer"] == "cus_portal_org_123"
 
@@ -317,9 +311,7 @@ async def test_organization_not_found_on_upgrade() -> None:
 async def test_rejects_org_subscription_without_authorize_reference() -> None:
     # No organization integration and no authorize_reference → middleware must
     # reject any organization-scoped subscription request.
-    driver, _mock, _auth = _build(
-        org_opts=None, with_org_plugin=False, authorize_reference=None
-    )
+    driver, _mock, _auth = _build(org_opts=None, with_org_plugin=False, authorize_reference=None)
     await _signup(driver, "org-disabled-test@email.com")
 
     r = await _upgrade(driver, plan="starter", org_id="fake-org-id")

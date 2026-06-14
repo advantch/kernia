@@ -151,9 +151,7 @@ def org_adapters_param() -> tuple[str, list[Any]]:
             pytest.param(
                 memory_factory_full,
                 id="mongo",
-                marks=pytest.mark.skipif(
-                    not has_docker, reason="Docker required for mongo"
-                ),
+                marks=pytest.mark.skipif(not has_docker, reason="Docker required for mongo"),
             ),
         ],
     )
@@ -212,9 +210,7 @@ async def _sign_up(
     return r.json()["user"]
 
 
-async def _create_org(
-    driver: ASGIDriver, *, name: str, slug: str | None = None
-) -> dict[str, Any]:
+async def _create_org(driver: ASGIDriver, *, name: str, slug: str | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {"name": name}
     if slug:
         body["slug"] = slug
@@ -383,9 +379,7 @@ async def test_set_active_explicit(
     adapter = await org_adapter_factory()
     driver = await _make_driver(adapter)
     await _sign_up(driver, email="x@example.com")
-    org_a = await _create_org(
-        driver, name="OrgA", slug="org-a"
-    )
+    org_a = await _create_org(driver, name="OrgA", slug="org-a")
     org_b_resp = await driver.request(
         "POST",
         "/organization/create",
@@ -412,9 +406,7 @@ async def test_set_active_explicit(
     assert r.json()["activeOrganization"]["id"] == org_b["id"]
 
     # Clear active.
-    r = await driver.request(
-        "POST", "/organization/set-active", json_body={"organizationId": None}
-    )
+    r = await driver.request("POST", "/organization/set-active", json_body={"organizationId": None})
     assert r.status == 200
     r = await driver.request("GET", "/get-session")
     assert "activeOrganization" not in r.json()
@@ -468,13 +460,9 @@ async def test_invite_member_duplicate_returns_409(
         "email": "dup-invite@example.com",
         "role": "member",
     }
-    r = await driver.request(
-        "POST", "/organization/invite-member", json_body=invite_body
-    )
+    r = await driver.request("POST", "/organization/invite-member", json_body=invite_body)
     assert r.status == 200
-    r = await driver.request(
-        "POST", "/organization/invite-member", json_body=invite_body
-    )
+    r = await driver.request("POST", "/organization/invite-member", json_body=invite_body)
     assert r.status == 409
     assert r.json()["code"] == "EMAIL_ALREADY_INVITED"
 
@@ -924,9 +912,7 @@ async def test_dynamic_role_crud_round_trip(
     assert r.status == 200, r.json()
 
     # List should include the new role plus built-ins.
-    r = await driver.request(
-        "GET", "/organization/list-roles", query=f"organizationId={org['id']}"
-    )
+    r = await driver.request("GET", "/organization/list-roles", query=f"organizationId={org['id']}")
     assert r.status == 200
     roles = r.json()
     role_names = [row.get("role") for row in roles]
@@ -997,9 +983,7 @@ async def test_unauthenticated_create_rejected(
 ) -> None:
     adapter = await org_adapter_factory()
     driver = await _make_driver(adapter)
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": "X"}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": "X"})
     assert r.status == 401
 
 
@@ -1015,15 +999,11 @@ async def test_check_slug(org_adapter_factory: Callable[[], Awaitable[Any]]) -> 
     await _sign_up(driver, email="slug@example.com")
     await _create_org(driver, name="Slug Co", slug="slug-co")
     # Free slug → status True
-    r = await driver.request(
-        "POST", "/organization/check-slug", json_body={"slug": "totally-free"}
-    )
+    r = await driver.request("POST", "/organization/check-slug", json_body={"slug": "totally-free"})
     assert r.status == 200, r.json()
     assert r.json()["status"] is True
     # Taken slug → 400 SLUG_TAKEN
-    r = await driver.request(
-        "POST", "/organization/check-slug", json_body={"slug": "slug-co"}
-    )
+    r = await driver.request("POST", "/organization/check-slug", json_body={"slug": "slug-co"})
     assert r.status == 400
     assert r.json()["code"] == "SLUG_TAKEN"
 
@@ -1084,9 +1064,7 @@ async def test_get_invitation(org_adapter_factory: Callable[[], Awaitable[Any]])
     # The invited user signs up and reads the invitation.
     driver_b = await _make_driver(adapter)
     await _sign_up(driver_b, email="guest@example.com")
-    r = await driver_b.request(
-        "GET", "/organization/get-invitation", query=f"id={invite['id']}"
-    )
+    r = await driver_b.request("GET", "/organization/get-invitation", query=f"id={invite['id']}")
     assert r.status == 200, r.json()
     body = r.json()
     assert body["id"] == invite["id"]
@@ -1094,9 +1072,7 @@ async def test_get_invitation(org_adapter_factory: Callable[[], Awaitable[Any]])
     assert body["organizationSlug"] == org["slug"]
     assert body["inviterEmail"] == "inv-owner@example.com"
     # A non-recipient is forbidden.
-    r = await driver_a.request(
-        "GET", "/organization/get-invitation", query=f"id={invite['id']}"
-    )
+    r = await driver_a.request("GET", "/organization/get-invitation", query=f"id={invite['id']}")
     assert r.status == 403
 
 
@@ -1141,9 +1117,7 @@ async def test_set_active_team_and_listings(
     assert r.status == 200, r.json()
     assert any(m["userId"] == user["id"] for m in r.json())
     # Unset active team.
-    r = await driver.request(
-        "POST", "/organization/set-active-team", json_body={"teamId": None}
-    )
+    r = await driver.request("POST", "/organization/set-active-team", json_body={"teamId": None})
     assert r.status == 200
 
 

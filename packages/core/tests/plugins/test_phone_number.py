@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.plugins.phone_number import (
     PHONE_NUMBER_ERROR_CODES,
     PHONE_NUMBER_USER_FIELDS,

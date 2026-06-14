@@ -82,9 +82,7 @@ async def test_magic_link_happy_path(adapter_factory) -> None:
     assert len(smtp.sent) == 1
     token = smtp.sent[0].meta["token"]
 
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 200, r.json()
     body = r.json()
     assert body["user"]["email"] == "alice@example.com"
@@ -96,9 +94,7 @@ async def test_magic_link_happy_path(adapter_factory) -> None:
 async def test_magic_link_invalid_token(adapter_factory) -> None:
     adapter = await adapter_factory()
     driver, _ = _build_driver(adapter, MockSMTP())
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": "nope"})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": "nope"}))
     assert r.status == 400
     assert r.json()["code"] == "MAGIC_LINK_INVALID"
 
@@ -108,18 +104,12 @@ async def test_magic_link_token_consumed_once(adapter_factory) -> None:
     adapter = await adapter_factory()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp)
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "bob@example.com"}
-    )
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "bob@example.com"})
     token = smtp.sent[0].meta["token"]
-    r1 = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r1 = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r1.status == 200
     driver.cookies.clear()
-    r2 = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r2 = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r2.status == 400
     assert r2.json()["code"] == "MAGIC_LINK_INVALID"
 
@@ -129,13 +119,9 @@ async def test_magic_link_sign_up_disabled(adapter_factory) -> None:
     adapter = await adapter_factory()
     smtp = MockSMTP()
     driver, _ = _build_driver(adapter, smtp, disable_sign_up=True)
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "newbie@example.com"}
-    )
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "newbie@example.com"})
     token = smtp.sent[0].meta["token"]
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 403
     assert r.json()["code"] == "MAGIC_LINK_SIGN_UP_DISABLED"
 
@@ -158,9 +144,7 @@ async def test_send_magic_link_url_and_no_metadata() -> None:
 
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
-    r = await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
-    )
+    r = await driver.request("POST", "/sign-in/magic-link", json_body={"email": "a@b.com"})
     assert r.status == 200, r.json()
     assert len(captured) == 1
     assert captured[0]["email"] == "a@b.com"
@@ -190,9 +174,7 @@ async def test_custom_generate_token() -> None:
         memory_adapter(),
         {"send_magic_link": send, "generate_token": lambda _email: "custom_token"},
     )
-    r = await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
-    )
+    r = await driver.request("POST", "/sign-in/magic-link", json_body={"email": "a@b.com"})
     assert r.status == 200, r.json()
     assert captured[0]["token"] == "custom_token"
 
@@ -208,9 +190,7 @@ async def test_sign_up_with_name() -> None:
         json_body={"email": "new-email@email.com", "name": "test"},
     )
     token = captured[0]["token"]
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 200, r.json()
     user = r.json()["user"]
     assert user["name"] == "test"
@@ -224,12 +204,8 @@ async def test_store_token_hashed() -> None:
 
     captured, send = _captured()
     adapter = memory_adapter()
-    driver, _ = _build_with(
-        adapter, {"send_magic_link": send, "store_token": "hashed"}
-    )
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
-    )
+    driver, _ = _build_with(adapter, {"send_magic_link": send, "store_token": "hashed"})
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "a@b.com"})
     token = captured[0]["token"]
     # Stored under the hashed identifier; verifying with the plaintext token works.
     from kernia.types.adapter import Where
@@ -239,9 +215,7 @@ async def test_store_token_hashed() -> None:
         model="verification", where=(Where(field="identifier", value=hashed),)
     )
     assert rec is not None
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 200, r.json()
 
 
@@ -261,18 +235,14 @@ async def test_store_token_custom_hasher() -> None:
             },
         },
     )
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
-    )
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "a@b.com"})
     token = captured[0]["token"]
     rec = await adapter.find_one(
         model="verification",
         where=(Where(field="identifier", value=f"{token}hashed"),),
     )
     assert rec is not None
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 200, r.json()
 
 
@@ -282,12 +252,8 @@ async def test_verify_last_magic_link() -> None:
     captured, send = _captured()
     driver, _ = _build_with(memory_adapter(), {"send_magic_link": send})
     for _ in range(3):
-        await driver.request(
-            "POST", "/sign-in/magic-link", json_body={"email": "a@b.com"}
-        )
+        await driver.request("POST", "/sign-in/magic-link", json_body={"email": "a@b.com"})
     last_token = captured[-1]["token"]
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": last_token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": last_token}))
     assert r.status == 200, r.json()
     assert r.json()["session"]["id"]

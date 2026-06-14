@@ -115,9 +115,7 @@ def _resolve_required_roles(ctx: EndpointContext, opts: SCIMOptions) -> list[str
         org_plugin = _get_plugin(ctx, "organization")
         org_options = getattr(org_plugin, "options", None) if org_plugin else None
         if isinstance(org_options, Mapping):
-            creator_role = org_options.get("creatorRole") or org_options.get(
-                "creator_role"
-            )
+            creator_role = org_options.get("creatorRole") or org_options.get("creator_role")
         else:
             creator_role = getattr(org_options, "creator_role", None) or getattr(
                 org_options, "creatorRole", None
@@ -141,9 +139,7 @@ def _require_session_user_id(ctx: EndpointContext) -> str:
 
 async def _request_session_user(ctx: EndpointContext) -> dict[str, Any]:
     user_id = _require_session_user_id(ctx)
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=user_id),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="id", value=user_id),))
     if user is None:
         raise APIError(401, "UNAUTHORIZED", message="Unauthorized")
     return user
@@ -191,13 +187,9 @@ async def _assert_scim_provider_access(
                 message="You must be a member of the organization to access this provider",
             )
         if not _has_required_role(member.get("role", ""), required_role):
-            raise APIError(
-                403, "FORBIDDEN", message="Insufficient role for this operation"
-            )
+            raise APIError(403, "FORBIDDEN", message="Insufficient role for this operation")
     elif provider.get("userId") and provider.get("userId") != user_id:
-        raise APIError(
-            403, "FORBIDDEN", message="You must be the owner to access this provider"
-        )
+        raise APIError(403, "FORBIDDEN", message="You must be the owner to access this provider")
 
 
 async def _check_scim_provider_access(
@@ -244,9 +236,7 @@ async def _find_user_by_id(
         if not member:
             return None, None
 
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=user_id),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="id", value=user_id),))
     if not user:
         return None, None
     return user, account
@@ -327,9 +317,7 @@ def _parse_scim_api_user_filter(filter_str: str | None) -> list[Any]:
     try:
         return parse_scim_user_filter(filter_str)
     except SCIMParseError as e:
-        raise SCIMAPIError(
-            "BAD_REQUEST", detail=str(e), scimType="invalidFilter"
-        ) from None
+        raise SCIMAPIError("BAD_REQUEST", detail=str(e), scimType="invalidFilter") from None
     except Exception:
         raise SCIMAPIError(
             "BAD_REQUEST", detail="Invalid SCIM filter", scimType="invalidFilter"
@@ -388,9 +376,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
     if _is_provider_ownership_enabled(opts):
         provider_fields.append(FieldDef("userId", "string", required=False))
 
-    schema = PluginSchema(
-        tables=(ModelDef(name="scimProvider", fields=tuple(provider_fields)),)
-    )
+    schema = PluginSchema(tables=(ModelDef(name="scimProvider", fields=tuple(provider_fields)),))
 
     # -- provider/token management -----------------------------------------
 
@@ -405,9 +391,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
             raise APIError(400, "BAD_REQUEST", message="providerId is required")
 
         if ":" in provider_id:
-            raise APIError(
-                400, "BAD_REQUEST", message="Provider id contains forbidden characters"
-            )
+            raise APIError(400, "BAD_REQUEST", message="Provider id contains forbidden characters")
 
         reserved = set(_RESERVED_PROVIDER_IDS)
         reserved.update((ctx.auth.options.social_providers or {}).keys())
@@ -435,20 +419,14 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
                     message="You are not a member of the organization",
                 )
             if not _has_required_role(member.get("role", ""), required_role):
-                raise APIError(
-                    403, "FORBIDDEN", message="Insufficient role for this operation"
-                )
+                raise APIError(403, "FORBIDDEN", message="Insufficient role for this operation")
 
         where = [Where(field="providerId", value=provider_id)]
         if organization_id:
             where.append(Where(field="organizationId", value=organization_id))
-        existing = await ctx.auth.adapter.find_one(
-            model="scimProvider", where=tuple(where)
-        )
+        existing = await ctx.auth.adapter.find_one(model="scimProvider", where=tuple(where))
         if existing:
-            await _assert_scim_provider_access(
-                ctx, user["id"], existing, required_role
-            )
+            await _assert_scim_provider_access(ctx, user["id"], existing, required_role)
             await ctx.auth.adapter.delete(
                 model="scimProvider",
                 where=(Where(field="id", value=existing["id"]),),
@@ -474,9 +452,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
         }
         if _is_provider_ownership_enabled(opts):
             data["userId"] = user["id"]
-        new_provider = await ctx.auth.adapter.create(
-            model="scimProvider", data=data
-        )
+        new_provider = await ctx.auth.adapter.create(model="scimProvider", data=data)
 
         if opts.after_scim_token_generated:
             result = opts.after_scim_token_generated(
@@ -504,9 +480,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
                 where=(Where(field="userId", value=user_id),),
             )
             for m in members:
-                org_memberships[m["organizationId"]] = _parse_member_roles(
-                    m.get("role", "")
-                )
+                org_memberships[m["organizationId"]] = _parse_member_roles(m.get("role", ""))
 
         all_providers = await ctx.auth.adapter.find_many(model="scimProvider")
 
@@ -531,9 +505,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
         if not provider_id:
             raise APIError(400, "BAD_REQUEST", message="providerId is required")
         required_role = _resolve_required_roles(ctx, opts)
-        provider = await _check_scim_provider_access(
-            ctx, user_id, provider_id, required_role
-        )
+        provider = await _check_scim_provider_access(ctx, user_id, provider_id, required_role)
         return _normalize_scim_provider(provider)
 
     async def delete_provider_connection(ctx: EndpointContext) -> dict[str, Any]:
@@ -568,9 +540,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
             ),
         )
         if existing_account:
-            raise SCIMAPIError(
-                "CONFLICT", detail="User already exists", scimType="uniqueness"
-            )
+            raise SCIMAPIError("CONFLICT", detail="User already exists", scimType="uniqueness")
 
         email = get_user_primary_email(user_name, body.get("emails"))
         name = get_user_full_name(email, body.get("name"))
@@ -686,9 +656,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
         if not account_user_ids:
             return empty
 
-        user_filters: list[Where] = [
-            Where(field="id", value=account_user_ids, operator="in")
-        ]
+        user_filters: list[Where] = [Where(field="id", value=account_user_ids, operator="in")]
 
         organization_id = provider.get("organizationId")
         if organization_id:
@@ -705,17 +673,14 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
             user_filters = [Where(field="id", value=member_user_ids, operator="in")]
 
         where = tuple(user_filters) + tuple(
-            Where(field=f.field, value=f.value, operator=f.operator or "eq")
-            for f in api_filters
+            Where(field=f.field, value=f.value, operator=f.operator or "eq") for f in api_filters
         )
         users = await ctx.auth.adapter.find_many(model="user", where=where)
 
         resources = []
         for user in users:
             account = next((a for a in accounts if a["userId"] == user["id"]), None)
-            resources.append(
-                create_user_resource(ctx.auth.base_url, user, account)
-            )
+            resources.append(create_user_resource(ctx.auth.base_url, user, account))
 
         return {
             "schemas": [LIST_RESPONSE_SCHEMA],
@@ -828,9 +793,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
         await ctx.auth.adapter.delete_many(
             model="account", where=(Where(field="userId", value=user_id),)
         )
-        await ctx.auth.adapter.delete(
-            model="user", where=(Where(field="id", value=user_id),)
-        )
+        await ctx.auth.adapter.delete(model="user", where=(Where(field="id", value=user_id),))
         ctx.response_headers["x-scim-status"] = "204"
         return {}
 
@@ -856,9 +819,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
                     "primary": True,
                 }
             ],
-            "schemas": [
-                "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
-            ],
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
             "meta": {"resourceType": "ServiceProviderConfig"},
         }
 
@@ -915,12 +876,8 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
             EndpointOptions(method="POST", requires_session=True),
             delete_provider_connection,
         ),
-        create_auth_endpoint(
-            "/scim/v2/Users", EndpointOptions(method="POST"), create_scim_user
-        ),
-        create_auth_endpoint(
-            "/scim/v2/Users", EndpointOptions(method="GET"), list_scim_users
-        ),
+        create_auth_endpoint("/scim/v2/Users", EndpointOptions(method="POST"), create_scim_user),
+        create_auth_endpoint("/scim/v2/Users", EndpointOptions(method="GET"), list_scim_users),
         create_auth_endpoint(
             "/scim/v2/Users/:userId",
             EndpointOptions(method="GET"),
@@ -946,9 +903,7 @@ def scim(options: SCIMOptions | None = None) -> KerniaPlugin:
             EndpointOptions(method="GET"),
             service_provider_config,
         ),
-        create_auth_endpoint(
-            "/scim/v2/Schemas", EndpointOptions(method="GET"), get_scim_schemas
-        ),
+        create_auth_endpoint("/scim/v2/Schemas", EndpointOptions(method="GET"), get_scim_schemas),
         create_auth_endpoint(
             "/scim/v2/Schemas/:schemaId",
             EndpointOptions(method="GET"),

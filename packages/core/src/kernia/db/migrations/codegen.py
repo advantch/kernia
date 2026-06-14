@@ -41,8 +41,7 @@ def resolve_full_schema(
         for new_model in schema.tables or ():
             if new_model.name in by_name:
                 raise ValueError(
-                    f"plugin {plugin.id!r} declared a table {new_model.name!r} "
-                    f"that already exists"
+                    f"plugin {plugin.id!r} declared a table {new_model.name!r} that already exists"
                 )
             by_name[new_model.name] = new_model
         # field extensions
@@ -56,8 +55,7 @@ def resolve_full_schema(
             for f in extra_fields:
                 if f.name in existing_names:
                     raise ValueError(
-                        f"plugin {plugin.id!r} tries to redefine field "
-                        f"{model_name}.{f.name}"
+                        f"plugin {plugin.id!r} tries to redefine field {model_name}.{f.name}"
                     )
                 existing_names.add(f.name)
             by_name[model_name] = ModelDef(

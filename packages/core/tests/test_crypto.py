@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.crypto import hash_password, needs_rehash, verify_password
 
 

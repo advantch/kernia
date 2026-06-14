@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from kernia.plugins.generic_oauth.config import GenericOAuthConfig
 from kernia.plugins.generic_oauth.routes import build_routes
@@ -47,10 +48,8 @@ class _GenericOAuthPlugin:
     hooks: object | None = None
     on_request: None = None
     on_response: None = None
-    rate_limit: tuple = ()
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(GENERIC_OAUTH_ERROR_CODES)
-    )
+    rate_limit: tuple[Any, ...] = ()
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(GENERIC_OAUTH_ERROR_CODES))
     init: None = None
 
 
@@ -67,9 +66,9 @@ def generic_oauth(config: Sequence[GenericOAuthConfig]) -> KerniaPlugin:
         if c.provider_id in seen:
             raise ValueError(f"duplicate provider_id: {c.provider_id}")
         seen.add(c.provider_id)
-    options_state: dict = {"configs": {c.provider_id: c for c in config}}
+    options_state: dict[str, Any] = {"configs": {c.provider_id: c for c in config}}
     endpoints = build_routes(options_state)
     return _GenericOAuthPlugin(endpoints=endpoints)  # type: ignore[return-value]
 
 
-__all__ = ["generic_oauth", "GENERIC_OAUTH_ERROR_CODES"]
+__all__ = ["GENERIC_OAUTH_ERROR_CODES", "generic_oauth"]

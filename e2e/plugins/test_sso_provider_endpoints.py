@@ -131,9 +131,7 @@ async def test_get_provider_401_when_not_authenticated() -> None:
 async def test_get_provider_404_when_not_found() -> None:
     driver = _build()
     await _signup(driver, "owner@example.com")
-    r = await driver.request(
-        "GET", "/sso/get-provider", query="providerId=does-not-exist"
-    )
+    r = await driver.request("GET", "/sso/get-provider", query="providerId=does-not-exist")
     assert r.status == 404
 
 
@@ -200,9 +198,7 @@ async def test_get_provider_saml_cert_parse_error_graceful() -> None:
     pid = await _register_saml(driver, cert="not-a-real-certificate")
     r = await driver.request("GET", "/sso/get-provider", query=f"providerId={pid}")
     assert r.status == 200
-    assert r.json()["samlConfig"]["certificate"] == {
-        "error": "Failed to parse certificate"
-    }
+    assert r.json()["samlConfig"]["certificate"] == {"error": "Failed to parse certificate"}
 
 
 # ---------------------------------------------------------------------------
@@ -327,9 +323,7 @@ async def test_update_partial_oidc_config_merges() -> None:
 async def test_delete_404_when_not_found() -> None:
     driver = _build()
     await _signup(driver, "owner@example.com")
-    r = await driver.request(
-        "POST", "/sso/delete-provider", json_body={"id": "missing"}
-    )
+    r = await driver.request("POST", "/sso/delete-provider", json_body={"id": "missing"})
     assert r.status == 404
 
 

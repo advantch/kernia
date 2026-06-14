@@ -85,9 +85,7 @@ class _SIWEPlugin:
         RateLimitRule(path="/siwe/get-nonce", window=60, max=30),
         RateLimitRule(path="/siwe/verify", window=60, max=10),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(SIWE_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(SIWE_ERROR_CODES))
     init: None = None
 
 
@@ -139,10 +137,10 @@ def siwe(
 
 
 __all__ = [
+    "SIWE_ERROR_CODES",
     "ENSLookup",
     "ENSResolver",
     "GetNonce",
-    "SIWE_ERROR_CODES",
     "SIWEOptions",
     "VerifyMessage",
     "siwe",

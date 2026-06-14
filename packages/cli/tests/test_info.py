@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 from click.testing import CliRunner
-
 from kernia_cli.commands.info import info
 
 
@@ -19,9 +18,7 @@ def test_info_dry_run_works_without_config() -> None:
     assert "python_version" in data
 
 
-def test_info_against_fixture_lists_plugins(
-    tmp_path: Path, fixture_config_path: Path
-) -> None:
+def test_info_against_fixture_lists_plugins(tmp_path: Path, fixture_config_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         info,
@@ -42,9 +39,7 @@ def test_info_against_fixture_lists_plugins(
     assert data["adapter"] == "MemoryAdapter"
 
 
-def test_info_text_output_mentions_plugins(
-    tmp_path: Path, fixture_config_path: Path
-) -> None:
+def test_info_text_output_mentions_plugins(tmp_path: Path, fixture_config_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         info,

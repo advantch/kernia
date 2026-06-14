@@ -9,6 +9,8 @@ ported.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from kernia_oauth_provider import OAuthProviderOptions, oauth_provider
 from kernia_test_utils import ASGIDriver
@@ -16,8 +18,20 @@ from kernia_test_utils import ASGIDriver
 from .conftest import ISSUER, make_auth
 
 BASE_CLAIMS = [
-    "sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp",
-    "email", "email_verified", "name", "picture", "family_name", "given_name",
+    "sub",
+    "iss",
+    "aud",
+    "exp",
+    "iat",
+    "sid",
+    "scope",
+    "azp",
+    "email",
+    "email_verified",
+    "name",
+    "picture",
+    "family_name",
+    "given_name",
 ]
 
 
@@ -41,16 +55,21 @@ async def test_openid_config_full_field_set(driver) -> None:
     assert j["response_types_supported"] == ["code"]
     assert j["response_modes_supported"] == ["query"]
     assert j["grant_types_supported"] == [
-        "authorization_code", "client_credentials", "refresh_token",
+        "authorization_code",
+        "client_credentials",
+        "refresh_token",
     ]
     assert j["token_endpoint_auth_methods_supported"] == [
-        "client_secret_basic", "client_secret_post",
+        "client_secret_basic",
+        "client_secret_post",
     ]
     assert j["introspection_endpoint_auth_methods_supported"] == [
-        "client_secret_basic", "client_secret_post",
+        "client_secret_basic",
+        "client_secret_post",
     ]
     assert j["revocation_endpoint_auth_methods_supported"] == [
-        "client_secret_basic", "client_secret_post",
+        "client_secret_basic",
+        "client_secret_post",
     ]
     assert j["code_challenge_methods_supported"] == ["S256"]
     assert j["authorization_response_iss_parameter_supported"] is True
@@ -61,18 +80,24 @@ async def test_openid_config_full_field_set(driver) -> None:
     assert j["end_session_endpoint"] == f"{ISSUER}/oauth2/end-session"
     assert j["acr_values_supported"] == ["urn:mace:incommon:iap:bronze"]
     assert j["prompt_values_supported"] == [
-        "login", "consent", "create", "select_account", "none",
+        "login",
+        "consent",
+        "create",
+        "select_account",
+        "none",
     ]
 
 
 async def test_oauth_server_config_matches_openid_subset(driver) -> None:
     oidc = (await driver.request("GET", "/.well-known/openid-configuration")).json()
-    oauth = (
-        await driver.request("GET", "/.well-known/oauth-authorization-server")
-    ).json()
+    oauth = (await driver.request("GET", "/.well-known/oauth-authorization-server")).json()
     for key in [
-        "issuer", "authorization_endpoint", "token_endpoint", "jwks_uri",
-        "grant_types_supported", "code_challenge_methods_supported",
+        "issuer",
+        "authorization_endpoint",
+        "token_endpoint",
+        "jwks_uri",
+        "grant_types_supported",
+        "code_challenge_methods_supported",
     ]:
         assert oauth[key] == oidc[key]
 
@@ -103,12 +128,10 @@ async def test_utilizes_advertised_metadata_fields() -> None:
 async def test_fails_if_advertised_scope_invalid() -> None:
     with pytest.raises(
         ValueError,
-        match="advertisedMetadata.scopes_supported create:test not found in scopes",
+        match=re.escape("advertisedMetadata.scopes_supported create:test not found in scopes"),
     ):
         oauth_provider(
-            OAuthProviderOptions(
-                issuer=ISSUER, advertised_scopes_supported=("create:test",)
-            )
+            OAuthProviderOptions(issuer=ISSUER, advertised_scopes_supported=("create:test",))
         )
 
 
@@ -125,8 +148,7 @@ async def test_advertise_custom_claims() -> None:
     "baseURL-from-request resolution, remoteJwks, or disableJwtPlugin alg "
     "switching (those are JS-only metadata-wrapper behaviors)."
 )
-async def test_dynamic_baseurl_and_jwks_alg_cases() -> None:
-    ...
+async def test_dynamic_baseurl_and_jwks_alg_cases() -> None: ...
 
 
 @pytest.mark.skip(
@@ -134,5 +156,4 @@ async def test_dynamic_baseurl_and_jwks_alg_cases() -> None:
     "mcp package in this port; the oauth-provider resource-metadata client is "
     "not implemented here."
 )
-async def test_protected_resource_metadata_cases() -> None:
-    ...
+async def test_protected_resource_metadata_cases() -> None: ...

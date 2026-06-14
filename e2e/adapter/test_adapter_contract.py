@@ -14,7 +14,6 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import pytest
-
 from kernia.types.adapter import CustomAdapter, JoinConfig, SortBy, Where
 from kernia_memory_adapter import memory_adapter
 from kernia_mongo import mongo_adapter
@@ -320,6 +319,7 @@ async def test_consume_one_deletes_atomically(adapter: CustomAdapter) -> None:
     if not hasattr(adapter, "consume_one"):
         pytest.skip("adapter does not implement ConsumingAdapter")
     import time as _time
+
     await adapter.create(
         model="verification",
         data={

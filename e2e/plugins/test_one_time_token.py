@@ -76,9 +76,7 @@ async def test_should_work() -> None:
     assert r.json() is not None
 
     # Second verify must fail (single use).
-    r2 = await driver.request(
-        "POST", "/one-time-token/verify", json_body={"token": token}
-    )
+    r2 = await driver.request("POST", "/one-time-token/verify", json_body={"token": token})
     assert r2.status == 400
 
 
@@ -131,9 +129,18 @@ async def test_should_reject_when_underlying_session_expired() -> None:
             update={"expiresAt": int(time.time()) - 60},
         )
 
+    # Drop the (now-expired) session cookie before verifying: the OTT is its
+    # own credential (upstream calls verify without a session). If the cookie
+    # were replayed, the router's expired-session chokepoint would delete the
+    # stale row first and the handler would report "Session not found" instead
+    # of exercising its own expiry check.
+    driver.cookies.clear()
+
     r = await driver.request("POST", "/one-time-token/verify", json_body={"token": token})
     assert r.status == 400
     assert r.json()["message"] == "Session expired"
+    # The expired session must not be (re)issued as a cookie on the error path.
+    assert "better-auth.session_token" not in r.set_cookies()
 
 
 # --------------------------------------------------------------------------------------

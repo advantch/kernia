@@ -39,9 +39,7 @@ class _EmailPasswordPlugin:
         RateLimitRule(path="/sign-up/email", window=60, max=5),
         RateLimitRule(path="/forget-password", window=60, max=3),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(EMAIL_PASSWORD_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(EMAIL_PASSWORD_ERROR_CODES))
     init: None = None
 
 

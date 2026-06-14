@@ -65,4 +65,4 @@ class GenericOAuthConfig:
             )
 
 
-__all__ = ["GenericOAuthConfig", "TokenGetter", "UserInfoGetter", "ProfileMapper"]
+__all__ = ["GenericOAuthConfig", "ProfileMapper", "TokenGetter", "UserInfoGetter"]

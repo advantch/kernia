@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.oauth2.state import generate_state, parse_state
 
 

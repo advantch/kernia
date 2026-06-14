@@ -47,7 +47,7 @@ def init(options: KerniaOptions) -> Kernia:
     """
     if not options.secret:
         raise ValueError("KerniaOptions.secret is required")
-    if options.database is None:  # type: ignore[unreachable]
+    if options.database is None:
         raise ValueError("KerniaOptions.database is required")
 
     # Synthesize an in-memory rate-limit store when one isn't supplied — keeps
@@ -86,15 +86,11 @@ def init(options: KerniaOptions) -> Kernia:
     # registration order. Mirrors how better-auth assembles `databaseHooks`.
     database_hooks: list[DatabaseHooksEntry] = []
     if options.database_hooks:
-        database_hooks.append(
-            DatabaseHooksEntry(source="options", hooks=options.database_hooks)
-        )
+        database_hooks.append(DatabaseHooksEntry(source="options", hooks=options.database_hooks))
     for plugin in options.plugins:
         plugin_hooks = getattr(plugin, "database_hooks", None)
         if plugin_hooks:
-            database_hooks.append(
-                DatabaseHooksEntry(source=plugin.id, hooks=plugin_hooks)
-            )
+            database_hooks.append(DatabaseHooksEntry(source=plugin.id, hooks=plugin_hooks))
 
     ctx = AuthContext(
         options=options,

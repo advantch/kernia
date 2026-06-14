@@ -33,9 +33,7 @@ def get_user_full_name(email: str, name: Mapping[str, Any] | None = None) -> str
     return email
 
 
-def get_user_primary_email(
-    user_name: str, emails: list[Mapping[str, Any]] | None = None
-) -> str:
+def get_user_primary_email(user_name: str, emails: list[Mapping[str, Any]] | None = None) -> str:
     if emails:
         primary = next((e for e in emails if e.get("primary")), None)
         if primary and primary.get("value"):

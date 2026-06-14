@@ -45,12 +45,8 @@ class SCIMOptions:
     provider_ownership: ProviderOwnership | None = None
     required_role: Sequence[str] | None = None
     default_scim: Sequence[SCIMProvider] = ()
-    before_scim_token_generated: (
-        Callable[[dict[str, Any]], Awaitable[None] | None] | None
-    ) = None
-    after_scim_token_generated: (
-        Callable[[dict[str, Any]], Awaitable[None] | None] | None
-    ) = None
+    before_scim_token_generated: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
+    after_scim_token_generated: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
     store_scim_token: StoreSCIMToken = "plain"
     # Optional override of the organization creator role when computing the
     # default required role set (the Python organization plugin does not expose

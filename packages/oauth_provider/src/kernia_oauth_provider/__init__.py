@@ -13,4 +13,4 @@ from kernia_oauth_provider.plugin import (
     oauth_provider,
 )
 
-__all__ = ["oauth_provider", "OAuthProviderOptions", "OAuthClient"]
+__all__ = ["OAuthClient", "OAuthProviderOptions", "oauth_provider"]

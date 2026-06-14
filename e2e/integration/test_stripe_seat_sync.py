@@ -307,8 +307,6 @@ async def test_seat_sync_no_op_when_organization_integration_disabled() -> None:
 
     await get_bus(auth.context).emit(
         "organization.member.added",
-        MemberEvent(
-            organization_id=org["id"], user_id="someone", role="member", action="added"
-        ),
+        MemberEvent(organization_id=org["id"], user_id="someone", role="member", action="added"),
     )
     assert all(e["type"] != "subscription.update" for e in mock.capture_events)

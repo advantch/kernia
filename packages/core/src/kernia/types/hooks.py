@@ -18,7 +18,6 @@ from typing import Protocol
 
 from kernia.types.context import EndpointContext
 
-
 # A hook matches one or more paths. `match` may be a literal path, a glob ("/sign-in/*"),
 # or a callable that inspects the context.
 HookMatcher = str | Callable[[EndpointContext], bool]

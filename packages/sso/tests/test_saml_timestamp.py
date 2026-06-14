@@ -111,9 +111,7 @@ class TestNotOnOrAfterValidation:
 # Boundary conditions (exactly at window edges)
 # --------------------------------------------------------------------------- #
 class TestBoundaryConditions:
-    FIXED_TIME_MS = int(
-        datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC).timestamp() * 1000
-    )
+    FIXED_TIME_MS = int(datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC).timestamp() * 1000)
 
     @pytest.fixture(autouse=True)
     def _freeze_clock(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,15 +150,11 @@ class TestMissingTimestampsBehavior:
         _validate({}, {"requireTimestamps": False})
 
     def test_reject_missing_timestamps_when_required(self) -> None:
-        with pytest.raises(
-            APIError, match="SAML assertion missing required timestamp conditions"
-        ):
+        with pytest.raises(APIError, match="SAML assertion missing required timestamp conditions"):
             _validate(None, {"requireTimestamps": True})
 
     def test_reject_empty_conditions_when_required(self) -> None:
-        with pytest.raises(
-            APIError, match="SAML assertion missing required timestamp conditions"
-        ):
+        with pytest.raises(APIError, match="SAML assertion missing required timestamp conditions"):
             _validate({}, {"requireTimestamps": True})
 
     def test_accept_only_not_before_valid(self) -> None:
@@ -196,15 +190,11 @@ class TestCustomClockSkewConfiguration:
 # --------------------------------------------------------------------------- #
 class TestMalformedTimestampHandling:
     def test_reject_malformed_not_before(self) -> None:
-        with pytest.raises(
-            APIError, match="SAML assertion has invalid NotBefore timestamp"
-        ):
+        with pytest.raises(APIError, match="SAML assertion has invalid NotBefore timestamp"):
             _validate({"notBefore": "not-a-valid-date"})
 
     def test_reject_malformed_not_on_or_after(self) -> None:
-        with pytest.raises(
-            APIError, match="SAML assertion has invalid NotOnOrAfter timestamp"
-        ):
+        with pytest.raises(APIError, match="SAML assertion has invalid NotOnOrAfter timestamp"):
             _validate({"notOnOrAfter": "invalid-timestamp"})
 
     def test_treat_empty_string_timestamps_as_missing(self) -> None:
@@ -212,9 +202,7 @@ class TestMalformedTimestampHandling:
         _validate({"notOnOrAfter": ""})
 
     def test_reject_garbage_data_in_timestamps(self) -> None:
-        with pytest.raises(
-            APIError, match="SAML assertion has invalid NotBefore timestamp"
-        ):
+        with pytest.raises(APIError, match="SAML assertion has invalid NotBefore timestamp"):
             _validate({"notBefore": "abc123xyz", "notOnOrAfter": "!@#$%^&*()"})
 
     def test_accept_valid_iso_8601_timestamps(self) -> None:

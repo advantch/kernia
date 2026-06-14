@@ -12,4 +12,4 @@ Endpoints:
 
 from kernia.plugins.mcp.plugin import MCPOptions, mcp
 
-__all__ = ["mcp", "MCPOptions"]
+__all__ = ["MCPOptions", "mcp"]

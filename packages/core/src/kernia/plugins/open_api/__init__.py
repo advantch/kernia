@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeGuard
 
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.api.request import HTMLResponse
@@ -54,7 +54,7 @@ def _pkg_version() -> str:
         return "0.0.0"
 
 
-def _is_pydantic_model(t: Any) -> bool:
+def _is_pydantic_model(t: Any) -> TypeGuard[type]:
     return t is not None and hasattr(t, "model_json_schema")
 
 
@@ -76,12 +76,14 @@ def _query_params_from_model(model: type) -> tuple[list[dict[str, Any]], dict[st
     required = set(schema.get("required", []) or [])
     params: list[dict[str, Any]] = []
     for name, prop in props.items():
-        params.append({
-            "name": name,
-            "in": "query",
-            "required": name in required,
-            "schema": prop,
-        })
+        params.append(
+            {
+                "name": name,
+                "in": "query",
+                "required": name in required,
+                "schema": prop,
+            }
+        )
     return params, defs
 
 
@@ -171,8 +173,7 @@ def build_openapi_document(
         codes_for_owner = plugin_error_codes.get(ep.owner or "", {})
         if codes_for_owner:
             responses["400"] = {
-                "description": "Plugin error codes: "
-                + ", ".join(sorted(codes_for_owner.keys())),
+                "description": "Plugin error codes: " + ", ".join(sorted(codes_for_owner.keys())),
                 "content": {"application/json": {"schema": err_schema}},
             }
         op["responses"] = responses

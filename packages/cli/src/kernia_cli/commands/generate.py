@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
-
 from kernia.db.migrations.codegen import emit_migration
 
 from kernia_cli.utils import (
@@ -50,7 +49,9 @@ from kernia_cli.utils import (
     help="Overwrite the output file if it exists.",
 )
 def generate(config_path: str, output: str | None, cwd: str, force: bool) -> None:
-    mod = load_config_module(Path(cwd) / config_path if not Path(config_path).is_absolute() else config_path)
+    mod = load_config_module(
+        Path(cwd) / config_path if not Path(config_path).is_absolute() else config_path
+    )
     auth = find_auth_handle(mod)
 
     models = collect_models(auth)

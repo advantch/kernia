@@ -6,14 +6,11 @@ from pathlib import Path
 
 import sqlalchemy as sa
 from click.testing import CliRunner
-
 from kernia_cli.commands.generate import generate
 from kernia_cli.commands.migrate import migrate
 
 
-def test_generate_then_migrate_creates_tables(
-    tmp_path: Path, fixture_config_path: Path
-) -> None:
+def test_generate_then_migrate_creates_tables(tmp_path: Path, fixture_config_path: Path) -> None:
     runner = CliRunner()
 
     db_file = tmp_path / "app.db"

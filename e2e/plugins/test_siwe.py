@@ -48,9 +48,7 @@ async def test_siwe_full_round_trip() -> None:
     driver = _build()
 
     # 1. Get nonce.
-    r = await driver.request(
-        "GET", "/siwe/nonce", query=f"address={address}"
-    )
+    r = await driver.request("GET", "/siwe/nonce", query=f"address={address}")
     assert r.status == 200, r.json()
     nonce = r.json()["nonce"]
 
@@ -213,9 +211,7 @@ async def test_generate_valid_nonce_default_chain_id() -> None:
 
 async def test_get_nonce_alias_with_address_input() -> None:
     _, driver = _stub_auth()
-    r = await driver.request(
-        "POST", "/siwe/get-nonce", json_body={"address": WALLET, "chainId": 1}
-    )
+    r = await driver.request("POST", "/siwe/get-nonce", json_body={"address": WALLET, "chainId": 1})
     assert r.status == 200, r.json()
     assert r.json()["nonce"] == "A1b2C3d4E5f6G7h8J"
 
@@ -239,9 +235,7 @@ async def test_reject_verification_when_nonce_missing() -> None:
 
 async def test_reject_invalid_public_key() -> None:
     _, driver = _stub_auth()
-    r = await driver.request(
-        "POST", "/siwe/nonce", json_body={"walletAddress": "invalid"}
-    )
+    r = await driver.request("POST", "/siwe/nonce", json_body={"walletAddress": "invalid"})
     assert r.status == 400
     assert r.json()["message"] == (
         "[body.walletAddress] Invalid string: must match pattern "
@@ -267,9 +261,7 @@ async def test_reject_invalid_signature() -> None:
 
 async def test_reject_invalid_wallet_address_format() -> None:
     _, driver = _stub_auth()
-    r = await driver.request(
-        "POST", "/siwe/nonce", json_body={"walletAddress": "not_a_valid_key"}
-    )
+    r = await driver.request("POST", "/siwe/nonce", json_body={"walletAddress": "not_a_valid_key"})
     assert r.status == 400
 
 

@@ -50,9 +50,7 @@ BeforeHookResult = bool | HookData | Mapping[str, Any] | None
 BeforeHookFn = Callable[
     ["Record", "AuthContext | None"], Awaitable[BeforeHookResult] | BeforeHookResult
 ]
-AfterHookFn = Callable[
-    ["Record", "AuthContext | None"], Awaitable[None] | None
-]
+AfterHookFn = Callable[["Record", "AuthContext | None"], Awaitable[None] | None]
 
 
 @dataclass(frozen=True, slots=True)

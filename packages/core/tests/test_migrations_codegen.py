@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.db.migrations import emit_migration, resolve_full_schema
 from kernia.db.schema import CORE_MODELS
 from kernia.types.adapter import FieldDef, ModelDef

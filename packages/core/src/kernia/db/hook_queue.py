@@ -19,9 +19,7 @@ from contextvars import ContextVar
 
 AfterHook = Callable[[], Awaitable[None]]
 
-_queue: ContextVar[list[AfterHook] | None] = ContextVar(
-    "better_auth_after_tx_queue", default=None
-)
+_queue: ContextVar[list[AfterHook] | None] = ContextVar("better_auth_after_tx_queue", default=None)
 
 
 async def queue_after_transaction_hook(fn: AfterHook) -> None:

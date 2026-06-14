@@ -37,7 +37,7 @@ class VerifyEmailBody(BaseModel):
 _VERIFY_TTL = 60 * 60 * 24  # 24h
 
 
-async def _send_verification_email(ctx: EndpointContext) -> dict[str, bool]:
+async def _send_verification_email(ctx: EndpointContext) -> dict[str, object]:
     body: SendVerificationBody = ctx.body
     target_email = body.email
     if target_email is None and ctx.session is not None:
@@ -70,7 +70,7 @@ async def _send_verification_email(ctx: EndpointContext) -> dict[str, bool]:
         )
     # dev/test path
     if ctx.auth.options.advanced.get("expose_verification_token_for_tests"):
-        return {"success": True, "_token": token}  # type: ignore[return-value]
+        return {"success": True, "_token": token}
     return {"success": True}
 
 
@@ -99,9 +99,7 @@ async def _verify_email(ctx: EndpointContext) -> dict[str, object]:
     if not isinstance(identifier, str) or not identifier.startswith("verify-email:"):
         raise APIError(400, "INVALID_REQUEST")
     email = identifier.split(":", 1)[1]
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="email", value=email),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="email", value=email),))
     if user is None:
         # pending email-change flow: identifier could match a `email-change:<userId>` row
         raise APIError(404, "USER_NOT_FOUND")

@@ -19,8 +19,8 @@ from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -32,9 +32,7 @@ WEBHOOK_SECRET = "test_secret"
 PASSWORD = "password123"
 
 
-def _make(
-    *, with_org_plugin: bool = False, **overrides: Any
-) -> tuple[ASGIDriver, MockStripe, Any]:
+def _make(*, with_org_plugin: bool = False, **overrides: Any) -> tuple[ASGIDriver, MockStripe, Any]:
     mock = MockStripe()
     client = StripeClient(api_key="sk_test", transport=mock.mock_transport())
     opts = StripeOptions(
@@ -93,9 +91,7 @@ async def test_passes_when_no_explicit_reference_id() -> None:
     await _sign_up(driver, "ref-1@example.com")
     await _sign_in(driver, "ref-1@example.com")
 
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     assert r.status == 200, r.json()
     assert r.json().get("url")
 
@@ -175,9 +171,7 @@ async def test_allows_other_reference_id_when_authorize_returns_true() -> None:
     assert r.json().get("url")
 
     # The checkout session must use the *actor's* customer, not the target's.
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     assert session_event["object"]["customer"] == "cus_actor_reference"
     meta = session_event["object"]["metadata"]
     assert meta["userId"] == actor

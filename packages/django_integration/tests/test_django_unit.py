@@ -6,8 +6,8 @@ import pytest
 
 pytest.importorskip("django")
 
-import django  # noqa: E402
-from django.conf import settings  # noqa: E402
+import django
+from django.conf import settings
 
 
 def _ensure_django() -> None:
@@ -33,7 +33,6 @@ def _ensure_django() -> None:
 _ensure_django()
 
 from django.test import RequestFactory  # noqa: E402
-
 from kernia_django.views import django_request_to_scope  # noqa: E402
 
 

@@ -129,11 +129,7 @@ async def test_should_generate_register_options_without_session_when_resolve_use
 
 
 async def test_should_require_resolve_user_when_session_not_available() -> None:
-    plugin = passkey(
-        PasskeyOptions(
-            registration=PasskeyRegistrationOptions(require_session=False)
-        )
-    )
+    plugin = passkey(PasskeyOptions(registration=PasskeyRegistrationOptions(require_session=False)))
     driver, _, _ = _build(plugin)
     r = await driver.request("GET", "/passkey/generate-register-options")
     assert r.status == 400
@@ -175,9 +171,7 @@ async def test_should_call_after_verification_and_allow_user_id_override() -> No
     # Sign out so there's no active session (registration runs pre-auth).
     driver.cookies.clear()
 
-    webauthn_server.verify_registration_response = (
-        lambda **_: _mock_registration_verification()
-    )
+    webauthn_server.verify_registration_response = lambda **_: _mock_registration_verification()
 
     await driver.request(
         "GET",
@@ -230,9 +224,7 @@ async def test_should_reject_invalid_user_id_from_after_verification() -> None:
     resolved = r.json()["user"]
     driver.cookies.clear()
 
-    webauthn_server.verify_registration_response = (
-        lambda **_: _mock_registration_verification()
-    )
+    webauthn_server.verify_registration_response = lambda **_: _mock_registration_verification()
 
     await driver.request(
         "GET",
@@ -261,21 +253,15 @@ async def test_should_reject_after_verification_mismatching_session_user() -> No
     plugin = passkey(
         PasskeyOptions(
             origin=ORIGIN,
-            registration=PasskeyRegistrationOptions(
-                after_verification=after_verification
-            ),
+            registration=PasskeyRegistrationOptions(after_verification=after_verification),
         )
     )
     driver, _, _ = _build(plugin)
     await _sign_up(driver)
 
-    webauthn_server.verify_registration_response = (
-        lambda **_: _mock_registration_verification()
-    )
+    webauthn_server.verify_registration_response = lambda **_: _mock_registration_verification()
 
-    await driver.request(
-        "GET", "/passkey/generate-register-options", headers={"origin": ORIGIN}
-    )
+    await driver.request("GET", "/passkey/generate-register-options", headers={"origin": ORIGIN})
     r = await driver.request(
         "POST",
         "/passkey/verify-registration",
@@ -360,9 +346,7 @@ async def test_should_update_a_passkey() -> None:
 async def test_should_not_delete_a_passkey_that_doesnt_exist() -> None:
     driver, _, _ = _build()
     await _sign_up(driver)
-    r = await driver.request(
-        "POST", "/passkey/delete-passkey", json_body={"id": "mockPasskeyId"}
-    )
+    r = await driver.request("POST", "/passkey/delete-passkey", json_body={"id": "mockPasskeyId"})
     assert r.status >= 400
     assert r.json()["code"] == "PASSKEY_NOT_FOUND"
 
@@ -371,9 +355,7 @@ async def test_should_delete_a_passkey() -> None:
     driver, adapter, _ = _build()
     user_id = await _sign_up(driver)
     pk = await _seed_passkey(adapter, user_id)
-    r = await driver.request(
-        "POST", "/passkey/delete-passkey", json_body={"id": pk["id"]}
-    )
+    r = await driver.request("POST", "/passkey/delete-passkey", json_body={"id": pk["id"]})
     assert r.status == 200, r.json()
     assert r.json()["status"] is True
 
@@ -393,13 +375,9 @@ async def test_should_not_allow_deleting_another_users_passkey() -> None:
             "name": "Attacker",
         },
     )
-    r = await driver.request(
-        "POST", "/passkey/delete-passkey", json_body={"id": pk["id"]}
-    )
+    r = await driver.request("POST", "/passkey/delete-passkey", json_body={"id": pk["id"]})
     assert r.status >= 400
-    still = await adapter.find_one(
-        model="passkey", where=(Where(field="id", value=pk["id"]),)
-    )
+    still = await adapter.find_one(model="passkey", where=(Where(field="id", value=pk["id"]),))
     assert still is not None
 
 
@@ -428,9 +406,7 @@ async def test_should_not_allow_updating_another_users_passkey() -> None:
         json_body={"id": pk["id"], "name": "hacked"},
     )
     assert r.status >= 400
-    unchanged = await adapter.find_one(
-        model="passkey", where=(Where(field="id", value=pk["id"]),)
-    )
+    unchanged = await adapter.find_one(model="passkey", where=(Where(field="id", value=pk["id"]),))
     assert unchanged["name"] == "original-name"
 
 
@@ -444,10 +420,8 @@ async def test_should_verify_passkey_authentication_and_return_user() -> None:
         "GET", "/passkey/generate-authenticate-options", headers={"origin": ORIGIN}
     )
 
-    webauthn_server.verify_authentication_response = lambda **_: (
-        VerifiedAuthenticationResponse(
-            verified=True, authentication_info=AuthenticationInfo(new_counter=1)
-        )
+    webauthn_server.verify_authentication_response = lambda **_: VerifiedAuthenticationResponse(
+        verified=True, authentication_info=AuthenticationInfo(new_counter=1)
     )
 
     r = await driver.request(

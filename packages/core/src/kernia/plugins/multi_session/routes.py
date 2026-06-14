@@ -13,11 +13,11 @@ from __future__ import annotations
 import base64
 import json
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.context import revoke_session
 from kernia.cookies import sign, verify
 from kernia.error import APIError
 from kernia.types.adapter import Where
@@ -95,11 +95,13 @@ def _set_list(
 
 
 def _clear_list(ctx: EndpointContext) -> None:
-    ctx.set_cookies.append((
-        SESSION_LIST_COOKIE,
-        "",
-        CookieAttributes(path="/", max_age=0, http_only=True, secure=False, same_site="lax"),
-    ))
+    ctx.set_cookies.append(
+        (
+            SESSION_LIST_COOKIE,
+            "",
+            CookieAttributes(path="/", max_age=0, http_only=True, secure=False, same_site="lax"),
+        )
+    )
 
 
 def _active_token(ctx: EndpointContext) -> str | None:
@@ -173,13 +175,15 @@ async def _list_handler(ctx: EndpointContext) -> dict[str, Any]:
             model="user",
             where=(Where(field="id", value=row["userId"]),),
         )
-        out.append({
-            "id": row["id"],
-            "userId": row["userId"],
-            "expiresAt": row["expiresAt"],
-            "isActive": active == rec["token"],
-            "user": user,
-        })
+        out.append(
+            {
+                "id": row["id"],
+                "userId": row["userId"],
+                "expiresAt": row["expiresAt"],
+                "isActive": active == rec["token"],
+                "user": user,
+            }
+        )
     return {"sessions": out}
 
 
@@ -197,7 +201,11 @@ async def _switch_handler(ctx: EndpointContext) -> dict[str, Any]:
     if not row or int(row.get("expiresAt", 0)) < int(time.time()):
         # purge stale entry
         new_records = [r for r in records if r["id"] != target["id"]]
-        _set_list(ctx, new_records, ctx.auth.plugin_state.get("multi_session_options", MultiSessionOptions()))
+        _set_list(
+            ctx,
+            new_records,
+            ctx.auth.plugin_state.get("multi_session_options", MultiSessionOptions()),
+        )
         raise APIError(401, "INVALID_SESSION_TOKEN")
 
     # Move target to head of list (becomes active).
@@ -236,11 +244,15 @@ async def _revoke_handler(ctx: EndpointContext) -> dict[str, Any]:
             ctx.set_cookies.append((SESSION_TOKEN_COOKIE, signed, _session_cookie_attrs(ctx)))
             _set_list(ctx, new_records, opts)
         else:
-            ctx.set_cookies.append((
-                SESSION_TOKEN_COOKIE,
-                "",
-                CookieAttributes(path="/", max_age=0, http_only=True, secure=False, same_site="lax"),
-            ))
+            ctx.set_cookies.append(
+                (
+                    SESSION_TOKEN_COOKIE,
+                    "",
+                    CookieAttributes(
+                        path="/", max_age=0, http_only=True, secure=False, same_site="lax"
+                    ),
+                )
+            )
             _clear_list(ctx)
     else:
         if new_records:
@@ -262,7 +274,9 @@ def match_sign_out(ctx: EndpointContext) -> bool:
     return ctx.request.path == "/sign-out"
 
 
-def after_sign_in_hook(opts: MultiSessionOptions):
+def after_sign_in_hook(
+    opts: MultiSessionOptions,
+) -> Callable[[EndpointContext, object], Awaitable[object | None]]:
     async def handler(ctx: EndpointContext, result: object) -> object | None:
         # The handler emits a `session_token` Set-Cookie via ctx.set_cookies.
         new_token: str | None = None
@@ -305,7 +319,9 @@ def after_sign_in_hook(opts: MultiSessionOptions):
     return handler
 
 
-def after_sign_out_hook(opts: MultiSessionOptions):
+def after_sign_out_hook(
+    opts: MultiSessionOptions,
+) -> Callable[[EndpointContext, object], Awaitable[object | None]]:
     async def handler(ctx: EndpointContext, result: object) -> object | None:
         # Sign-out already revoked the active session and emitted clearing cookies.
         # We need to either promote the next session in the list, or clear the list.
@@ -328,7 +344,9 @@ def after_sign_out_hook(opts: MultiSessionOptions):
     return handler
 
 
-def on_response_factory(opts: MultiSessionOptions):
+def on_response_factory(
+    opts: MultiSessionOptions,
+) -> Callable[[EndpointContext, object], Awaitable[None]]:
     async def on_response(ctx: EndpointContext, result: object) -> None:
         # Stash options so handlers can read them without import gymnastics.
         ctx.auth.plugin_state.setdefault("multi_session_options", opts)

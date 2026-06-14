@@ -121,9 +121,7 @@ async def test_offline_access_with_pkce_succeeds(clients) -> None:
     )
     assert r.status == 200, r.json()
     code = r.json()["code"]
-    tr = await exchange_code(
-        driver, conf_no_pkce, code, verifier, scope="openid offline_access"
-    )
+    tr = await exchange_code(driver, conf_no_pkce, code, verifier, scope="openid offline_access")
     assert tr.status == 200, tr.json()
     assert tr.json()["access_token"]
     assert tr.json()["refresh_token"]
@@ -149,9 +147,7 @@ async def test_pkce_not_in_auth_but_in_token_fails(clients) -> None:
     _, driver, _, _, conf_no_pkce = clients
     r = await _authorize(driver, conf_no_pkce, scope="openid")
     code = r.json()["code"]
-    tr = await exchange_code(
-        driver, conf_no_pkce, code, pkce_verifier(), scope="openid"
-    )
+    tr = await exchange_code(driver, conf_no_pkce, code, pkce_verifier(), scope="openid")
     assert tr.status == 401
     assert (
         "code_verifier provided but PKCE was not used in authorization"

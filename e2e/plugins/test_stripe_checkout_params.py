@@ -28,8 +28,8 @@ from typing import Any
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -40,9 +40,7 @@ from kernia_test_utils import ASGIDriver, MockStripe
 WEBHOOK_SECRET = "whsec_test_secret"
 
 
-def _build(
-    *, hook: Any, free_trial_days: int | None = None
-) -> tuple[ASGIDriver, MockStripe]:
+def _build(*, hook: Any, free_trial_days: int | None = None) -> tuple[ASGIDriver, MockStripe]:
     mock = MockStripe()
     mock.add_price("price_starter", usage_type="licensed")
     client = StripeClient(api_key="sk_test_x", transport=mock.mock_transport())
@@ -89,9 +87,7 @@ async def _upgrade(driver: ASGIDriver, **extra: Any) -> dict:
 
 
 def _checkout_event(mock: MockStripe) -> dict:
-    return next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    return next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +101,7 @@ async def test_preserves_plan_free_trial_with_custom_subscription_data() -> None
             "params": {
                 "payment_method_collection": "if_required",
                 "subscription_data": {
-                    "trial_settings": {
-                        "end_behavior": {"missing_payment_method": "cancel"}
-                    }
+                    "trial_settings": {"end_behavior": {"missing_payment_method": "cancel"}}
                 },
             }
         }
@@ -130,9 +124,7 @@ async def test_preserves_internal_subscription_metadata() -> None:
         return {
             "params": {
                 "subscription_data": {
-                    "trial_settings": {
-                        "end_behavior": {"missing_payment_method": "cancel"}
-                    }
+                    "trial_settings": {"end_behavior": {"missing_payment_method": "cancel"}}
                 }
             }
         }

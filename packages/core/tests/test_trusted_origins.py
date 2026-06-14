@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth.trusted_origins import is_state_changing, is_trusted, normalize_origin
 
 
@@ -43,7 +42,9 @@ def test_same_origin_accepted() -> None:
 
 
 def test_no_origin_no_referer_accepted_for_ssr() -> None:
-    assert is_trusted(origin=None, referer=None, base_url="https://app.example.com", trusted_origins=())
+    assert is_trusted(
+        origin=None, referer=None, base_url="https://app.example.com", trusted_origins=()
+    )
 
 
 def test_cross_origin_rejected() -> None:

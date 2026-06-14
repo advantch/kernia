@@ -61,9 +61,11 @@ def generate_state(
     if link_to_user_id:
         payload["linkToUserId"] = link_to_user_id
 
-    raw = base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).rstrip(b"=").decode("ascii")
+    raw = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        .rstrip(b"=")
+        .decode("ascii")
+    )
     return sign(raw, secret)
 
 

@@ -36,7 +36,9 @@ class ASGIRequest:
 
     async def json(self) -> Any:
         if not self._parsed_done:
-            self._parsed = json.loads(self._body_bytes.decode("utf-8")) if self._body_bytes else None
+            self._parsed = (
+                json.loads(self._body_bytes.decode("utf-8")) if self._body_bytes else None
+            )
             self._parsed_done = True
         return self._parsed
 

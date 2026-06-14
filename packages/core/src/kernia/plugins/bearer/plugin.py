@@ -14,11 +14,13 @@ Mirrors `reference/packages/better-auth/src/plugins/bearer/index.ts`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import unquote
 
+from kernia.context import revoke_session
 from kernia.cookies import verify
 from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext, Session
@@ -44,7 +46,7 @@ class BearerOptions:
     require_signature: bool = False
 
 
-def _make_on_request(opts: BearerOptions):
+def _make_on_request(opts: BearerOptions) -> Callable[[EndpointContext], Awaitable[None]]:
     async def on_request(ctx: EndpointContext) -> None:
         # If a session is already attached (via cookie), do nothing.
         if ctx.session is not None:
@@ -59,7 +61,7 @@ def _make_on_request(opts: BearerOptions):
             return
         if auth_header[: len(_BEARER_SCHEME)].lower() != _BEARER_SCHEME:
             return
-        bearer_token = auth_header[len(_BEARER_SCHEME):].strip()
+        bearer_token = auth_header[len(_BEARER_SCHEME) :].strip()
         if not bearer_token:
             return
 
@@ -82,10 +84,19 @@ def _make_on_request(opts: BearerOptions):
         )
         if not row:
             return
+        # An expired session never authenticates — same chokepoint rule as the
+        # router's cookie path (`_attach_session`). Upstream funnels bearer
+        # tokens through `getSession`, which deletes the stale row and clears
+        # the session cookies; mirror that here so the Authorization header is
+        # not a bypass around expiry.
+        expires_at = int(row["expiresAt"])
+        if expires_at < int(time.time()):
+            ctx.set_cookies.extend(await revoke_session(ctx.auth, token=row["token"]))
+            return
         ctx.session = Session(
             id=row["id"],
             user_id=row["userId"],
-            expires_at=int(row["expiresAt"]),
+            expires_at=expires_at,
             token=row["token"],
             ip_address=row.get("ipAddress"),
             user_agent=row.get("userAgent"),

@@ -10,4 +10,4 @@ Endpoint: POST /one-tap/verify
 
 from kernia.plugins.one_tap.plugin import OneTapOptions, one_tap
 
-__all__ = ["one_tap", "OneTapOptions"]
+__all__ = ["OneTapOptions", "one_tap"]

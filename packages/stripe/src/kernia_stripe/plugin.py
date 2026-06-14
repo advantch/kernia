@@ -51,19 +51,13 @@ STRIPE_ERROR_CODES: Mapping[str, str] = {
         "Subscription has no pending cancellation or scheduled plan change"
     ),
     "ORGANIZATION_NOT_FOUND": "Organization not found",
-    "ORGANIZATION_SUBSCRIPTION_NOT_ENABLED": (
-        "Organization subscription is not enabled"
-    ),
+    "ORGANIZATION_SUBSCRIPTION_NOT_ENABLED": ("Organization subscription is not enabled"),
     "AUTHORIZE_REFERENCE_REQUIRED": (
-        "Organization subscriptions require authorizeReference callback to be "
-        "configured"
+        "Organization subscriptions require authorizeReference callback to be configured"
     ),
-    "ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION": (
-        "Cannot delete organization with active subscription"
-    ),
+    "ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION": ("Cannot delete organization with active subscription"),
     "ORGANIZATION_REFERENCE_ID_REQUIRED": (
-        "Reference ID is required. Provide referenceId or set "
-        "activeOrganizationId in session"
+        "Reference ID is required. Provide referenceId or set activeOrganizationId in session"
     ),
 }
 
@@ -105,4 +99,4 @@ def stripe(options: StripeOptions) -> KerniaPlugin:
     )
 
 
-__all__ = ["stripe", "STRIPE_ERROR_CODES"]
+__all__ = ["STRIPE_ERROR_CODES", "stripe"]

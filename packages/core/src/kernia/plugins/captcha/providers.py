@@ -40,9 +40,7 @@ class CaptchaProvider(Protocol):
 
     name: str
 
-    async def verify(
-        self, token: str, ip: str | None = None
-    ) -> VerifyResult: ...
+    async def verify(self, token: str, ip: str | None = None) -> VerifyResult: ...
 
 
 @dataclass

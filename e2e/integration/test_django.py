@@ -19,18 +19,16 @@ pytest.importorskip("django")
 def django_setup():
     import django
     from django.conf import settings
-
+    from django.http import JsonResponse
+    from django.urls import path
     from kernia.auth import init
     from kernia.plugins.email_password import email_and_password
     from kernia.types.init_options import KerniaOptions
     from kernia_django import (
-        KerniaMiddleware,
         require_session,
     )
     from kernia_django import setup as ba_setup
     from kernia_memory_adapter import memory_adapter
-    from django.http import JsonResponse
-    from django.urls import path
 
     auth = init(
         KerniaOptions(

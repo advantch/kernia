@@ -14,8 +14,8 @@ from __future__ import annotations
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -121,7 +121,7 @@ async def test_checkout_session_creates_stripe_customer_and_session() -> None:
 
 
 async def test_webhook_signed_event_persists_subscription_and_list_reflects_it() -> None:
-    driver, mock, auth = _make_driver()
+    driver, _mock, auth = _make_driver()
     user = await _sign_up(driver)
     user_id = user["user"]["id"]
 
@@ -241,9 +241,7 @@ async def test_cancel_subscription_routes_through_billing_portal() -> None:
     }
     body_bytes = _json.dumps(event).encode("utf-8")
     _, headers = _sign_bytes(body_bytes)
-    seed = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    seed = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert seed.status == 200, seed.json()
 
     r = await driver.request(
@@ -330,9 +328,7 @@ async def test_metered_checkout_omits_quantity_on_line_item() -> None:
     assert r.status == 200, r.json()
     # The captured checkout session must carry a line item with NO quantity for
     # the metered price (Stripe rejects quantity on metered items).
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     line_items = session_event["object"]["line_items"]
     assert len(line_items) == 1
     assert line_items[0]["price"] == "price_metered"
@@ -353,9 +349,7 @@ async def test_licensed_checkout_includes_quantity() -> None:
         },
     )
     assert r.status == 200, r.json()
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     line_items = session_event["object"]["line_items"]
     assert line_items[0]["price"] == "price_pro"
     assert line_items[0]["quantity"] == "3"
@@ -414,9 +408,7 @@ async def test_upgrade_subscription_swaps_price_with_proration() -> None:
     assert items[0]["price"]["id"] == "price_metered"
     assert items[0]["id"] == "si_existing"
     assert "quantity" not in items[0]
-    update_event = next(
-        e for e in mock.capture_events if e["type"] == "subscription.update"
-    )
+    update_event = next(e for e in mock.capture_events if e["type"] == "subscription.update")
     assert update_event["object"]["proration_behavior"] == "create_prorations"
 
     # DB row reflects the new plan + price id.
@@ -471,7 +463,7 @@ async def _seed_db_subscription(
 
 async def test_subscription_deleted_webhook_marks_canceled() -> None:
     """customer.subscription.deleted flips the row to status=canceled."""
-    driver, mock, auth = _make_driver()
+    driver, _mock, auth = _make_driver()
     user = await _sign_up(driver, email="delete-test@email.com")
     user_id = user["user"]["id"]
     await _link_customer(auth, user_id, "cus_delete")
@@ -493,9 +485,7 @@ async def test_subscription_deleted_webhook_marks_canceled() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     from kernia.types.adapter import Where
@@ -510,7 +500,7 @@ async def test_subscription_deleted_webhook_marks_canceled() -> None:
 
 async def test_subscription_created_webhook_does_not_duplicate() -> None:
     """A second created event for an existing row must not insert a duplicate."""
-    driver, mock, auth = _make_driver()
+    driver, _mock, auth = _make_driver()
     user = await _sign_up(driver, email="nodupe@email.com")
     user_id = user["user"]["id"]
     await _link_customer(auth, user_id, "cus_nodupe")
@@ -533,9 +523,7 @@ async def test_subscription_created_webhook_does_not_duplicate() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     from kernia.types.adapter import Where
@@ -549,7 +537,7 @@ async def test_subscription_created_webhook_does_not_duplicate() -> None:
 
 async def test_subscription_created_webhook_skips_when_no_reference() -> None:
     """No user/org linked to the customer → no row is created."""
-    driver, mock, auth = _make_driver()
+    driver, _mock, auth = _make_driver()
     user = await _sign_up(driver, email="noref@email.com")
     user_id = user["user"]["id"]
     # Deliberately do NOT link cus_orphan to any user.
@@ -569,9 +557,7 @@ async def test_subscription_created_webhook_skips_when_no_reference() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     from kernia.types.adapter import Where
@@ -614,9 +600,7 @@ async def test_subscription_updated_webhook_invokes_callbacks() -> None:
     user = await _sign_up(driver, email="upd@email.com")
     user_id = user["user"]["id"]
     await _link_customer(auth, user_id, "cus_upd")
-    await _seed_db_subscription(
-        auth, reference_id=user_id, customer_id="cus_upd", sub_id="sub_upd"
-    )
+    await _seed_db_subscription(auth, reference_id=user_id, customer_id="cus_upd", sub_id="sub_upd")
 
     event, headers = _signed(
         {
@@ -643,9 +627,7 @@ async def test_subscription_updated_webhook_invokes_callbacks() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
     assert "update" in captured
     payload = captured["update"]
@@ -656,7 +638,7 @@ async def test_subscription_updated_webhook_invokes_callbacks() -> None:
 async def test_subscription_updated_webhook_syncs_schedule_id() -> None:
     """A `schedule` on the Stripe object is mirrored to stripeScheduleId, and
     cleared when the schedule is removed."""
-    driver, mock, auth = _make_driver()
+    driver, _mock, auth = _make_driver()
     user = await _sign_up(driver, email="sched@email.com")
     user_id = user["user"]["id"]
     await _link_customer(auth, user_id, "cus_sched")
@@ -687,9 +669,7 @@ async def test_subscription_updated_webhook_syncs_schedule_id() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     from kernia.types.adapter import Where
@@ -716,9 +696,7 @@ async def test_subscription_updated_webhook_syncs_schedule_id() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
     row = await auth.context.adapter.find_one(
         model="subscription",
@@ -790,9 +768,7 @@ async def test_free_trial_on_trial_end_fires_on_active_transition() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
     assert "end" in fired
     assert fired["end"]["subscription"]["stripeSubscriptionId"] == "sub_trial"
@@ -918,7 +894,7 @@ async def test_checkout_reuses_existing_customer_via_search() -> None:
     (customers.search) instead of creating a new one."""
     # Disable createCustomerOnSignUp so the user has no stripeCustomerId yet —
     # checkout must then resolve the existing customer via customers.search.
-    driver, mock, auth = _make_driver(create_customer_on_sign_up=False)
+    driver, mock, _auth = _make_driver(create_customer_on_sign_up=False)
     await _sign_up(driver, email="reuse@example.com")
 
     # Pre-seed an existing Stripe customer for the same email.
@@ -942,15 +918,13 @@ async def test_checkout_reuses_existing_customer_via_search() -> None:
     assert r.status == 200, r.json()
     # No new customer.create was captured — the existing one was reused.
     assert all(e["type"] != "customer.create" for e in mock.capture_events)
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     assert session_event["object"]["customer"] == existing_id
 
 
 async def test_checkout_falls_back_to_list_when_search_unavailable() -> None:
     """If customers.search is unavailable, checkout falls back to customers.list."""
-    driver, mock, auth = _make_driver(create_customer_on_sign_up=False)
+    driver, mock, _auth = _make_driver(create_customer_on_sign_up=False)
     mock.search_unavailable = True
     await _sign_up(driver, email="fallback@example.com")
 
@@ -973,9 +947,7 @@ async def test_checkout_falls_back_to_list_when_search_unavailable() -> None:
     )
     assert r.status == 200, r.json()
     assert all(e["type"] != "customer.create" for e in mock.capture_events)
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     assert session_event["object"]["customer"] == existing_id
 
 
@@ -1024,9 +996,7 @@ async def test_on_customer_create_hook_and_metadata() -> None:
     assert r.status == 200, r.json()
     assert "data" in captured
     assert captured["data"]["user"]["id"] == user_id
-    create_event = next(
-        e for e in mock.capture_events if e["type"] == "customer.create"
-    )
+    create_event = next(e for e in mock.capture_events if e["type"] == "customer.create")
     meta = create_event["object"]["metadata"]
     assert meta["userId"] == user_id
     assert meta["customerType"] == "user"

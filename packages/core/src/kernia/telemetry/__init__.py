@@ -59,17 +59,19 @@ class _TelemetryPlugin:
         # underlying adapter's kind, not the wrapper's.
         underlying = getattr(ctx.adapter, "_raw", ctx.adapter)
         adapter_kind = type(underlying).__name__
-        await self.sink({
-            "kind": "startup",
-            "version": __version__,
-            "plugins": plugin_ids,
-            "adapter": adapter_kind,
-            "ts": int(time.time()),
-        })
+        await self.sink(
+            {
+                "kind": "startup",
+                "version": __version__,
+                "plugins": plugin_ids,
+                "adapter": adapter_kind,
+                "ts": int(time.time()),
+            }
+        )
         return None
 
 
-def telemetry(*, sink: TelemetrySink | None = None):
+def telemetry(*, sink: TelemetrySink | None = None) -> _TelemetryPlugin:
     """Construct the telemetry plugin. Off by default; opt in by adding to plugins."""
     return _TelemetryPlugin(sink=sink or _stdout_sink)
 

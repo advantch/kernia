@@ -38,9 +38,7 @@ def email_domain(email: str) -> str:
     return email.rsplit("@", 1)[1].strip().lower()
 
 
-async def provider_for_email(
-    auth: AuthContext, email: str
-) -> tuple[str, str] | None:
+async def provider_for_email(auth: AuthContext, email: str) -> tuple[str, str] | None:
     """Return `(provider_id, domain)` if `email` belongs to a verified SSO domain.
 
     Returns `None` if no domain matches or the matching domain is not yet verified.

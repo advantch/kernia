@@ -73,7 +73,7 @@ def _build_driver(adapter):
 
 async def test_full_oidc_signin_flow(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _build_driver(adapter)
+    _auth, driver = _build_driver(adapter)
     idp.create_user(sub="u-1", email="alice@example.com", name="Alice")
 
     # 1. Sign-in: builds authorize URL + state, returns 302.
@@ -112,7 +112,7 @@ async def test_full_oidc_signin_flow(patched_httpx, idp: MockIdP) -> None:
 
 async def test_link_account_flow(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _build_driver(adapter)
+    _auth, driver = _build_driver(adapter)
 
     # First: sign up via email/password to get a session.
     r = await driver.request(
@@ -223,12 +223,14 @@ def _discovery_cfg(provider_id="test", **overrides) -> GenericOAuthConfig:
 async def test_redirect_to_provider_and_handle_response(patched_httpx, idp: MockIdP) -> None:
     """Existing user → callbackURL (dashboard)."""
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg())
+    _auth, driver = _make_auth(adapter, _discovery_cfg())
     # Pre-create the user so this sign-in resolves an existing account/user.
     idp.create_user(sub="oauth2", email="oauth2@test.com", name="OAuth2 Test")
     # First sign-in creates them.
     res = await _signin(
-        driver, "test", callbackURL="http://localhost/dashboard",
+        driver,
+        "test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     assert res.status == 200
@@ -242,7 +244,9 @@ async def test_redirect_to_provider_and_handle_response(patched_httpx, idp: Mock
     # Second sign-in: now an existing user → dashboard.
     idp.create_user(sub="oauth2", email="oauth2@test.com", name="OAuth2 Test")
     res2 = await _signin(
-        driver, "test", callbackURL="http://localhost/dashboard",
+        driver,
+        "test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb2 = await _callback(driver, "test", _state_from_url(res2.json()["url"]))
@@ -251,10 +255,12 @@ async def test_redirect_to_provider_and_handle_response(patched_httpx, idp: Mock
 
 async def test_redirect_for_new_user_creates_account(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg())
+    _auth, driver = _make_auth(adapter, _discovery_cfg())
     idp.create_user(sub="oauth2-2", email="oauth2-2@test.com", name="OAuth2 Test 2")
     res = await _signin(
-        driver, "test", callbackURL="http://localhost/dashboard",
+        driver,
+        "test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "test", _state_from_url(res.json()["url"]))
@@ -274,20 +280,19 @@ async def test_redirect_for_new_user_creates_account(patched_httpx, idp: MockIdP
 
 async def test_invalid_provider_id_returns_400(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg())
+    _auth, driver = _make_auth(adapter, _discovery_cfg())
     res = await _signin(driver, "invalid-provider", callbackURL="http://localhost/dashboard")
     assert res.status == 400
 
 
 async def test_server_error_during_oauth_flow(patched_httpx, idp: MockIdP) -> None:
     """Provider yields no userinfo → callback redirects with ?error=."""
+
     async def _no_userinfo(_tokens):
         return None
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("test-err", get_user_info=_no_userinfo)
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("test-err", get_user_info=_no_userinfo))
     res = await _signin(driver, "test-err", callbackURL="http://localhost/dashboard")
     cb = await _callback(driver, "test-err", _state_from_url(res.json()["url"]))
     assert cb.status == 302
@@ -296,13 +301,15 @@ async def test_server_error_during_oauth_flow(patched_httpx, idp: MockIdP) -> No
 
 async def test_custom_redirect_uri(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter,
         _discovery_cfg("test2", redirect_uri="http://localhost/api/auth/callback/test2"),
     )
     idp.create_user(sub="cru", email="cru@test.com", name="Custom Redirect")
     res = await _signin(
-        driver, "test2", callbackURL="http://localhost/dashboard",
+        driver,
+        "test2",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     url = res.json()["url"]
@@ -317,16 +324,16 @@ async def test_custom_redirect_uri(patched_httpx, idp: MockIdP) -> None:
 
 async def test_no_user_when_signups_disabled(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("test2", disable_implicit_sign_up=True)
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("test2", disable_implicit_sign_up=True))
     idp.create_user(
         sub="oauth2-signup-disabled",
         email="oauth2-signup-disabled@test.com",
         name="OAuth2 Test Signup Disabled",
     )
     res = await _signin(
-        driver, "test2", callbackURL="http://localhost/dashboard",
+        driver,
+        "test2",
+        callbackURL="http://localhost/dashboard",
         errorCallbackURL="http://localhost/error",
     )
     cb = await _callback(driver, "test2", _state_from_url(res.json()["url"]))
@@ -338,17 +345,18 @@ async def test_no_user_when_signups_disabled(patched_httpx, idp: MockIdP) -> Non
 
 async def test_create_user_when_signup_requested(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("test2", disable_implicit_sign_up=True)
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("test2", disable_implicit_sign_up=True))
     idp.create_user(
         sub="oauth2-signup-requested",
         email="oauth2-signup-requested@test.com",
         name="Requested",
     )
     res = await _signin(
-        driver, "test2", callbackURL="http://localhost/dashboard",
-        errorCallbackURL="http://localhost/error", requestSignUp=True,
+        driver,
+        "test2",
+        callbackURL="http://localhost/dashboard",
+        errorCallbackURL="http://localhost/error",
+        requestSignUp=True,
     )
     cb = await _callback(driver, "test2", _state_from_url(res.json()["url"]))
     assert _location(cb) == "http://localhost/dashboard"
@@ -362,10 +370,12 @@ async def test_create_user_when_signup_requested(patched_httpx, idp: MockIdP) ->
 async def test_numeric_account_id_dedup(patched_httpx, idp: MockIdP) -> None:
     numeric = 123456789
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg("numeric-test"))
+    _auth, driver = _make_auth(adapter, _discovery_cfg("numeric-test"))
     idp.create_user(sub=numeric, email="numeric-id@test.com", name="Numeric")
     res = await _signin(
-        driver, "numeric-test", callbackURL="http://localhost/dashboard",
+        driver,
+        "numeric-test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "numeric-test", _state_from_url(res.json()["url"]))
@@ -409,10 +419,12 @@ async def test_custom_get_user_info_numeric_id(patched_httpx, idp: MockIdP) -> N
         pkce=True,
         get_user_info=_get_user_info,
     )
-    auth, driver = _make_auth(adapter, cfg)
+    _auth, driver = _make_auth(adapter, cfg)
     idp.create_user(sub="ignored", email="ignored@test.com", name="ignored")
     res = await _signin(
-        driver, "custom-numeric", callbackURL="http://localhost/dashboard",
+        driver,
+        "custom-numeric",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "custom-numeric", _state_from_url(res.json()["url"]))
@@ -435,7 +447,7 @@ async def test_map_profile_to_user_numeric_id(patched_httpx, idp: MockIdP) -> No
         }
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter, _discovery_cfg("map-profile-numeric", map_profile_to_user=_map)
     )
     idp.create_user(
@@ -445,7 +457,9 @@ async def test_map_profile_to_user_numeric_id(patched_httpx, idp: MockIdP) -> No
         user_id=numeric,
     )
     res = await _signin(
-        driver, "map-profile-numeric", callbackURL="http://localhost/dashboard",
+        driver,
+        "map-profile-numeric",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "map-profile-numeric", _state_from_url(res.json()["url"]))
@@ -472,7 +486,7 @@ async def test_await_async_map_profile_to_user(patched_httpx, idp: MockIdP) -> N
         }
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter, _discovery_cfg("map-profile-async", map_profile_to_user=_map)
     )
     idp.create_user(
@@ -482,7 +496,9 @@ async def test_await_async_map_profile_to_user(patched_httpx, idp: MockIdP) -> N
         user_id=777,
     )
     res = await _signin(
-        driver, "map-profile-async", callbackURL="http://localhost/dashboard",
+        driver,
+        "map-profile-async",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "map-profile-async", _state_from_url(res.json()["url"]))
@@ -528,10 +544,12 @@ async def test_strava_map_profile_to_user(patched_httpx, idp: MockIdP) -> None:
         map_profile_to_user=_map,
         get_user_info=_get_user_info,
     )
-    auth, driver = _make_auth(adapter, cfg)
+    _auth, driver = _make_auth(adapter, cfg)
     idp.create_user(sub="ignored")
     res = await _signin(
-        driver, "strava", callbackURL="http://localhost/dashboard",
+        driver,
+        "strava",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     url = res.json()["url"]
@@ -549,7 +567,7 @@ async def test_strava_map_profile_to_user(patched_httpx, idp: MockIdP) -> None:
 async def test_email_is_missing_redirect(patched_httpx, idp: MockIdP) -> None:
     """Both provider userinfo and mapProfileToUser omit email → email_is_missing."""
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg("no-email-unresolved"))
+    _auth, driver = _make_auth(adapter, _discovery_cfg("no-email-unresolved"))
     # No email enqueued → id_token has no email claim, userinfo has none either.
     idp.create_user(sub="no-email-no-synthesis", name="No Email User")
     res = await _signin(driver, "no-email-unresolved", callbackURL="http://localhost/dashboard")
@@ -562,7 +580,7 @@ async def test_email_is_missing_redirect(patched_httpx, idp: MockIdP) -> None:
 
 async def test_state_mismatch_rejected(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg("test-cookie-csrf", pkce=False))
+    _auth, driver = _make_auth(adapter, _discovery_cfg("test-cookie-csrf", pkce=False))
     await _signin(driver, "test-cookie-csrf", callbackURL="http://localhost/dashboard")
     cb = await driver.request(
         "GET",
@@ -577,10 +595,8 @@ async def test_state_mismatch_rejected(patched_httpx, idp: MockIdP) -> None:
 
 async def test_callback_without_state(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg())
-    cb = await driver.request(
-        "GET", "/oauth2/callback/test", query="code=dummy"
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg())
+    cb = await driver.request("GET", "/oauth2/callback/test", query="code=dummy")
     assert cb.status == 302
     assert "please_restart_the_process" in _location(cb)
 
@@ -613,15 +629,19 @@ async def test_custom_get_token(patched_httpx, idp: MockIdP) -> None:
         }
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter,
         _discovery_cfg(
-            "custom-provider", scopes=("snsapi_login",),
-            get_token=_get_token, get_user_info=_get_user_info,
+            "custom-provider",
+            scopes=("snsapi_login",),
+            get_token=_get_token,
+            get_user_info=_get_user_info,
         ),
     )
     res = await _signin(
-        driver, "custom-provider", callbackURL="http://localhost/dashboard",
+        driver,
+        "custom-provider",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "custom-provider", _state_from_url(res.json()["url"]))
@@ -635,11 +655,11 @@ async def test_custom_get_token_error(patched_httpx, idp: MockIdP) -> None:
         raise RuntimeError("Token exchange failed")
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("error-provider", get_token=_get_token)
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("error-provider", get_token=_get_token))
     res = await _signin(
-        driver, "error-provider", callbackURL="http://localhost/dashboard",
+        driver,
+        "error-provider",
+        callbackURL="http://localhost/dashboard",
         errorCallbackURL="http://localhost/error",
     )
     cb = await _callback(driver, "error-provider", _state_from_url(res.json()["url"]))
@@ -679,15 +699,19 @@ async def test_get_based_token_endpoint(patched_httpx, idp: MockIdP) -> None:
         }
 
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter,
         _discovery_cfg(
-            "custom-get-provider", scopes=("profile", "email"),
-            get_token=_get_token, get_user_info=_get_user_info,
+            "custom-get-provider",
+            scopes=("profile", "email"),
+            get_token=_get_token,
+            get_user_info=_get_user_info,
         ),
     )
     res = await _signin(
-        driver, "custom-get-provider", callbackURL="http://localhost/dashboard",
+        driver,
+        "custom-get-provider",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/welcome",
     )
     assert "scope=profile" in res.json()["url"]
@@ -703,11 +727,15 @@ async def test_get_based_token_endpoint(patched_httpx, idp: MockIdP) -> None:
 
 def test_duplicate_provider_ids_rejected() -> None:
     cfg1 = GenericOAuthConfig(
-        provider_id="duplicate-id", client_id="c1", client_secret="s1",
+        provider_id="duplicate-id",
+        client_id="c1",
+        client_secret="s1",
         discovery_url="https://idp.test/.well-known/openid-configuration",
     )
     cfg2 = GenericOAuthConfig(
-        provider_id="duplicate-id", client_id="c2", client_secret="s2",
+        provider_id="duplicate-id",
+        client_id="c2",
+        client_secret="s2",
         discovery_url="https://idp.test/.well-known/openid-configuration",
     )
     with pytest.raises(ValueError, match="duplicate"):
@@ -716,11 +744,15 @@ def test_duplicate_provider_ids_rejected() -> None:
 
 def test_unique_provider_ids_ok() -> None:
     cfg1 = GenericOAuthConfig(
-        provider_id="unique-1", client_id="c1", client_secret="s1",
+        provider_id="unique-1",
+        client_id="c1",
+        client_secret="s1",
         discovery_url="https://idp.test/.well-known/openid-configuration",
     )
     cfg2 = GenericOAuthConfig(
-        provider_id="unique-2", client_id="c2", client_secret="s2",
+        provider_id="unique-2",
+        client_id="c2",
+        client_secret="s2",
         discovery_url="https://idp.test/.well-known/openid-configuration",
     )
     plugin = generic_oauth([cfg1, cfg2])
@@ -732,16 +764,18 @@ def test_unique_provider_ids_ok() -> None:
 
 async def test_iss_matches_configured_issuer(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("iss-test", issuer="https://idp.test")
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("iss-test", issuer="https://idp.test"))
     idp.create_user(sub="iss-match", email="iss-match@test.com", name="Issuer Match")
     res = await _signin(
-        driver, "iss-test", callbackURL="http://localhost/dashboard",
+        driver,
+        "iss-test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(
-        driver, "iss-test", _state_from_url(res.json()["url"]),
+        driver,
+        "iss-test",
+        _state_from_url(res.json()["url"]),
         extra="iss=https%3A%2F%2Fidp.test",
     )
     assert _location(cb) == "http://localhost/new_user"
@@ -750,16 +784,18 @@ async def test_iss_matches_configured_issuer(patched_httpx, idp: MockIdP) -> Non
 
 async def test_iss_mismatch_rejected(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
-        adapter, _discovery_cfg("iss-mismatch", issuer="https://idp.test")
-    )
+    _auth, driver = _make_auth(adapter, _discovery_cfg("iss-mismatch", issuer="https://idp.test"))
     idp.create_user(sub="iss-x", email="iss-x@test.com", name="X")
     res = await _signin(
-        driver, "iss-mismatch", callbackURL="http://localhost/dashboard",
+        driver,
+        "iss-mismatch",
+        callbackURL="http://localhost/dashboard",
         errorCallbackURL="http://localhost/error",
     )
     cb = await _callback(
-        driver, "iss-mismatch", _state_from_url(res.json()["url"]),
+        driver,
+        "iss-mismatch",
+        _state_from_url(res.json()["url"]),
         extra="iss=https%3A%2F%2Fevil-server.com",
     )
     loc = _location(cb)
@@ -770,14 +806,18 @@ async def test_iss_mismatch_rejected(patched_httpx, idp: MockIdP) -> None:
 async def test_iss_from_discovery_document(patched_httpx, idp: MockIdP) -> None:
     """No issuer configured → fall back to discovery `issuer` for validation."""
     adapter = memory_adapter()
-    auth, driver = _make_auth(adapter, _discovery_cfg("iss-discovery"))
+    _auth, driver = _make_auth(adapter, _discovery_cfg("iss-discovery"))
     idp.create_user(sub="iss-disc", email="iss-disc@test.com", name="Disc")
     res = await _signin(
-        driver, "iss-discovery", callbackURL="http://localhost/dashboard",
+        driver,
+        "iss-discovery",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(
-        driver, "iss-discovery", _state_from_url(res.json()["url"]),
+        driver,
+        "iss-discovery",
+        _state_from_url(res.json()["url"]),
         extra="iss=https%3A%2F%2Fidp.test",
     )
     assert _location(cb) == "http://localhost/new_user"
@@ -795,10 +835,12 @@ async def test_no_iss_validation_when_unconfigured(patched_httpx, idp: MockIdP) 
         user_info_url="https://idp.test/userinfo",
         pkce=True,
     )
-    auth, driver = _make_auth(adapter, cfg)
+    _auth, driver = _make_auth(adapter, cfg)
     idp.create_user(sub="no-iss", email="no-iss@test.com", name="No Iss")
     res = await _signin(
-        driver, "no-iss-test", callbackURL="http://localhost/dashboard",
+        driver,
+        "no-iss-test",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "no-iss-test", _state_from_url(res.json()["url"]))
@@ -807,15 +849,15 @@ async def test_no_iss_validation_when_unconfigured(patched_httpx, idp: MockIdP) 
 
 async def test_require_issuer_validation_missing_iss(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter,
-        _discovery_cfg(
-            "strict-iss", issuer="https://idp.test", require_issuer_validation=True
-        ),
+        _discovery_cfg("strict-iss", issuer="https://idp.test", require_issuer_validation=True),
     )
     idp.create_user(sub="strict", email="strict@test.com", name="Strict")
     res = await _signin(
-        driver, "strict-iss", callbackURL="http://localhost/dashboard",
+        driver,
+        "strict-iss",
+        callbackURL="http://localhost/dashboard",
         errorCallbackURL="http://localhost/error",
     )
     cb = await _callback(driver, "strict-iss", _state_from_url(res.json()["url"]))
@@ -826,15 +868,15 @@ async def test_require_issuer_validation_missing_iss(patched_httpx, idp: MockIdP
 
 async def test_lenient_issuer_validation_allows_missing_iss(patched_httpx, idp: MockIdP) -> None:
     adapter = memory_adapter()
-    auth, driver = _make_auth(
+    _auth, driver = _make_auth(
         adapter,
-        _discovery_cfg(
-            "lenient-iss", issuer="https://idp.test", require_issuer_validation=False
-        ),
+        _discovery_cfg("lenient-iss", issuer="https://idp.test", require_issuer_validation=False),
     )
     idp.create_user(sub="lenient", email="lenient@test.com", name="Lenient")
     res = await _signin(
-        driver, "lenient-iss", callbackURL="http://localhost/dashboard",
+        driver,
+        "lenient-iss",
+        callbackURL="http://localhost/dashboard",
         newUserCallbackURL="http://localhost/new_user",
     )
     cb = await _callback(driver, "lenient-iss", _state_from_url(res.json()["url"]))
@@ -848,7 +890,8 @@ def test_okta_helper_config() -> None:
     from kernia.plugins.generic_oauth import okta
 
     cfg = okta(
-        client_id="okta-client-id", client_secret="okta-client-secret",
+        client_id="okta-client-id",
+        client_secret="okta-client-secret",
         issuer="https://dev-12345.okta.com/oauth2/default",
     )
     assert cfg.provider_id == "okta"
@@ -863,7 +906,8 @@ def test_okta_helper_trailing_slash() -> None:
     from kernia.plugins.generic_oauth import okta
 
     cfg = okta(
-        client_id="x", client_secret="y",
+        client_id="x",
+        client_secret="y",
         issuer="https://dev-12345.okta.com/oauth2/default/",
     )
     assert cfg.discovery_url == (
@@ -875,7 +919,8 @@ def test_auth0_helper_config() -> None:
     from kernia.plugins.generic_oauth import auth0
 
     cfg = auth0(
-        client_id="auth0-client-id", client_secret="auth0-client-secret",
+        client_id="auth0-client-id",
+        client_secret="auth0-client-secret",
         domain="dev-xxx.eu.auth0.com",
     )
     assert cfg.provider_id == "auth0"
@@ -888,7 +933,9 @@ def test_auth0_helper_protocol_prefix() -> None:
     from kernia.plugins.generic_oauth import auth0
 
     cfg = auth0(
-        client_id="x", client_secret="y", domain="https://dev-xxx.eu.auth0.com",
+        client_id="x",
+        client_secret="y",
+        domain="https://dev-xxx.eu.auth0.com",
     )
     assert cfg.discovery_url == "https://dev-xxx.eu.auth0.com/.well-known/openid-configuration"
 
@@ -897,15 +944,15 @@ def test_microsoft_entra_id_helper_config() -> None:
     from kernia.plugins.generic_oauth import microsoft_entra_id
 
     cfg = microsoft_entra_id(
-        client_id="ms-client-id", client_secret="ms-client-secret", tenant_id="common",
+        client_id="ms-client-id",
+        client_secret="ms-client-secret",
+        tenant_id="common",
     )
     assert cfg.provider_id == "microsoft-entra-id"
     assert cfg.authorization_url == (
         "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     )
-    assert cfg.token_url == (
-        "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-    )
+    assert cfg.token_url == ("https://login.microsoftonline.com/common/oauth2/v2.0/token")
     assert cfg.user_info_url == "https://graph.microsoft.com/oidc/userinfo"
     assert cfg.scopes == ("openid", "profile", "email")
     assert cfg.get_user_info is not None
@@ -916,7 +963,9 @@ def test_microsoft_entra_id_helper_guid_tenant() -> None:
 
     tenant = "12345678-1234-1234-1234-123456789012"
     cfg = microsoft_entra_id(
-        client_id="x", client_secret="y", tenant_id=tenant,
+        client_id="x",
+        client_secret="y",
+        tenant_id=tenant,
     )
     assert cfg.authorization_url == (
         f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
@@ -939,7 +988,8 @@ def test_keycloak_helper_config() -> None:
     from kernia.plugins.generic_oauth import keycloak
 
     cfg = keycloak(
-        client_id="keycloak-client-id", client_secret="keycloak-client-secret",
+        client_id="keycloak-client-id",
+        client_secret="keycloak-client-secret",
         issuer="https://my-domain.com/realms/MyRealm",
     )
     assert cfg.provider_id == "keycloak"
@@ -954,7 +1004,8 @@ def test_keycloak_helper_trailing_slash() -> None:
     from kernia.plugins.generic_oauth import keycloak
 
     cfg = keycloak(
-        client_id="x", client_secret="y",
+        client_id="x",
+        client_secret="y",
         issuer="https://my-domain.com/realms/MyRealm/",
     )
     assert cfg.discovery_url == (
@@ -966,16 +1017,20 @@ def test_helper_overrides_scopes_and_options() -> None:
     from kernia.plugins.generic_oauth import keycloak, okta
 
     o = okta(
-        client_id="x", client_secret="y",
+        client_id="x",
+        client_secret="y",
         issuer="https://dev-12345.okta.com/oauth2/default",
-        scopes=("openid", "profile"), pkce=True, disable_implicit_sign_up=True,
+        scopes=("openid", "profile"),
+        pkce=True,
+        disable_implicit_sign_up=True,
     )
     assert o.scopes == ("openid", "profile")
     assert o.pkce is True
     assert o.disable_implicit_sign_up is True
 
     k = keycloak(
-        client_id="x", client_secret="y",
+        client_id="x",
+        client_secret="y",
         issuer="https://my-domain.com/realms/MyRealm",
         scopes=("openid", "profile"),
     )

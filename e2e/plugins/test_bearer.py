@@ -235,3 +235,74 @@ async def test_should_work_with_encoded_token(bearer_instance, transform) -> Non
     body = r.json()
     assert body is not None
     assert body.get("session") is not None
+
+
+async def test_expired_session_via_bearer_is_rejected_and_cleaned_up() -> None:
+    """The Authorization header must not bypass session expiry.
+
+    Mirrors the router's cookie chokepoint: an expired session presented as a
+    bearer token reads as "no session" (get-session → null, protected route →
+    401) and the stale row is deleted from storage.
+    """
+    import time
+
+    from kernia.types.adapter import Where
+    from kernia_memory_adapter import memory_adapter
+
+    auth = init(
+        KerniaOptions(
+            database=memory_adapter(),
+            secret="bearer-secret",
+            plugins=[email_and_password(), bearer()],
+        )
+    )
+    driver = ASGIDriver(app=auth.router.mount())
+    r = await driver.request(
+        "POST",
+        "/sign-up/email",
+        json_body={"email": "stale@example.com", "password": "password1234"},
+    )
+    assert r.status == 200, r.json()
+    token = _header(r, "set-auth-token") or ""
+    assert token
+    user_id = r.json()["user"]["id"]
+    driver.cookies.clear()
+
+    # Backdate the session row one hour into the past.
+    row = await auth.context.adapter.find_one(
+        model="session",
+        where=(Where(field="userId", value=user_id),),
+    )
+    assert row is not None
+    await auth.context.adapter.update(
+        model="session",
+        where=(Where(field="id", value=row["id"]),),
+        update={"expiresAt": int(time.time()) - 3600},
+    )
+
+    # A requires_session route with the expired bearer token must 401.
+    r = await driver.request(
+        "GET",
+        "/list-sessions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status == 401
+    assert r.json()["code"] == "UNAUTHORIZED"
+    # No set-auth-token header is echoed for a dead session.
+    assert _header(r, "set-auth-token") is None
+
+    # get-session with the expired bearer token reads as unauthenticated.
+    r = await driver.request(
+        "GET",
+        "/get-session",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status == 200
+    assert r.json() is None
+
+    # The stale row was deleted on first use.
+    remaining = await auth.context.adapter.find_one(
+        model="session",
+        where=(Where(field="userId", value=user_id),),
+    )
+    assert remaining is None

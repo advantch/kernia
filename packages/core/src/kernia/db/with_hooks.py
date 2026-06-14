@@ -191,16 +191,13 @@ class WithHooks:
         before_hooks = [
             entry
             for entry in self._entries
-            if (op := _op(entry.hooks.get(model), "delete")) is not None
-            and op.before is not None
+            if (op := _op(entry.hooks.get(model), "delete")) is not None and op.before is not None
         ]
         snapshot = pre_snapshot
         if before_hooks:
             if snapshot is None:
                 try:
-                    rows = await self._adapter.find_many(
-                        model=model, where=where, limit=1
-                    )
+                    rows = await self._adapter.find_many(model=model, where=where, limit=1)
                     snapshot = rows[0] if rows else None
                 except Exception:
                     snapshot = None
@@ -215,7 +212,7 @@ class WithHooks:
         consume = getattr(self._adapter, "consume_one", None)
         if consume is None:
             raise AttributeError("adapter does not support consume_one")
-        consumed = await consume(model=model, where=where)
+        consumed: dict[str, Any] | None = await consume(model=model, where=where)
         if not consumed:
             return None
         await self._queue_after(model, "delete", consumed)

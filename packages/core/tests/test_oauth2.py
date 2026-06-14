@@ -13,7 +13,6 @@ import time
 
 import httpx
 import pytest
-
 from kernia.oauth2 import (
     pkce_challenge,
     pkce_verifier,
@@ -50,7 +49,8 @@ def _sign_jwt(rsa_key, *, header: dict, claims: dict) -> str:
     from cryptography.hazmat.primitives.asymmetric import padding
 
     signing_input = (
-        _b64url(json.dumps(header, separators=(",", ":")).encode()) + "."
+        _b64url(json.dumps(header, separators=(",", ":")).encode())
+        + "."
         + _b64url(json.dumps(claims, separators=(",", ":")).encode())
     )
     sig = rsa_key.sign(

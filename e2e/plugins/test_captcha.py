@@ -21,8 +21,8 @@ from kernia.plugins.captcha import (
     turnstile,
 )
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter

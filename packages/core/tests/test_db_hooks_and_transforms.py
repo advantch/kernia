@@ -94,9 +94,7 @@ def test_resolve_tables_folds_additional_fields():
 
 def test_resolve_tables_rejects_duplicate_table():
     class Dup(_Plugin):
-        schema = PluginSchema(
-            tables=(ModelDef(name="user", fields=(FieldDef("id", "string"),)),)
-        )
+        schema = PluginSchema(tables=(ModelDef(name="user", fields=(FieldDef("id", "string"),)),))
 
     with pytest.raises(ValueError, match="already exists"):
         resolve_tables([Dup()])
@@ -131,9 +129,7 @@ async def test_transform_field_name_mapping_and_value_transforms():
                     "string",
                     required=False,
                     field_name="nickname",
-                    transform=FieldTransform(
-                        input=lambda v: v.upper(), output=lambda v: v.lower()
-                    ),
+                    transform=FieldTransform(input=lambda v: v.upper(), output=lambda v: v.lower()),
                 )
             ]
         }
@@ -158,9 +154,7 @@ async def test_transform_field_name_mapping_and_value_transforms():
 @pytest.mark.asyncio
 async def test_transform_applies_defaults_on_create_only_for_absent_fields():
     raw, ctx = _auth_with(
-        additional_fields={
-            "user": [FieldDef("plan", "string", required=False, default="free")]
-        }
+        additional_fields={"user": [FieldDef("plan", "string", required=False, default="free")]}
     )
     # absent -> default filled
     await ctx.adapter.create(model="user", data=_user_row(id="u1"))
@@ -175,9 +169,7 @@ async def test_transform_on_update_refreshes_absent_field():
     bumps = iter([111, 222])
     raw, ctx = _auth_with(
         additional_fields={
-            "user": [
-                FieldDef("rev", "number", required=False, on_update=lambda: next(bumps))
-            ]
+            "user": [FieldDef("rev", "number", required=False, on_update=lambda: next(bumps))]
         }
     )
     await ctx.adapter.create(model="user", data=_user_row())
@@ -194,7 +186,7 @@ async def test_transform_on_update_refreshes_absent_field():
 
 @pytest.mark.asyncio
 async def test_transform_passes_through_unknown_model():
-    raw, ctx = _auth_with()
+    _raw, ctx = _auth_with()
     row = await ctx.adapter.create(model="adhoc", data={"id": "x", "k": "v"})
     # pass-through: the wrapper adds nothing; the memory adapter supplies its own
     # createdAt/updatedAt, so assert the input survives unchanged.
@@ -208,7 +200,7 @@ async def test_transform_passes_through_unknown_model():
 
 @pytest.mark.asyncio
 async def test_database_hooks_before_after_and_patch():
-    raw, ctx = _auth_with()
+    _raw, ctx = _auth_with()
     seen = {"before": 0, "after": 0, "after_row": None}
 
     async def before(data, _ctx):
@@ -272,7 +264,7 @@ async def test_delete_hooks_receive_entity():
 
 @pytest.mark.asyncio
 async def test_after_hooks_defer_until_queue_drains():
-    raw, ctx = _auth_with()
+    _raw, ctx = _auth_with()
     order = []
 
     async def after(_row, _ctx):

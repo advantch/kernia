@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from authlib.jose import JsonWebKey
+from authlib.jose import JsonWebKey  # type: ignore[import-untyped]
 from authlib.jose import jwt as jose_jwt
 
 from kernia.api.endpoint import create_auth_endpoint
@@ -89,9 +89,7 @@ class JwtOptions:
     def __post_init__(self) -> None:
         # Upstream: options.jwks.remoteUrl must be set when using options.jwt.sign
         if self.sign is not None and not self.remote_url:
-            raise ValueError(
-                "options.jwks.remoteUrl must be set when using options.jwt.sign"
-            )
+            raise ValueError("options.jwks.remoteUrl must be set when using options.jwt.sign")
         # Upstream: alg must be specified when using remoteUrl.
         if self.remote_url and not self.algorithm:
             raise ValueError(
@@ -279,6 +277,8 @@ async def _maybe_await(value: Any) -> Any:
 
 
 async def _resolve_session_user(ctx: EndpointContext) -> dict[str, Any]:
+    if ctx.session is None:
+        raise APIError(401, "UNAUTHORIZED")
     user = await ctx.auth.adapter.find_one(
         model="user", where=(Where(field="id", value=ctx.session.user_id),)
     )
@@ -357,7 +357,7 @@ def _enforce_rotate_authz(ctx: EndpointContext, opts: JwtOptions) -> None:
     if opts.rotate_admin_token:
         auth_header = ctx.request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
-            tok = auth_header[len("Bearer "):]
+            tok = auth_header[len("Bearer ") :]
             if secrets.compare_digest(tok, opts.rotate_admin_token):
                 return
     # Session+role route
@@ -425,9 +425,7 @@ async def sign_jwt(
     # Exp: explicit payload exp wins, else expiration_time (default "15m").
     if "exp" not in body:
         exp_setting: int | str = (
-            opts.expiration_time
-            if opts.expiration_time is not None
-            else opts.access_token_ttl
+            opts.expiration_time if opts.expiration_time is not None else opts.access_token_ttl
         )
         body["exp"] = to_exp_jwt(exp_setting, iat)
 
@@ -451,11 +449,7 @@ async def sign_jwt(
     alg = key_row["algorithm"]
     header = {"alg": alg, "typ": "JWT", "kid": key_row["keyId"]}
     token_bytes = jose_jwt.encode(header, body, private_jwk)
-    return (
-        token_bytes.decode("ascii")
-        if isinstance(token_bytes, bytes)
-        else str(token_bytes)
-    )
+    return token_bytes.decode("ascii") if isinstance(token_bytes, bytes) else str(token_bytes)
 
 
 async def verify_local_jwt(
@@ -469,7 +463,7 @@ async def verify_local_jwt(
     rows = await auth.adapter.find_many(model="jwk")
     if not rows:
         raise ValueError("no JWKS keys configured")
-    jwks = {"keys": []}
+    jwks: dict[str, list[Any]] = {"keys": []}
     for row in rows:
         pub = json.loads(row["publicKey"])
         pub["kid"] = row["keyId"]
@@ -540,9 +534,7 @@ class _JwtPlugin:
     opts: JwtOptions
     id: str = "jwt"
     version: str | None = None
-    schema: PluginSchema | None = field(
-        default_factory=lambda: PluginSchema(tables=(JWK_MODEL,))
-    )
+    schema: PluginSchema | None = field(default_factory=lambda: PluginSchema(tables=(JWK_MODEL,)))
     endpoints: tuple[AuthEndpoint, ...] = ()
     middlewares: None = None
     hooks: None = None
@@ -578,10 +570,10 @@ def jwt(options: JwtOptions | None = None) -> KerniaPlugin:
 
 
 __all__ = [
-    "JwtOptions",
     "JWK_MODEL",
-    "jwt",
+    "JwtOptions",
     "issue_jwt",
+    "jwt",
     "sign_jwt",
     "to_exp_jwt",
     "verify_local_jwt",

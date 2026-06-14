@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.error import APIError
 from kernia.oauth2.link_account import handle_oauth_user_info
@@ -13,7 +12,9 @@ from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter
 
 
-def _profile(sub: str = "g-1", email: str = "alice@example.com", verified: bool = True) -> OAuthUserProfile:
+def _profile(
+    sub: str = "g-1", email: str = "alice@example.com", verified: bool = True
+) -> OAuthUserProfile:
     return OAuthUserProfile(
         id=sub,
         email=email,
@@ -146,7 +147,7 @@ async def test_explicit_link_to_user_id() -> None:
 
 async def test_explicit_link_conflict_when_account_already_links_to_someone_else() -> None:
     ctx = _build_ctx()
-    user_a, _ = await handle_oauth_user_info(
+    _user_a, _ = await handle_oauth_user_info(
         ctx, provider_id="google", profile=_profile(sub="g-1"), tokens={}
     )
     user_b = await ctx.adapter.create(

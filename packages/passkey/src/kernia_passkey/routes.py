@@ -177,9 +177,7 @@ def _get_signed_cookie(ctx: EndpointContext, name: str) -> str | None:
     return cookie_utils.verify(raw, secret=ctx.auth.secret)
 
 
-def _set_signed_cookie(
-    ctx: EndpointContext, name: str, value: str, max_age: int
-) -> None:
+def _set_signed_cookie(ctx: EndpointContext, name: str, value: str, max_age: int) -> None:
     signed = cookie_utils.sign(value, secret=ctx.auth.secret)
     attrs = CookieAttributes(
         path="/",
@@ -202,12 +200,8 @@ async def _session_user(ctx: EndpointContext) -> dict[str, Any] | None:
     )
 
 
-async def _resolve_registration_user(
-    opts: PasskeyOptions, ctx: EndpointContext
-) -> dict[str, Any]:
-    require_session = (
-        opts.registration.require_session if opts.registration else True
-    )
+async def _resolve_registration_user(opts: PasskeyOptions, ctx: EndpointContext) -> dict[str, Any]:
+    require_session = opts.registration.require_session if opts.registration else True
     if require_session:
         user = await _session_user(ctx)
         if not user or not user.get("id"):
@@ -224,9 +218,7 @@ async def _resolve_registration_user(
         raise APIError(400, "RESOLVE_USER_REQUIRED")
 
     resolved = await _maybe_await(
-        opts.registration.resolve_user(
-            ctx=ctx, context=_query(ctx).get("context")
-        )
+        opts.registration.resolve_user(ctx=ctx, context=_query(ctx).get("context"))
     )
     if not resolved or not resolved.get("id") or not resolved.get("name"):
         raise APIError(400, "RESOLVED_USER_INVALID")
@@ -317,15 +309,11 @@ def _build_authenticator_selection(ctx: EndpointContext, opts: PasskeyOptions) -
     )
 
     custom = opts.authenticator_selection or {}
-    attachment = _query(ctx).get("authenticatorAttachment") or custom.get(
-        "authenticatorAttachment"
-    )
+    attachment = _query(ctx).get("authenticatorAttachment") or custom.get("authenticatorAttachment")
     resident = custom.get("residentKey", "preferred")
     user_verification = custom.get("userVerification", "preferred")
     return AuthenticatorSelectionCriteria(
-        authenticator_attachment=(
-            AuthenticatorAttachment(attachment) if attachment else None
-        ),
+        authenticator_attachment=(AuthenticatorAttachment(attachment) if attachment else None),
         resident_key=ResidentKeyRequirement(resident) if resident else None,
         user_verification=UserVerificationRequirement(user_verification),
     )
@@ -400,9 +388,7 @@ def _user_verification(value: str) -> Any:
 
 async def _verify_registration(ctx: EndpointContext) -> dict[str, Any]:
     opts = _opts(ctx)
-    require_session = (
-        opts.registration.require_session if opts.registration else True
-    )
+    require_session = opts.registration.require_session if opts.registration else True
     origin = _resolve_origin(ctx, opts)
     if not origin:
         raise APIError(400, "FAILED_TO_VERIFY_REGISTRATION")
@@ -427,11 +413,7 @@ async def _verify_registration(ctx: EndpointContext) -> dict[str, Any]:
     session_user = await _session_user(ctx) if not require_session else None
     if require_session:
         session_user = await _session_user(ctx)
-    if (
-        session_user
-        and session_user.get("id")
-        and user_data["id"] != session_user["id"]
-    ):
+    if session_user and session_user.get("id") and user_data["id"] != session_user["id"]:
         raise APIError(401, "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY")
 
     try:
@@ -472,14 +454,8 @@ async def _verify_registration(ctx: EndpointContext) -> dict[str, Any]:
             new_id = result["userId"]
             if not isinstance(new_id, str) or not new_id:
                 raise APIError(400, "RESOLVED_USER_INVALID")
-            if (
-                session_user
-                and session_user.get("id")
-                and new_id != session_user["id"]
-            ):
-                raise APIError(
-                    401, "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY"
-                )
+            if session_user and session_user.get("id") and new_id != session_user["id"]:
+                raise APIError(401, "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY")
             target_user_id = new_id
 
     transports = ""
@@ -721,16 +697,12 @@ def build_endpoints(opts: PasskeyOptions) -> tuple[AuthEndpoint, ...]:
         ),
         create_auth_endpoint(
             "/passkey/delete-passkey",
-            EndpointOptions(
-                method="POST", body=DeletePasskeyBody, requires_session=True
-            ),
+            EndpointOptions(method="POST", body=DeletePasskeyBody, requires_session=True),
             _delete_passkey,
         ),
         create_auth_endpoint(
             "/passkey/update-passkey",
-            EndpointOptions(
-                method="POST", body=UpdatePasskeyBody, requires_session=True
-            ),
+            EndpointOptions(method="POST", body=UpdatePasskeyBody, requires_session=True),
             _update_passkey,
         ),
     )

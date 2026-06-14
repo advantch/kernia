@@ -37,7 +37,7 @@ def decrypt_token(stored: str, *, secret: str) -> str:
     """Decrypt a token stored by `encrypt_token`. Raises ValueError on tamper."""
     if not stored.startswith(_PREFIX):
         raise ValueError("not an encrypted token")
-    body = stored[len(_PREFIX):]
+    body = stored[len(_PREFIX) :]
     try:
         nonce_b64, ct_b64 = body.split(".", 1)
         nonce = _unb64(nonce_b64)

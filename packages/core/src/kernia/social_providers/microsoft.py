@@ -15,9 +15,13 @@ from kernia.social_providers._helpers import make_provider
 
 
 def _microsoft_profile(raw: Mapping[str, Any]) -> OAuthUserProfile:
-    name = raw.get("name") or " ".join(
-        part for part in (raw.get("given_name"), raw.get("family_name")) if part
-    ).strip() or None
+    name = (
+        raw.get("name")
+        or " ".join(
+            part for part in (raw.get("given_name"), raw.get("family_name")) if part
+        ).strip()
+        or None
+    )
     email = raw.get("email") or raw.get("preferred_username")
     return OAuthUserProfile(
         id=str(raw["sub"]),
@@ -41,12 +45,8 @@ def microsoft(
     `tenant_id` may be a tenant GUID or one of "common", "organizations",
     "consumers".
     """
-    authorization_endpoint = (
-        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
-    )
-    token_endpoint = (
-        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-    )
+    authorization_endpoint = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
+    token_endpoint = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
     return make_provider(
         id="microsoft",
         name="Microsoft",

@@ -206,7 +206,7 @@ async def test_userinfo_with_opaque_token(opaque) -> None:
 
 
 async def test_userinfo_unknown_opaque_token_401(opaque) -> None:
-    _, driver, client = opaque
+    _, driver, _client = opaque
     r = await driver.request(
         "GET",
         "/oauth2/userinfo",
@@ -266,9 +266,7 @@ async def test_revoke_with_opaque_access_token_prefix() -> None:
         },
     )
     assert r.status == 200, r.json()
-    assert not (await _introspect(driver, client, tokens["access_token"])).json()[
-        "active"
-    ]
+    assert not (await _introspect(driver, client, tokens["access_token"])).json()["active"]
 
 
 async def test_revoke_with_refresh_token_prefix() -> None:

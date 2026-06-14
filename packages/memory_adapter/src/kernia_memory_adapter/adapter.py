@@ -62,11 +62,7 @@ def _match(row: Record, where: Sequence[Where]) -> bool:
             case "ends_with":
                 ok = isinstance(cell, str) and cell.endswith(val)
             case "ilike_eq":
-                ok = (
-                    isinstance(cell, str)
-                    and isinstance(val, str)
-                    and cell.lower() == val.lower()
-                )
+                ok = isinstance(cell, str) and isinstance(val, str) and cell.lower() == val.lower()
             case _:  # pragma: no cover — exhaustive
                 raise ValueError(f"unsupported operator: {op}")
 

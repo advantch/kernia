@@ -29,8 +29,8 @@ from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -316,9 +316,7 @@ async def test_prevents_trial_abuse_after_cancel_during_trial() -> None:
     assert (await _post_webhook(driver, event)).status == 200
 
     # Re-subscribing must not grant a second trial.
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     assert r.status == 200, r.json()
     assert r.json()["url"] is not None
     assert not _has_trial(_last_checkout_params(mock))

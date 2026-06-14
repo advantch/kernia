@@ -18,9 +18,7 @@ from kernia.types.secondary_storage import SecondaryStorage
 # Server-side atomic GETDEL fallback (Redis 6.2+ has GETDEL natively; we keep
 # Lua for broader compatibility and to make the contract explicit).
 _GET_AND_DELETE_LUA = (
-    "local v = redis.call('GET', KEYS[1]); "
-    "if v then redis.call('DEL', KEYS[1]) end; "
-    "return v"
+    "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]) end; return v"
 )
 
 

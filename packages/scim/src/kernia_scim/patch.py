@@ -25,7 +25,11 @@ def _set_path(doc: MutableMapping[str, Any], path: str, value: Any) -> None:
     parts = path.split(".")
     cur: Any = doc
     for p in parts[:-1]:
-        if not isinstance(cur, MutableMapping) or p not in cur or not isinstance(cur[p], MutableMapping):
+        if (
+            not isinstance(cur, MutableMapping)
+            or p not in cur
+            or not isinstance(cur[p], MutableMapping)
+        ):
             cur[p] = {}  # type: ignore[index]
         cur = cur[p]
     cur[parts[-1]] = value  # type: ignore[index]

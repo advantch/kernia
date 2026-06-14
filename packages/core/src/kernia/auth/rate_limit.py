@@ -44,9 +44,7 @@ class RateLimitDecision:
 class RateLimitStore(Protocol):
     """Backend contract for rate-limit storage."""
 
-    async def hit(
-        self, key: str, *, window: int, max_: int
-    ) -> RateLimitDecision: ...
+    async def hit(self, key: str, *, window: int, max_: int) -> RateLimitDecision: ...
 
 
 # --------------------------------------------------------------------------- in-memory
@@ -73,9 +71,7 @@ class InMemoryRateLimitStore:
         bucket.count += 1
         allowed = bucket.count <= max_
         remaining = max(0, max_ - bucket.count)
-        return RateLimitDecision(
-            allowed=allowed, remaining=remaining, reset_at=bucket.expires_at
-        )
+        return RateLimitDecision(allowed=allowed, remaining=remaining, reset_at=bucket.expires_at)
 
 
 # --------------------------------------------------------------------------- redis
@@ -154,9 +150,7 @@ def _rule_for(ctx: EndpointContext) -> tuple[str, int, int] | None:
     return None
 
 
-async def enforce_rate_limit(
-    ctx: EndpointContext, store: RateLimitStore | None
-) -> None:
+async def enforce_rate_limit(ctx: EndpointContext, store: RateLimitStore | None) -> None:
     """Apply rate-limit rules to the current request.
 
     Raises `APIError(429, "RATE_LIMITED")` with a `Retry-After` response header

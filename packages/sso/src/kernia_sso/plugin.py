@@ -113,9 +113,7 @@ SSO_HOOKS = PluginHooks(
 class _SSOPlugin:
     id: str = "sso"
     version: str | None = "0.1.0"
-    schema: PluginSchema | None = field(
-        default_factory=lambda: PluginSchema(tables=SSO_MODELS)
-    )
+    schema: PluginSchema | None = field(default_factory=lambda: PluginSchema(tables=SSO_MODELS))
     endpoints: tuple[AuthEndpoint, ...] = field(default_factory=lambda: _routes.ALL)
     middlewares: None = None
     hooks: PluginHooks | None = SSO_HOOKS

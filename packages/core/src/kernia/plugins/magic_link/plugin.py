@@ -45,9 +45,7 @@ class _MagicLinkPlugin:
         RateLimitRule(path="/sign-in/magic-link", window=60, max=5),
         RateLimitRule(path="/magic-link/verify", window=60, max=10),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(MAGIC_LINK_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(MAGIC_LINK_ERROR_CODES))
     init: None = None
 
 

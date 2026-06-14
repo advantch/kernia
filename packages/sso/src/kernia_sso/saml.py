@@ -356,17 +356,12 @@ def validate_permissive(
 
     # Status
     status_code = root.find("./samlp:Status/samlp:StatusCode", SAML_NS)
-    if status_code is None or status_code.attrib.get("Value", "").rsplit(":", 1)[
-        -1
-    ] != "Success":
+    if status_code is None or status_code.attrib.get("Value", "").rsplit(":", 1)[-1] != "Success":
         raise SAMLValidationError("SAML status is not Success")
 
     # Issuer at Response level
     response_issuer = root.find("./saml:Issuer", SAML_NS)
-    if (
-        response_issuer is None
-        or (response_issuer.text or "").strip() != plan.idp_entity_id
-    ):
+    if response_issuer is None or (response_issuer.text or "").strip() != plan.idp_entity_id:
         raise SAMLValidationError(
             f"unexpected issuer: {response_issuer is not None and response_issuer.text!r}"
         )
@@ -380,9 +375,7 @@ def validate_permissive(
     # InResponseTo
     rt_attr = root.attrib.get("InResponseTo")
     if request_id is not None and rt_attr != request_id:
-        raise SAMLValidationError(
-            f"InResponseTo mismatch: {rt_attr!r} != {request_id!r}"
-        )
+        raise SAMLValidationError(f"InResponseTo mismatch: {rt_attr!r} != {request_id!r}")
 
     # Conditions / Audience
     conditions = assertion.find("./saml:Conditions", SAML_NS)
@@ -392,9 +385,7 @@ def validate_permissive(
         not_before = conditions.attrib.get("NotBefore")
         not_on_or_after = conditions.attrib.get("NotOnOrAfter")
         audience_value = plan.audience or plan.sp_entity_id
-        for aud in conditions.findall(
-            "./saml:AudienceRestriction/saml:Audience", SAML_NS
-        ):
+        for aud in conditions.findall("./saml:AudienceRestriction/saml:Audience", SAML_NS):
             if (aud.text or "").strip() == audience_value:
                 audience_match = True
                 break
@@ -423,9 +414,7 @@ def validate_permissive(
         expected_cert = _strip_pem(plan.idp_cert)
         # Compare with whitespace squashed.
         if "".join(seen_cert.split()) != "".join(expected_cert.split()):
-            raise SAMLValidationError(
-                "assertion is signed with an unexpected certificate"
-            )
+            raise SAMLValidationError("assertion is signed with an unexpected certificate")
         ref = sig.find("./ds:SignedInfo/ds:Reference", SAML_NS)
         if ref is None or ref.attrib.get("URI", "").lstrip("#") != assertion_id:
             raise SAMLValidationError("Signature Reference does not point at the Assertion")
@@ -437,10 +426,7 @@ def validate_permissive(
     attrs: dict[str, Any] = {}
     for a in assertion.findall("./saml:AttributeStatement/saml:Attribute", SAML_NS):
         name = a.attrib.get("Name") or a.attrib.get("FriendlyName") or ""
-        values = [
-            (v.text or "").strip()
-            for v in a.findall("./saml:AttributeValue", SAML_NS)
-        ]
+        values = [(v.text or "").strip() for v in a.findall("./saml:AttributeValue", SAML_NS)]
         attrs[name] = values[0] if len(values) == 1 else values
 
     return SAMLAssertion(
@@ -478,9 +464,7 @@ def _parse_iso8601(s: str) -> datetime | None:
 # ---------------------------------------------------------------------------
 
 
-def apply_mapping(
-    assertion: SAMLAssertion, mapping: Mapping[str, str] | None
-) -> dict[str, Any]:
+def apply_mapping(assertion: SAMLAssertion, mapping: Mapping[str, str] | None) -> dict[str, Any]:
     """Translate SAML attributes onto our user fields.
 
     `mapping` is `{our_field: their_attribute_name}`. `email` defaults to the
