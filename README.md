@@ -86,7 +86,7 @@ export const authClient = createAuthClient({ baseURL: "/api/auth" });
 
 ## Install
 
-> **Not yet on PyPI.** Install from source while parity work stabilizes.
+> **Not yet on PyPI.** Install from source ahead of the first release.
 
 ```bash
 git clone https://github.com/advantch/kernia
@@ -159,21 +159,16 @@ k-anonymity checks, and captcha middleware (reCAPTCHA v2/v3, Turnstile, hCaptcha
 
 Found a vulnerability? See [SECURITY.md](./SECURITY.md) — please report privately.
 
-## Testing & parity
-
-Kernia tracks Better Auth 1.6.11. "Done" for an area means the **upstream test
-cases are ported and green**, not "looks plausible".
+## Testing
 
 ```bash
 uv run pytest e2e/ -q              # cross-adapter + per-plugin + integration
-uv run python scripts/audit_layout.py   # the no-shortcuts parity gate
 ```
 
-- `scripts/audit_layout.py` fetches the pinned Better Auth source and fails if any
-  upstream directory lacks a Kernia counterpart or a documented waiver.
 - `examples/frontend/scripts/wire-check.mjs` drives the official Better Auth JS
   client through sign-up → session → sign-out → sign-in → organization
-  create/list, plus a negative-credentials case.
+  create/list, plus a negative-credentials case — proof the wire protocol holds
+  end to end.
 
 Tiers: unit tests in `packages/<pkg>/tests/`, plugin integration in
 `e2e/plugins/`, cross-cutting flows in `e2e/integration/`, adapter conformance in
@@ -193,14 +188,13 @@ Docker is unavailable.
 ├── e2e/                              # adapter/ · plugins/ · integration/
 ├── apps/docs/                        # Fumadocs + Next.js docs site (Vercel)
 ├── examples/                         # FastAPI + React SaaS reference app
-├── scripts/audit_layout.py           # parity gate
 └── .github/workflows/                # ci.yml · security.yml · publish.yml
 ```
 
 ## Contributing
 
 Issues and PRs welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) for the
-workspace layout, quality gates, and the parity discipline. By contributing you
+workspace layout, quality gates, and conventions. By contributing you
 agree to the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License

@@ -22,6 +22,17 @@ build/
 /site/
 docs/site/
 
+# Internal tooling (not part of the public repo)
+scripts/audit_layout.py
+scripts/setup_kernia_dns.sh
+spec/
+
 # Local
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
 .env
 .env.local
+.env.test

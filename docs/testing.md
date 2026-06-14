@@ -6,12 +6,6 @@ Run the backend suite:
 uv run pytest e2e/ packages/ -q
 ```
 
-Run the layout parity audit:
-
-```bash
-python scripts/audit_layout.py
-```
-
 Run the demo frontend build:
 
 ```bash
