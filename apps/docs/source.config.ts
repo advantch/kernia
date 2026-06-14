@@ -1,4 +1,4 @@
-import { defineConfig, defineDocs } from "fumadocs-mdx/config";
+import { defineConfig, defineDocs, frontmatterSchema } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
 import {
   createFileSystemGeneratorCache,
@@ -21,6 +21,19 @@ export const docs = defineDocs({
       pages: z.array(z.string()).optional(),
       root: z.boolean().optional(),
     }),
+  },
+});
+
+export const blog = defineDocs({
+  dir: "./content/blog",
+  docs: {
+    schema: frontmatterSchema.extend({
+      author: z.string().default("Themba"),
+      date: z.coerce.date(),
+      tags: z.array(z.string()).default([]),
+      draft: z.boolean().default(false),
+    }),
+    async: true,
   },
 });
 
