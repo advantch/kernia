@@ -11,9 +11,9 @@ Mirrors `reference/.../plugins/generic-oauth/routes.ts`:
 from __future__ import annotations
 
 import inspect
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -75,9 +75,7 @@ def _generate_state_with_signup(
         "v": 1,
         "callbackURL": callback_url,
         "providerId": provider_id,
-        "nonce": _base64.urlsafe_b64encode(_secrets.token_bytes(16))
-        .rstrip(b"=")
-        .decode("ascii"),
+        "nonce": _base64.urlsafe_b64encode(_secrets.token_bytes(16)).rstrip(b"=").decode("ascii"),
         "createdAt": int(_time.time()),
     }
     if error_callback_url:
@@ -93,9 +91,7 @@ def _generate_state_with_signup(
     if link_email:
         payload["linkEmail"] = link_email
     raw = (
-        _base64.urlsafe_b64encode(
-            _json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        )
+        _base64.urlsafe_b64encode(_json.dumps(payload, separators=(",", ":")).encode("utf-8"))
         .rstrip(b"=")
         .decode("ascii")
     )
@@ -169,14 +165,15 @@ def _build_authorize_url(
 # ----- /oauth2/sign-in/:provider_id (GET) -----
 
 
-def _sign_in_factory(options_state: dict[str, Any]):
+def _sign_in_factory(
+    options_state: dict[str, Any],
+) -> Callable[[EndpointContext], Awaitable[RedirectResponse]]:
     async def _handler(ctx: EndpointContext) -> RedirectResponse:
-        provider_id = ctx.path_params.get("providerId") or ctx.path_params.get(
-            "provider_id"
-        )
+        provider_id = ctx.path_params.get("providerId") or ctx.path_params.get("provider_id")
         config = options_state["configs"].get(provider_id)
         if config is None:
             raise APIError(400, "PROVIDER_NOT_FOUND", message=f"unknown provider: {provider_id}")
+        provider_id = cast("str", provider_id)
 
         callback_url = (
             ctx.request.query.get("callbackURL")
@@ -198,9 +195,7 @@ def _sign_in_factory(options_state: dict[str, Any]):
             error_callback_url=error_callback_url,
             code_verifier=code_verifier,
         )
-        redirect_uri = config.redirect_uri or (
-            f"{ctx.auth.base_url}/oauth2/callback/{provider_id}"
-        )
+        redirect_uri = config.redirect_uri or (f"{ctx.auth.base_url}/oauth2/callback/{provider_id}")
         url = _build_authorize_url(
             plan=plan,
             config=config,
@@ -230,7 +225,9 @@ class SignInOAuth2Body(BaseModel):
     scopes: list[str] | None = None
 
 
-def _sign_in_json_factory(options_state: dict[str, Any]):
+def _sign_in_json_factory(
+    options_state: dict[str, Any],
+) -> Callable[[EndpointContext], Awaitable[dict[str, Any]]]:
     async def _handler(ctx: EndpointContext) -> dict[str, Any]:
         body: SignInOAuth2Body = ctx.body
         config = options_state["configs"].get(body.provider_id)
@@ -288,11 +285,11 @@ def _error_redirect(base: str, error: str) -> RedirectResponse:
     return RedirectResponse(location=f"{base}{sep}error={quote(error)}")
 
 
-def _callback_factory(options_state: dict[str, Any]):
+def _callback_factory(
+    options_state: dict[str, Any],
+) -> Callable[[EndpointContext], Awaitable[RedirectResponse]]:
     async def _handler(ctx: EndpointContext) -> RedirectResponse:
-        provider_id = ctx.path_params.get("providerId") or ctx.path_params.get(
-            "provider_id"
-        )
+        provider_id = ctx.path_params.get("providerId") or ctx.path_params.get("provider_id")
         config = options_state["configs"].get(provider_id)
         if config is None:
             raise APIError(
@@ -300,6 +297,7 @@ def _callback_factory(options_state: dict[str, Any]):
                 "PROVIDER_CONFIG_NOT_FOUND",
                 message=f"No config found for provider {provider_id}",
             )
+        provider_id = cast("str", provider_id)
 
         # form_post (Apple/etc.) — params arrive in the request body
         if ctx.request.method == "POST":
@@ -309,10 +307,7 @@ def _callback_factory(options_state: dict[str, Any]):
             parsed = parse_qs(raw_body.decode("utf-8")) if raw_body else {}
             params: dict[str, str] = {k: v[0] for k, v in parsed.items() if v}
         else:
-            params = {
-                k: (v[0] if isinstance(v, list) else v)
-                for k, v in ctx.request.query.items()
-            }
+            params = {k: (v[0] if isinstance(v, list) else v) for k, v in ctx.request.query.items()}
 
         default_error_url = _default_error_url(ctx)
 
@@ -323,10 +318,7 @@ def _callback_factory(options_state: dict[str, Any]):
             from urllib.parse import quote
 
             return RedirectResponse(
-                location=(
-                    f"{default_error_url}?error={quote(err)}"
-                    f"&error_description={quote(desc)}"
-                )
+                location=(f"{default_error_url}?error={quote(err)}&error_description={quote(desc)}")
             )
 
         # Parse + verify state. A missing or tampered state must not be fatal;
@@ -360,16 +352,12 @@ def _callback_factory(options_state: dict[str, Any]):
             if not iss and config.require_issuer_validation:
                 return _error_redirect(error_url, "issuer_missing")
 
-        redirect_uri = config.redirect_uri or (
-            f"{ctx.auth.base_url}/oauth2/callback/{provider_id}"
-        )
+        redirect_uri = config.redirect_uri or (f"{ctx.auth.base_url}/oauth2/callback/{provider_id}")
 
         # --- token exchange ---
         try:
             if config.get_token is not None:
-                tokens = await config.get_token(
-                    params["code"], redirect_uri, code_verifier
-                )
+                tokens = await config.get_token(params["code"], redirect_uri, code_verifier)
             else:
                 tokens = await exchange_code(
                     token_url=plan.token_url,
@@ -414,9 +402,7 @@ def _callback_factory(options_state: dict[str, Any]):
         profile = _to_profile(user_info_raw)
 
         trusted = ctx.auth.options.account.account_linking.trusted_providers
-        allow_different_emails = (
-            ctx.auth.options.account.account_linking.allow_different_emails
-        )
+        allow_different_emails = ctx.auth.options.account.account_linking.allow_different_emails
 
         # Explicit account-link path requires the emails to match (unless the
         # instance opts into linking accounts with different emails).
@@ -453,16 +439,14 @@ def _callback_factory(options_state: dict[str, Any]):
             if code in ("SIGNUP_DISABLED",) or "SIGNUP" in code.upper():
                 return _error_redirect(error_url, "signup_disabled")
             if "ALREADY_LINKED" in code.upper():
-                return _error_redirect(
-                    error_url, "account_already_linked_to_different_user"
-                )
+                return _error_redirect(error_url, "account_already_linked_to_different_user")
             raise
 
         # Linking to a signed-in user: no new session, redirect to callbackURL.
         if link_to_user_id:
             return RedirectResponse(location=callback_url)
 
-        session, cookies = await create_session(
+        _session, cookies = await create_session(
             ctx.auth,
             user_id=user["id"],
             ip_address=ctx.request.headers.get("x-forwarded-for"),
@@ -577,7 +561,9 @@ class LinkAccountBody(BaseModel):
     scopes: list[str] | None = None
 
 
-def _link_account_factory(options_state: dict[str, Any]):
+def _link_account_factory(
+    options_state: dict[str, Any],
+) -> Callable[[EndpointContext], Awaitable[dict[str, Any]]]:
     async def _handler(ctx: EndpointContext) -> dict[str, Any]:
         if ctx.session is None:
             raise APIError(401, "UNAUTHORIZED")
@@ -590,8 +576,10 @@ def _link_account_factory(options_state: dict[str, Any]):
         code_verifier = pkce_verifier() if config.pkce else None
         link_email = None
         if ctx.user is not None:
-            link_email = ctx.user.get("email") if isinstance(ctx.user, dict) else getattr(
-                ctx.user, "email", None
+            link_email = (
+                ctx.user.get("email")
+                if isinstance(ctx.user, dict)
+                else getattr(ctx.user, "email", None)
             )
         state_token = _generate_state_with_signup(
             secret=ctx.auth.secret,

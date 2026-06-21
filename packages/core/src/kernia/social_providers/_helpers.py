@@ -19,7 +19,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from kernia.oauth2 import exchange_code, fetch_userinfo, pkce_challenge
+from kernia.oauth2 import exchange_code, pkce_challenge
 from kernia.social_providers._base import OAuthProvider, OAuthUserProfile
 
 ProfileMapper = Callable[[Mapping[str, Any]], OAuthUserProfile]
@@ -106,7 +106,8 @@ class _StandardOAuthProvider:
                     auth=(self.client_id, self.client_secret),
                 )
                 r.raise_for_status()
-                return r.json()
+                payload: dict[str, Any] = r.json()
+                return payload
         return await exchange_code(
             token_url=self.token_endpoint,
             client_id=self.client_id,
@@ -205,4 +206,4 @@ def make_provider(
     )
 
 
-__all__ = ["make_provider", "ProfileMapper", "_default_profile_mapper"]
+__all__ = ["ProfileMapper", "_default_profile_mapper", "make_provider"]

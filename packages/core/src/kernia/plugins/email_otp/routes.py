@@ -40,22 +40,20 @@ _DEFAULT_EXPIRES_IN = 5 * 60  # 5 minutes
 _DEFAULT_ALLOWED_ATTEMPTS = 3
 
 
-def _opts(ctx: EndpointContext) -> dict[str, object]:
+def _opts(ctx: EndpointContext) -> dict[str, Any]:
     return dict(ctx.auth.options.advanced.get(_OPTIONS_KEY) or {})
 
 
 def _otp_length(ctx: EndpointContext) -> int:
-    return int(_opts(ctx).get("otp_length", _DEFAULT_LENGTH))  # type: ignore[arg-type]
+    return int(_opts(ctx).get("otp_length", _DEFAULT_LENGTH))
 
 
 def _expires_in(ctx: EndpointContext) -> int:
-    return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))  # type: ignore[arg-type]
+    return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))
 
 
 def _allowed_attempts(ctx: EndpointContext) -> int:
-    return int(
-        _opts(ctx).get("allowed_attempts", _DEFAULT_ALLOWED_ATTEMPTS)  # type: ignore[arg-type]
-    )
+    return int(_opts(ctx).get("allowed_attempts", _DEFAULT_ALLOWED_ATTEMPTS))
 
 
 def default_key_hasher(otp: str) -> str:
@@ -110,13 +108,11 @@ def generate_otp(length: int = _DEFAULT_LENGTH) -> str:
     return f"{secrets.randbelow(upper):0{length}d}"
 
 
-async def _generate_otp(
-    ctx: EndpointContext, *, email: str, purpose: str
-) -> str:
+async def _generate_otp(ctx: EndpointContext, *, email: str, purpose: str) -> str:
     """Mirror upstream `opts.generateOTP(...) || defaultOTPGenerator(opts)`."""
     gen = _opts(ctx).get("generate_otp")
     if gen is not None:
-        custom = await _maybe_await(gen({"email": email, "type": purpose}, ctx))  # type: ignore[operator]
+        custom = await _maybe_await(gen({"email": email, "type": purpose}, ctx))
         if custom:
             return str(custom)
     return generate_otp(_otp_length(ctx))
@@ -166,9 +162,7 @@ async def _retrieve_otp(ctx: EndpointContext, stored: str) -> str | None:
     return None
 
 
-async def _try_reuse_otp(
-    ctx: EndpointContext, *, email: str, purpose: str
-) -> str | None:
+async def _try_reuse_otp(ctx: EndpointContext, *, email: str, purpose: str) -> str | None:
     """Reuse an unexpired OTP and extend its expiry. Mirrors `tryReuseOTP`."""
     identifier = _identifier(purpose, email)
     record = await ctx.auth.adapter.find_one(
@@ -207,12 +201,10 @@ async def _send_otp(ctx: EndpointContext, email: str, otp: str, purpose: str) ->
             "EMAIL_OTP_NOT_CONFIGURED",
             message="send_otp callable is not configured",
         )
-    await fn(email, otp, purpose)  # type: ignore[misc]
+    await fn(email, otp, purpose)
 
 
-async def _create_otp(
-    ctx: EndpointContext, *, email: str, purpose: str
-) -> str:
+async def _create_otp(ctx: EndpointContext, *, email: str, purpose: str) -> str:
     # resend_strategy "reuse": resend the same OTP and extend expiry when the
     # OTP is recoverable (plain/encrypted/custom decrypt). Falls back to rotate.
     if _opts(ctx).get("resend_strategy") == "reuse":
@@ -384,9 +376,7 @@ async def _send_verification_otp(ctx: EndpointContext) -> dict[str, object]:
     # yet). Otherwise we only send when the user exists, but still return success
     # to avoid user-enumeration. Mirrors upstream `shouldSendOTP`.
     should_send = purpose == "sign-in" and not disable_sign_up
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="email", value=email),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="email", value=email),))
     if user is None and not should_send:
         identifier = _identifier(purpose, email)
         await ctx.auth.adapter.delete_many(
@@ -405,9 +395,7 @@ async def _verify_email(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(400, "INVALID_EMAIL", message="Email address is invalid.")
     # Atomic-style consume (delete first, re-create on miss) for race safety.
     await _consume_otp(ctx, email=email, purpose="email-verification", otp=body.otp)
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="email", value=email),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="email", value=email),))
     if user is None:
         raise APIError(400, "USER_NOT_FOUND", message="User not found")
     updated = await ctx.auth.adapter.update(
@@ -432,9 +420,7 @@ async def _forget_password_send(ctx: EndpointContext) -> dict[str, object]:
 
 async def _reset_password(ctx: EndpointContext) -> dict[str, object]:
     body: ResetPasswordBody = ctx.body
-    await _consume_otp(
-        ctx, email=body.email, purpose="forget-password", otp=body.otp
-    )
+    await _consume_otp(ctx, email=body.email, purpose="forget-password", otp=body.otp)
     user = await ctx.auth.adapter.find_one(
         model="user", where=(Where(field="email", value=body.email.lower()),)
     )
@@ -504,9 +490,7 @@ async def _request_email_change(ctx: EndpointContext) -> dict[str, object]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
     if not _change_email_enabled(ctx):
-        raise APIError(
-            400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled"
-        )
+        raise APIError(400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled")
     body: RequestEmailChangeBody = ctx.body
     email = await _session_user_email(ctx)
     if email is None:
@@ -526,9 +510,7 @@ async def _request_email_change(ctx: EndpointContext) -> dict[str, object]:
                 "OTP_REQUIRED",
                 message="OTP is required to verify current email",
             )
-        await _consume_otp(
-            ctx, email=email, purpose="email-verification", otp=body.otp
-        )
+        await _consume_otp(ctx, email=email, purpose="email-verification", otp=body.otp)
 
     # Issue the change-email OTP keyed by (currentEmail-newEmail).
     composite = f"{email}-{new_email}"
@@ -554,9 +536,7 @@ async def _change_email(ctx: EndpointContext) -> dict[str, object]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
     if not _change_email_enabled(ctx):
-        raise APIError(
-            400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled"
-        )
+        raise APIError(400, "CHANGE_EMAIL_DISABLED", message="Change email with OTP is disabled")
     body: ChangeEmailBody = ctx.body
     email = await _session_user_email(ctx)
     if email is None:

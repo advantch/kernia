@@ -13,7 +13,6 @@ Mirrors the matrices in
 from __future__ import annotations
 
 import pytest
-
 from kernia.plugins.organization.access_control import (
     DEFAULT_ROLES,
     DEFAULT_STATEMENTS,
@@ -45,15 +44,11 @@ def test_owner_can_create_member() -> None:
 
 
 def test_owner_can_invite_and_cancel() -> None:
-    assert has_permission(
-        "owner", {"invitation": ["create", "cancel"]}
-    )
+    assert has_permission("owner", {"invitation": ["create", "cancel"]})
 
 
 def test_owner_can_manage_ac_fully() -> None:
-    assert has_permission(
-        "owner", {"ac": ["create", "read", "update", "delete"]}
-    )
+    assert has_permission("owner", {"ac": ["create", "read", "update", "delete"]})
 
 
 def test_admin_can_update_org() -> None:
@@ -69,9 +64,7 @@ def test_admin_can_create_member() -> None:
 
 
 def test_admin_can_invite_and_cancel() -> None:
-    assert has_permission(
-        "admin", {"invitation": ["create", "cancel"]}
-    )
+    assert has_permission("admin", {"invitation": ["create", "cancel"]})
 
 
 def test_member_cannot_update_organization() -> None:
@@ -194,9 +187,7 @@ def test_role_authorize_rejects_unknown_resource_under_and() -> None:
 
 def test_role_authorize_or_skips_unknown_resource() -> None:
     role = define_role("editor", {"posts": ("read",)})
-    assert role.authorize(
-        {"comments": ["read"], "posts": ["read"]}, connector="OR"
-    )
+    assert role.authorize({"comments": ["read"], "posts": ["read"]}, connector="OR")
 
 
 # ---------------------------------------------------------------------------
@@ -205,34 +196,26 @@ def test_role_authorize_or_skips_unknown_resource() -> None:
 
 
 def test_merge_dynamic_roles_overlays_on_defaults() -> None:
-    table = merge_dynamic_roles(
-        [{"role": "writer", "permissions": {"posts": ["read", "write"]}}]
-    )
+    table = merge_dynamic_roles([{"role": "writer", "permissions": {"posts": ["read", "write"]}}])
     assert "writer" in table
     assert "owner" in table  # defaults preserved
     assert table["writer"].statement == {"posts": ("read", "write")}
 
 
 def test_dynamic_role_grants_custom_permissions() -> None:
-    table = merge_dynamic_roles(
-        [{"role": "writer", "permissions": {"posts": ["read", "write"]}}]
-    )
+    table = merge_dynamic_roles([{"role": "writer", "permissions": {"posts": ["read", "write"]}}])
     assert has_permission("writer", {"posts": ["read"]}, table)
     assert has_permission("writer", {"posts": ["write"]}, table)
 
 
 def test_dynamic_role_denies_undeclared_actions() -> None:
     """Custom role with {"posts": ("read", "write")} allows write but not delete."""
-    table = merge_dynamic_roles(
-        [{"role": "writer", "permissions": {"posts": ["read", "write"]}}]
-    )
+    table = merge_dynamic_roles([{"role": "writer", "permissions": {"posts": ["read", "write"]}}])
     assert not has_permission("writer", {"posts": ["delete"]}, table)
 
 
 def test_dynamic_role_overrides_builtin_when_same_name() -> None:
-    table = merge_dynamic_roles(
-        [{"role": "admin", "permissions": {"organization": ["delete"]}}]
-    )
+    table = merge_dynamic_roles([{"role": "admin", "permissions": {"organization": ["delete"]}}])
     # Override gave admin delete-org, which the default admin did NOT have.
     assert has_permission("admin", {"organization": ["delete"]}, table)
 
@@ -280,9 +263,7 @@ def test_default_statements_contain_expected_resources() -> None:
         ("member", "ac", "delete", False),
     ],
 )
-def test_built_in_role_matrix(
-    role_name: str, resource: str, action: str, expected: bool
-) -> None:
-    assert (
-        has_permission(role_name, {resource: [action]}) is expected
-    ), f"{role_name} {resource}.{action}"
+def test_built_in_role_matrix(role_name: str, resource: str, action: str, expected: bool) -> None:
+    assert has_permission(role_name, {resource: [action]}) is expected, (
+        f"{role_name} {resource}.{action}"
+    )

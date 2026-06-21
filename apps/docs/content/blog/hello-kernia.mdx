@@ -1,0 +1,26 @@
+---
+title: Hello, Kernia
+description: How to publish posts on this blog.
+author: Themba
+date: 2026-06-12
+tags: [meta]
+draft: true
+---
+
+This is a draft post — it never renders in production while `draft: true` is
+set in the frontmatter. Flip it to `false` (or delete the line) to publish.
+
+## Writing a post
+
+Create an `.mdx` file in `apps/docs/content/blog/`. The filename becomes the
+URL slug. Frontmatter fields:
+
+- `title` (required)
+- `description` — shown on the index and in meta tags
+- `date` (required) — `YYYY-MM-DD`, controls ordering
+- `author` — defaults to `Themba`
+- `tags` — optional list
+- `draft` — `true` hides the post everywhere
+
+All the MDX components from the docs (callouts, tabs, steps, code blocks) work
+here too.

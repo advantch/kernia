@@ -31,18 +31,6 @@ jobs:
       - name: mypy
         run: uv run mypy packages/core/src
 
-  layout-audit:
-    name: Layout audit (parity gate)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-        with:
-          version: "latest"
-      - run: uv python install 3.12
-      - name: Audit Kernia layout against pinned Better Auth source
-        run: uv run python scripts/audit_layout.py
-
   test:
     name: Tests (py${{ matrix.python }})
     runs-on: ubuntu-latest

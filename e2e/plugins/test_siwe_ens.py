@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins.siwe import siwe
 from kernia.types.adapter import Where

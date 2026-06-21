@@ -67,7 +67,7 @@ class EventBus:
 
 def get_bus(auth: Any) -> EventBus:
     """Return the bus attached to an `AuthContext` (creating one on first call)."""
-    bus = auth.plugin_state.get("events")
+    bus: EventBus | None = auth.plugin_state.get("events")
     if bus is None:
         bus = EventBus()
         auth.plugin_state["events"] = bus

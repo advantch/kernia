@@ -27,10 +27,12 @@ def test_error_codes_cover_failure_modes() -> None:
 
 
 def test_body_alias_camelcase() -> None:
-    body = SignInMagicLinkBody.model_validate({
-        "email": "a@b.com",
-        "callbackURL": "/done",
-    })
+    body = SignInMagicLinkBody.model_validate(
+        {
+            "email": "a@b.com",
+            "callbackURL": "/done",
+        }
+    )
     assert body.email == "a@b.com"
     assert body.callback_url == "/done"
 

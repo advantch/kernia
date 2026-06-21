@@ -25,8 +25,8 @@ from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -79,9 +79,7 @@ async def _signup(driver: ASGIDriver, auth: object, email: str) -> str:
     return user_id
 
 
-async def _seed_db_sub(
-    auth: object, *, user_id: str, plan: str, stripe_sub_id: str
-) -> None:
+async def _seed_db_sub(auth: object, *, user_id: str, plan: str, stripe_sub_id: str) -> None:
     await auth.context.adapter.create(  # type: ignore[attr-defined]
         model="subscription",
         data={
@@ -101,9 +99,7 @@ def _events(mock: MockStripe, kind: str) -> list[dict]:
 async def test_schedules_plan_change_at_period_end() -> None:
     driver, mock, auth = _build()
     user_id = await _signup(driver, auth, "schedule-downgrade@email.com")
-    await _seed_db_sub(
-        auth, user_id=user_id, plan="premium", stripe_sub_id="sub_schedule_test"
-    )
+    await _seed_db_sub(auth, user_id=user_id, plan="premium", stripe_sub_id="sub_schedule_test")
     mock.add_subscription(
         "sub_schedule_test", customer=CUSTOMER_ID, items=[{"price": "price_premium"}]
     )
@@ -150,9 +146,7 @@ async def test_schedules_plan_change_at_period_end() -> None:
 async def test_releases_existing_plugin_schedule_before_scheduling_new() -> None:
     driver, mock, auth = _build()
     user_id = await _signup(driver, auth, "release-schedule@email.com")
-    await _seed_db_sub(
-        auth, user_id=user_id, plan="premium", stripe_sub_id="sub_with_schedule"
-    )
+    await _seed_db_sub(auth, user_id=user_id, plan="premium", stripe_sub_id="sub_with_schedule")
     mock.add_subscription(
         "sub_with_schedule",
         customer=CUSTOMER_ID,
@@ -199,9 +193,7 @@ async def test_releases_existing_plugin_schedule_before_immediate_upgrade() -> N
         metadata={"source": "@better-auth/stripe"},
     )
 
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "premium"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "premium"})
     assert r.status == 200, r.json()
 
     released = _events(mock, "subscription_schedule.release")
@@ -216,9 +208,7 @@ async def test_releases_existing_plugin_schedule_before_immediate_upgrade() -> N
 async def test_does_not_release_externally_created_schedule() -> None:
     driver, mock, auth = _build()
     user_id = await _signup(driver, auth, "external-schedule@email.com")
-    await _seed_db_sub(
-        auth, user_id=user_id, plan="starter", stripe_sub_id="sub_external_schedule"
-    )
+    await _seed_db_sub(auth, user_id=user_id, plan="starter", stripe_sub_id="sub_external_schedule")
     mock.add_subscription(
         "sub_external_schedule",
         customer=CUSTOMER_ID,
@@ -232,9 +222,7 @@ async def test_does_not_release_externally_created_schedule() -> None:
         metadata={},  # no source field → not plugin-owned
     )
 
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "premium"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "premium"})
     assert r.status == 200, r.json()
 
     # External schedule must NOT be released.

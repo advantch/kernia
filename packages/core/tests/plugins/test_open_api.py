@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.plugins.open_api import build_openapi_document, open_api, scalar_html
@@ -38,11 +37,9 @@ def test_every_registered_route_appears_in_paths(auth_instance) -> None:
     doc = build_openapi_document(
         router=auth_instance.router, plugins=list(auth_instance.context.plugins)
     )
-    for (method, path) in auth_instance.router._endpoints:
+    for method, path in auth_instance.router._endpoints:
         assert path in doc["paths"], f"missing path {path}"
-        assert method.lower() in doc["paths"][path], (
-            f"missing method {method} for {path}"
-        )
+        assert method.lower() in doc["paths"][path], f"missing method {method} for {path}"
 
 
 def test_request_body_schemas_present_for_body_endpoints(auth_instance) -> None:

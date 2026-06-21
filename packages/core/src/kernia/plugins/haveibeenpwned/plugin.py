@@ -43,12 +43,10 @@ async def _fetch_range(
     """Fetch the prefix bucket — k-anonymity API returns `suffix:count` lines."""
     cache_key = f"hibp:{prefix}"
     if secondary_storage is not None:
-        cached = await secondary_storage.get(cache_key)  # type: ignore[attr-defined]
+        cached: str | None = await secondary_storage.get(cache_key)  # type: ignore[attr-defined]
         if cached is not None:
             return cached
-    async with httpx.AsyncClient(
-        transport=transport, timeout=httpx.Timeout(10.0)
-    ) as client:
+    async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0)) as client:
         resp = await client.get(
             _RANGE_URL.format(prefix=prefix),
             headers={"User-Agent": "kernia", "Add-Padding": "true"},
@@ -161,4 +159,4 @@ def have_i_been_pwned(
     )
 
 
-__all__ = ["have_i_been_pwned", "HIBP_ERROR_CODES"]
+__all__ = ["HIBP_ERROR_CODES", "have_i_been_pwned"]

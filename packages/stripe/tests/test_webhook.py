@@ -23,8 +23,8 @@ from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -88,9 +88,7 @@ async def _create_user(auth: Any, *, email: str, customer_id: str) -> str:
 
 async def test_stores_billing_interval_year_for_annual_subscriptions() -> None:
     driver, _mock, auth = _make()
-    uid = await _create_user(
-        auth, email="annual-user@test.com", customer_id="cus_annual_test"
-    )
+    uid = await _create_user(auth, email="annual-user@test.com", customer_id="cus_annual_test")
     now = int(time.time())
     event, headers = _signed(
         {
@@ -119,9 +117,7 @@ async def test_stores_billing_interval_year_for_annual_subscriptions() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     sub = await auth.context.adapter.find_one(
@@ -166,9 +162,7 @@ async def test_skips_subscription_creation_when_plan_not_found() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     sub = await auth.context.adapter.find_one(
@@ -181,9 +175,7 @@ async def test_skips_subscription_creation_when_plan_not_found() -> None:
 
 async def test_skips_creation_when_metadata_subscription_id_exists() -> None:
     driver, _mock, auth = _make()
-    uid = await _create_user(
-        auth, email="meta-sub@test.com", customer_id="cus_meta_sub"
-    )
+    uid = await _create_user(auth, email="meta-sub@test.com", customer_id="cus_meta_sub")
     # Seed an existing incomplete row; the event's metadata.subscriptionId points
     # at it, so the created handler must NOT insert a second row.
     now = int(time.time())
@@ -226,9 +218,7 @@ async def test_skips_creation_when_metadata_subscription_id_exists() -> None:
             },
         }
     )
-    r = await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=headers
-    )
+    r = await driver.request("POST", "/stripe/webhook", json_body=event, headers=headers)
     assert r.status == 200, r.json()
 
     rows = await auth.context.adapter.find_many(

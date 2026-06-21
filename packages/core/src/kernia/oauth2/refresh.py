@@ -49,9 +49,12 @@ async def refresh_access_token(
     own_client = http_client is None
     client = http_client or httpx.AsyncClient(timeout=30.0)
     try:
-        r = await client.post(token_url, data=data, headers=headers, auth=auth)
+        # httpx accepts auth=None at runtime (meaning "no auth") but its stubs
+        # only admit the sentinel/tuple/callable forms.
+        r = await client.post(token_url, data=data, headers=headers, auth=auth)  # type: ignore[arg-type]
         r.raise_for_status()
-        return r.json()
+        payload: dict[str, Any] = r.json()
+        return payload
     finally:
         if own_client:
             await client.aclose()

@@ -150,9 +150,7 @@ async def _authorize_reference(
     if customer_type == "organization":
         if not opts.authorize_reference:
             raise _err("AUTHORIZE_REFERENCE_REQUIRED")
-        reference_id = explicit_reference_id or getattr(
-            ctx.session, "active_organization_id", None
-        )
+        reference_id = explicit_reference_id or getattr(ctx.session, "active_organization_id", None)
         if not reference_id:
             raise _err("ORGANIZATION_REFERENCE_ID_REQUIRED")
         ok = await _maybe_await(
@@ -213,9 +211,7 @@ async def _resolve_price(
     client = opts.stripe_client
     try:
         if lookup_key:
-            listed = await client.list_prices(
-                lookup_keys=[lookup_key], active=True, limit=1
-            )
+            listed = await client.list_prices(lookup_keys=[lookup_key], active=True, limit=1)
             data = (listed or {}).get("data") or []
             if data:
                 return data[0]
@@ -228,9 +224,7 @@ async def _resolve_price(
 
 def _plan_price_id(plan: StripePlan, *, annual: bool) -> str | None:
     if annual:
-        return (
-            plan.annual_discount_price_id or plan.annual_price_id or plan.price_id
-        )
+        return plan.annual_discount_price_id or plan.annual_price_id or plan.price_id
     return plan.price_id
 
 
@@ -282,9 +276,7 @@ async def _build_line_items(
     effective_price_id = (resolved or {}).get("id") or price_id
     metered = plan.metered or is_metered_price(resolved)
 
-    is_auto_managed_seats = bool(
-        plan.seat_price_id and customer_type == "organization"
-    )
+    is_auto_managed_seats = bool(plan.seat_price_id and customer_type == "organization")
     is_seat_only = is_auto_managed_seats and plan.seat_price_id == plan.price_id
 
     items: list[dict[str, Any]] = []
@@ -309,9 +301,7 @@ async def _get_user_row(ctx: EndpointContext) -> dict[str, Any]:
     return user
 
 
-async def _find_user_customer(
-    opts: StripeOptions, email: str
-) -> dict[str, Any] | None:
+async def _find_user_customer(opts: StripeOptions, email: str) -> dict[str, Any] | None:
     """Search → list fallback for an existing user (non-org) Stripe customer."""
     client = opts.stripe_client
     try:
@@ -384,9 +374,7 @@ async def _call_customer_create(
     )
 
 
-async def _find_org_customer(
-    opts: StripeOptions, org_id: str
-) -> dict[str, Any] | None:
+async def _find_org_customer(opts: StripeOptions, org_id: str) -> dict[str, Any] | None:
     """Search → list fallback for an existing organization Stripe customer."""
     client = opts.stripe_client
     try:
@@ -406,10 +394,7 @@ async def _find_org_customer(
         listed = await client.list_customers(limit=100)
         for customer in (listed or {}).get("data") or []:
             meta = customer.get("metadata") or {}
-            if (
-                meta.get("organizationId") == org_id
-                and meta.get("customerType") == "organization"
-            ):
+            if meta.get("organizationId") == org_id and meta.get("customerType") == "organization":
                 return customer
     return None
 
@@ -445,10 +430,7 @@ async def _ensure_org_customer(
             extra: dict[str, Any] = {}
             if opts.organization and opts.organization.get_customer_create_params:
                 extra = (
-                    await _maybe_await(
-                        opts.organization.get_customer_create_params(org, ctx)
-                    )
-                    or {}
+                    await _maybe_await(opts.organization.get_customer_create_params(org, ctx)) or {}
                 )
             extra = dict(extra)
             # Library-owned fields take priority (defu: base wins).
@@ -540,9 +522,7 @@ def _build_checkout_endpoint(opts: StripeOptions) -> AuthEndpoint:
             ),
         }
         if plan.free_trial:
-            params["subscription_data"] = {
-                "trial_period_days": plan.free_trial.days
-            }
+            params["subscription_data"] = {"trial_period_days": plan.free_trial.days}
         elif plan.free_trial_days:
             params["subscription_data"] = {"trial_period_days": plan.free_trial_days}
         session = await opts.stripe_client.create_checkout_session(**params)
@@ -593,9 +573,7 @@ def _build_billing_portal_endpoint(opts: StripeOptions) -> AuthEndpoint:
             action="billing-portal",
         )
         reference_id = _get_reference_id(ctx, opts, customer_type, body.referenceId)
-        customer_id = await _customer_for_reference(
-            ctx, opts, customer_type, reference_id
-        )
+        customer_id = await _customer_for_reference(ctx, opts, customer_type, reference_id)
         if not customer_id:
             raise APIError(404, "CUSTOMER_NOT_FOUND")
         portal = await opts.stripe_client.create_billing_portal_session(
@@ -658,11 +636,7 @@ def _build_cancel_endpoint(opts: StripeOptions) -> AuthEndpoint:
         listed = await opts.stripe_client.list_subscriptions(
             customer=subscription["stripeCustomerId"]
         )
-        active = [
-            s
-            for s in (listed.get("data") or [])
-            if is_active_or_trialing(s)
-        ]
+        active = [s for s in (listed.get("data") or []) if is_active_or_trialing(s)]
         if not active:
             await ctx.auth.adapter.delete_many(
                 model="subscription",
@@ -688,9 +662,7 @@ def _build_cancel_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
     return create_auth_endpoint(
         "/subscription/cancel",
-        EndpointOptions(
-            method="POST", body=CancelSubscriptionBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=CancelSubscriptionBody, requires_session=True),
         handler,
     )
 
@@ -738,9 +710,7 @@ def _build_restore_endpoint(opts: StripeOptions) -> AuthEndpoint:
             )
             return await client.get_subscription(subscription["stripeSubscriptionId"])
 
-        listed = await client.list_subscriptions(
-            customer=subscription["stripeCustomerId"]
-        )
+        listed = await client.list_subscriptions(customer=subscription["stripeCustomerId"])
         active = next(
             (s for s in (listed.get("data") or []) if is_active_or_trialing(s)),
             None,
@@ -769,9 +739,7 @@ def _build_restore_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
     return create_auth_endpoint(
         "/subscription/restore",
-        EndpointOptions(
-            method="POST", body=RestoreSubscriptionBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=RestoreSubscriptionBody, requires_session=True),
         handler,
     )
 
@@ -798,9 +766,7 @@ def _build_resume_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
     return create_auth_endpoint(
         "/stripe/resume-subscription",
-        EndpointOptions(
-            method="POST", body=ResumeSubscriptionBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=ResumeSubscriptionBody, requires_session=True),
         handler,
     )
 
@@ -831,9 +797,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         if body.subscriptionId:
             sub_to_update = await ctx.auth.adapter.find_one(
                 model="subscription",
-                where=(
-                    Where(field="stripeSubscriptionId", value=body.subscriptionId),
-                ),
+                where=(Where(field="stripeSubscriptionId", value=body.subscriptionId),),
             )
             if not sub_to_update:
                 raise _err("SUBSCRIPTION_NOT_FOUND")
@@ -848,17 +812,13 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         if customer_type == "organization":
             customer_id = (
                 sub_to_update.get("stripeCustomerId") if sub_to_update else None
-            ) or await _customer_for_reference(
-                ctx, opts, customer_type, reference_id
-            )
+            ) or await _customer_for_reference(ctx, opts, customer_type, reference_id)
             if not customer_id:
                 customer_id = await _ensure_org_customer(
                     ctx, opts, reference_id=reference_id, metadata=body.metadata
                 )
         else:
-            customer_id = await _ensure_user_customer(
-                ctx, opts, metadata=body.metadata
-            )
+            customer_id = await _ensure_user_customer(ctx, opts, metadata=body.metadata)
 
         member_count = await _seat_member_count(
             ctx, plan, customer_type=customer_type, reference_id=reference_id
@@ -879,9 +839,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         target_stripe_sub_id = body.subscriptionId
         if not target_stripe_sub_id and sub_to_update is None:
             try:
-                listed = await opts.stripe_client.list_subscriptions(
-                    customer=customer_id
-                )
+                listed = await opts.stripe_client.list_subscriptions(customer=customer_id)
             except Exception:
                 listed = {"data": []}
             active = [
@@ -910,9 +868,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         existing_sub: dict[str, Any] | None = None
         if target_stripe_sub_id:
             try:
-                existing_sub = await opts.stripe_client.get_subscription(
-                    target_stripe_sub_id
-                )
+                existing_sub = await opts.stripe_client.get_subscription(target_stripe_sub_id)
             except Exception:
                 existing_sub = None
             if not existing_sub or not is_active_or_trialing(existing_sub):
@@ -950,14 +906,11 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             )
             for s in (listed_scheds or {}).get("data") or []:
                 sub_ref = s.get("subscription")
-                sub_ref_id = (
-                    sub_ref.get("id") if isinstance(sub_ref, dict) else sub_ref
-                )
+                sub_ref_id = sub_ref.get("id") if isinstance(sub_ref, dict) else sub_ref
                 if (
                     sub_ref_id == target_stripe_sub_id
                     and s.get("status") == "active"
-                    and (s.get("metadata") or {}).get("source")
-                    == "@better-auth/stripe"
+                    and (s.get("metadata") or {}).get("source") == "@better-auth/stripe"
                 ):
                     await opts.stripe_client.release_subscription_schedule(s["id"])
                     if db_row:
@@ -983,9 +936,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
         stripe_subscription_price_id: str | None = None
         if planitem:
             _pp = planitem.get("price")
-            stripe_subscription_price_id = (
-                _pp.get("id") if isinstance(_pp, dict) else _pp
-            )
+            stripe_subscription_price_id = _pp.get("id") if isinstance(_pp, dict) else _pp
         price_id_to_use = price_id  # new plan base price (line_items[0])
 
         resolved_new_price = await _resolve_price(
@@ -994,9 +945,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             lookup_key=_plan_lookup_key(plan, annual=annual),
         )
         is_metered = bool(plan.metered) or is_metered_price(resolved_new_price)
-        is_auto_managed_seats = bool(
-            plan.seat_price_id and customer_type == "organization"
-        )
+        is_auto_managed_seats = bool(plan.seat_price_id and customer_type == "organization")
         old_plan = get_plan_by_name(opts, db_row["plan"]) if db_row else None
 
         # priceMap: oldPriceId -> {newPrice, quantity?} (seat-price changes).
@@ -1060,24 +1009,18 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
                     new_phase_items.append(
                         {
                             "price": replacement["newPrice"],
-                            "quantity": replacement.get(
-                                "quantity", item.get("quantity", 1)
-                            ),
+                            "quantity": replacement.get("quantity", item.get("quantity", 1)),
                         }
                     )
                     continue
                 if ip == stripe_subscription_price_id:
                     entry: dict[str, Any] = {"price": price_id_to_use}
                     if not is_metered:
-                        entry["quantity"] = (
-                            1 if is_auto_managed_seats else (body.seats or 1)
-                        )
+                        entry["quantity"] = 1 if is_auto_managed_seats else (body.seats or 1)
                     new_phase_items.append(entry)
                     continue
                 # Keep as-is; consume one positive delta to avoid re-adding it.
-                new_phase_items.append(
-                    {"price": ip, "quantity": item.get("quantity", 1)}
-                )
+                new_phase_items.append({"price": ip, "quantity": item.get("quantity", 1)})
                 d = sched_delta.get(ip)
                 if d is not None and d > 0:
                     if d == 1:
@@ -1155,9 +1098,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
             if si_price_id == stripe_subscription_price_id:
                 entry: dict[str, Any] = {"id": si_id, "price": price_id_to_use}
                 if not is_metered:
-                    entry["quantity"] = (
-                        1 if is_auto_managed_seats else (body.seats or 1)
-                    )
+                    entry["quantity"] = 1 if is_auto_managed_seats else (body.seats or 1)
                 update_items.append(entry)
                 continue
             # Keep as-is; consume one positive delta to avoid re-adding it.
@@ -1196,9 +1137,7 @@ def _build_upgrade_endpoint(opts: StripeOptions) -> AuthEndpoint:
 
     return create_auth_endpoint(
         "/subscription/upgrade",
-        EndpointOptions(
-            method="POST", body=UpgradeSubscriptionBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=UpgradeSubscriptionBody, requires_session=True),
         handler,
     )
 
@@ -1227,9 +1166,7 @@ async def _upgrade_via_checkout(
         model="subscription",
         where=(Where(field="referenceId", value=reference_id),),
     )
-    subscription = next(
-        (s for s in existing if s.get("status") == "incomplete"), None
-    )
+    subscription = next((s for s in existing if s.get("status") == "incomplete"), None)
     now = int(time.time())
     if subscription is None:
         subscription = await ctx.auth.adapter.create(
@@ -1254,8 +1191,7 @@ async def _upgrade_via_checkout(
 
     # Has this reference ever trialed? Prevents multiple trials by plan-hopping.
     has_ever_trialed = any(
-        bool(s.get("trialStart") or s.get("trialEnd"))
-        or s.get("status") == "trialing"
+        bool(s.get("trialStart") or s.get("trialEnd")) or s.get("status") == "trialing"
         for s in existing
     )
 
@@ -1320,17 +1256,14 @@ async def _upgrade_via_checkout(
 
     # customer_update default depends on customer type; the hook may override.
     default_customer_update = (
-        {"name": "auto", "address": "auto"}
-        if customer_type == "user"
-        else {"address": "auto"}
+        {"name": "auto", "address": "auto"} if customer_type == "user" else {"address": "auto"}
     )
 
     params: dict[str, Any] = {
         **additional_params,
         "mode": "subscription",
         "customer": customer_id,
-        "customer_update": additional_params.get("customer_update")
-        or default_customer_update,
+        "customer_update": additional_params.get("customer_update") or default_customer_update,
         "locale": body.locale or additional_params.get("locale"),
         "success_url": body.successUrl or body.returnUrl or "/",
         "cancel_url": body.cancelUrl or body.returnUrl or "/",
@@ -1405,9 +1338,7 @@ def _build_webhook_endpoint(opts: StripeOptions) -> AuthEndpoint:
     async def handler(ctx: EndpointContext) -> dict[str, Any]:
         sig = ctx.request.headers.get("stripe-signature")
         if not sig:
-            raise APIError(
-                400, "INVALID_SIGNATURE", message="missing Stripe-Signature header"
-            )
+            raise APIError(400, "INVALID_SIGNATURE", message="missing Stripe-Signature header")
         payload = await ctx.request.body()
         verify_signature(payload, sig, opts.webhook_secret)
         try:

@@ -15,7 +15,7 @@ from kernia.plugins.admin import admin
 from kernia.plugins.admin.plugin import AdminOptions
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
-from kernia.types.init_options import KerniaOptions, EmailPasswordOptions
+from kernia.types.init_options import EmailPasswordOptions, KerniaOptions
 from kernia_memory_adapter import memory_adapter
 from kernia_test_utils import ASGIDriver
 
@@ -98,7 +98,7 @@ async def _build_shared() -> tuple[object, object, ASGIDriver, dict, ASGIDriver,
 
 
 async def test_admin_full_lifecycle() -> None:
-    driver, auth, admin_user = await _build_driver_with_admin()
+    driver, _auth, admin_user = await _build_driver_with_admin()
 
     r = await driver.request(
         "POST",
@@ -143,9 +143,7 @@ async def test_admin_full_lifecycle() -> None:
     )
     assert r.status == 200
 
-    r = await driver.request(
-        "POST", "/admin/impersonate-user", json_body={"userId": bob_id}
-    )
+    r = await driver.request("POST", "/admin/impersonate-user", json_body={"userId": bob_id})
     assert r.status == 200, r.json()
     body = r.json()
     assert body["session"]["impersonatedBy"] == admin_user["id"]
@@ -159,9 +157,7 @@ async def test_admin_full_lifecycle() -> None:
     assert r.status == 200
     assert r.json()["user"]["id"] == admin_user["id"]
 
-    r = await driver.request(
-        "POST", "/admin/list-user-sessions", json_body={"userId": bob_id}
-    )
+    r = await driver.request("POST", "/admin/list-user-sessions", json_body={"userId": bob_id})
     assert r.status == 200
     sessions = r.json()["sessions"]
     assert all(not s.get("impersonatedBy") for s in sessions)
@@ -179,7 +175,7 @@ async def test_admin_full_lifecycle() -> None:
 
 
 async def test_non_admin_cannot_access() -> None:
-    driver, auth, _admin = await _build_driver_with_admin()
+    driver, _auth, _admin = await _build_driver_with_admin()
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     r = await driver.request(
@@ -500,7 +496,12 @@ async def test_should_allow_to_set_multiple_user_roles() -> None:
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Test User mr", "email": "testmr@test.com", "password": "test", "role": "user"},
+        json_body={
+            "name": "Test User mr",
+            "email": "testmr@test.com",
+            "password": "test",
+            "role": "user",
+        },
     )
     assert created.json()["user"]["role"] == "user"
     uid = created.json()["user"]["id"]
@@ -555,7 +556,12 @@ async def test_should_not_allow_banned_user_to_sign_in() -> None:
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Ban Me", "email": "banme@test.com", "password": "password", "role": "user"},
+        json_body={
+            "name": "Ban Me",
+            "email": "banme@test.com",
+            "password": "password",
+            "role": "user",
+        },
     )
     uid = created.json()["user"]["id"]
     await admin_d.request("POST", "/admin/ban-user", json_body={"userId": uid})
@@ -580,7 +586,12 @@ async def test_should_change_banned_user_message() -> None:
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Ban Me", "email": "banme@test.com", "password": "password", "role": "user"},
+        json_body={
+            "name": "Ban Me",
+            "email": "banme@test.com",
+            "password": "password",
+            "role": "user",
+        },
     )
     uid = created.json()["user"]["id"]
     await admin_d.request("POST", "/admin/ban-user", json_body={"userId": uid})
@@ -596,7 +607,12 @@ async def test_should_allow_banned_user_to_sign_in_if_ban_expired() -> None:
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Ban Me", "email": "banme@test.com", "password": "password", "role": "user"},
+        json_body={
+            "name": "Ban Me",
+            "email": "banme@test.com",
+            "password": "password",
+            "role": "user",
+        },
     )
     uid = created.json()["user"]["id"]
     # Ban with an already-elapsed expiry so the next access auto-unbans.
@@ -650,7 +666,7 @@ async def test_should_not_allow_non_admin_to_list_user_sessions() -> None:
 
 
 async def test_should_allow_admins_to_impersonate_user() -> None:
-    _auth, _db, admin_d, admin_user, _user_d, non_admin = await _build_shared()
+    _auth, _db, admin_d, _admin_user, _user_d, non_admin = await _build_shared()
     r = await admin_d.request(
         "POST", "/admin/impersonate-user", json_body={"userId": non_admin["id"]}
     )
@@ -676,7 +692,12 @@ async def test_should_not_allow_to_impersonate_admins_without_permission() -> No
     target = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Other Admin", "email": "other-admin@test.com", "password": "password", "role": "admin"},
+        json_body={
+            "name": "Other Admin",
+            "email": "other-admin@test.com",
+            "password": "password",
+            "role": "admin",
+        },
     )
     uid = target.json()["user"]["id"]
     r = await admin_d.request("POST", "/admin/impersonate-user", json_body={"userId": uid})
@@ -751,7 +772,12 @@ async def test_should_allow_impersonating_admins_with_permission() -> None:
     target = await super_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Target Admin Perm", "email": "target-admin-perm@test.com", "password": "password", "role": "admin"},
+        json_body={
+            "name": "Target Admin Perm",
+            "email": "target-admin-perm@test.com",
+            "password": "password",
+            "role": "admin",
+        },
     )
     target_id = target.json()["user"]["id"]
 
@@ -785,7 +811,12 @@ async def test_should_allow_impersonating_admins_with_legacy_option() -> None:
     target = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Target Admin Legacy", "email": "target-admin-legacy@test.com", "password": "password", "role": "admin"},
+        json_body={
+            "name": "Target Admin Legacy",
+            "email": "target-admin-legacy@test.com",
+            "password": "password",
+            "role": "admin",
+        },
     )
     target_id = target.json()["user"]["id"]
     r = await admin_d.request("POST", "/admin/impersonate-user", json_body={"userId": target_id})
@@ -818,7 +849,7 @@ async def test_should_allow_admin_to_stop_impersonating() -> None:
 
 
 async def test_should_allow_admin_to_revoke_user_session() -> None:
-    _auth, _db, admin_d, _admin, user_d, non_admin = await _build_shared()
+    _auth, _db, admin_d, _admin, _user_d, non_admin = await _build_shared()
     sessions = await admin_d.request(
         "POST", "/admin/list-user-sessions", json_body={"userId": non_admin["id"]}
     )
@@ -961,7 +992,11 @@ async def test_should_allow_admin_to_update_user() -> None:
         "/admin/update-user",
         json_body={
             "userId": non_admin["id"],
-            "data": {"name": "Updated Name", "customField": "custom value", "role": ["member", "user"]},
+            "data": {
+                "name": "Updated Name",
+                "customField": "custom value",
+                "role": ["member", "user"],
+            },
         },
     )
     # `member` is not in the default role map, so update-user rejects the role.
@@ -991,13 +1026,17 @@ async def test_should_not_allow_non_admin_to_update_user() -> None:
 
 
 async def test_should_allow_creating_users_from_server() -> None:
-    _auth, _db, admin_d, _admin, _user_d, _non_admin = await _build_shared()
+    _auth, _db, _admin_d, _admin, _user_d, _non_admin = await _build_shared()
     # No-session driver simulates a server-side create.
     server_d = _new_driver(_auth)
     r = await server_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"email": "server-create@test.com", "password": "password", "name": "Server User"},
+        json_body={
+            "email": "server-create@test.com",
+            "password": "password",
+            "name": "Server User",
+        },
     )
     assert r.status == 200, r.json()
     assert r.json()["user"]["email"] == "server-create@test.com"
@@ -1024,9 +1063,7 @@ def _ac_plugin() -> object:
     )
     user_ac = ac.new_role({"user": ("read",), "order": ("read",)})
     support_ac = ac.new_role({"user": ("update",), "order": ("update",)})
-    return admin(
-        AdminOptions(roles={"admin": admin_ac, "user": user_ac, "support": support_ac})
-    )
+    return admin(AdminOptions(roles={"admin": admin_ac, "user": user_ac, "support": support_ac}))
 
 
 async def _build_ac() -> tuple[object, object, ASGIDriver, dict]:
@@ -1043,7 +1080,7 @@ async def _build_ac() -> tuple[object, object, ASGIDriver, dict]:
 
 
 async def test_ac_should_not_allow_role_updates_without_set_role() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    auth, db, _admin_d, _admin = await _build_ac()
     support_d = _new_driver(auth)
     support_res = await _sign_up(support_d, "support@test.com", "password", "Support")
     support_id = support_res["user"]["id"]
@@ -1070,7 +1107,7 @@ async def test_ac_should_not_allow_role_updates_without_set_role() -> None:
 
 
 async def test_ac_should_reject_non_existent_roles_via_update_user() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    auth, _db, admin_d, _admin = await _build_ac()
     target_d = _new_driver(auth)
     target_res = await _sign_up(target_d, "role-target@test.com", "password", "Role Target")
     target_id = target_res["user"]["id"]
@@ -1083,9 +1120,11 @@ async def test_ac_should_reject_non_existent_roles_via_update_user() -> None:
 
 
 async def test_ac_should_allow_valid_role_updates_with_set_role() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    auth, _db, admin_d, _admin = await _build_ac()
     target_d = _new_driver(auth)
-    target_res = await _sign_up(target_d, "role-valid-target@test.com", "password", "Role Valid Target")
+    target_res = await _sign_up(
+        target_d, "role-valid-target@test.com", "password", "Role Valid Target"
+    )
     target_id = target_res["user"]["id"]
     res = await admin_d.request(
         "POST",
@@ -1097,7 +1136,7 @@ async def test_ac_should_allow_valid_role_updates_with_set_role() -> None:
 
 
 async def test_ac_should_validate_using_user_id() -> None:
-    auth, db, admin_d, admin_user = await _build_ac()
+    _auth, _db, admin_d, admin_user = await _build_ac()
     r = await admin_d.request(
         "POST",
         "/admin/has-permission",
@@ -1115,7 +1154,7 @@ async def test_ac_should_validate_using_user_id() -> None:
 
 
 async def test_ac_should_validate_using_role() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    _auth, _db, admin_d, _admin = await _build_ac()
     r = await admin_d.request(
         "POST",
         "/admin/has-permission",
@@ -1131,7 +1170,7 @@ async def test_ac_should_validate_using_role() -> None:
 
 
 async def test_ac_should_prioritize_role_over_user_id() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    auth, _db, admin_d, _admin = await _build_ac()
     user_d = _new_driver(auth)
     target = await _sign_up(user_d, "rolepriority@test.com", "password", "Role Priority")
     uid = target["user"]["id"]
@@ -1150,12 +1189,14 @@ async def test_ac_should_prioritize_role_over_user_id() -> None:
 
 
 async def test_ac_should_check_permissions_for_banned_user_with_role() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    auth, _db, admin_d, _admin = await _build_ac()
     user_d = _new_driver(auth)
     banned = await _sign_up(user_d, "bannedwithRole@test.com", "password", "Banned Role Test User")
     banned_id = banned["user"]["id"]
     await admin_d.request(
-        "POST", "/admin/ban-user", json_body={"userId": banned_id, "banReason": "Testing role priority"}
+        "POST",
+        "/admin/ban-user",
+        json_body={"userId": banned_id, "banReason": "Testing role priority"},
     )
     with_role = await admin_d.request(
         "POST",
@@ -1172,11 +1213,16 @@ async def test_ac_should_check_permissions_for_banned_user_with_role() -> None:
 
 
 async def test_ac_should_not_set_multiple_non_existent_roles() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    _auth, _db, admin_d, _admin = await _build_ac()
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Test User mr", "email": "testmr@test.com", "password": "test", "role": ["user"]},
+        json_body={
+            "name": "Test User mr",
+            "email": "testmr@test.com",
+            "password": "test",
+            "role": ["user"],
+        },
     )
     uid = created.json()["user"]["id"]
     res = await admin_d.request(
@@ -1187,11 +1233,16 @@ async def test_ac_should_not_set_multiple_non_existent_roles() -> None:
 
 
 async def test_ac_should_not_set_non_existent_role() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    _auth, _db, admin_d, _admin = await _build_ac()
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Test User mr", "email": "testmr2@test.com", "password": "test", "role": "user"},
+        json_body={
+            "name": "Test User mr",
+            "email": "testmr2@test.com",
+            "password": "test",
+            "role": "user",
+        },
     )
     uid = created.json()["user"]["id"]
     res = await admin_d.request(
@@ -1202,11 +1253,16 @@ async def test_ac_should_not_set_non_existent_role() -> None:
 
 
 async def test_ac_should_properly_handle_custom_roles_in_create_user() -> None:
-    auth, db, admin_d, _admin = await _build_ac()
+    _auth, _db, admin_d, _admin = await _build_ac()
     created = await admin_d.request(
         "POST",
         "/admin/create-user",
-        json_body={"name": "Support Role User", "email": "support-role@test.com", "password": "test", "role": "support"},
+        json_body={
+            "name": "Support Role User",
+            "email": "support-role@test.com",
+            "password": "test",
+            "role": "support",
+        },
     )
     assert created.status == 200, created.json()
     assert created.json()["user"]["role"] == "support"

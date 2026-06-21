@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 FIXTURE_CONFIG = '''"""Fixture Kernia config for CLI tests."""
 
 from kernia import KerniaOptions, KerniaPlugin, PluginSchema

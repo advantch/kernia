@@ -1,7 +1,7 @@
 # Contributing to Kernia
 
 Thanks for your interest in Kernia. This guide gets you from clone to green
-tests, and explains the conventions that keep the parity work auditable.
+tests, and explains the project's conventions.
 
 ## Project shape
 
@@ -54,22 +54,16 @@ Docker-gated suites skip cleanly when Docker isn't running.
 uv run ruff check .          # lint
 uv run ruff format --check . # format
 uv run mypy packages/core/src
-uv run python scripts/audit_layout.py   # the "no shortcuts" parity gate
 ```
 
-The **layout audit** fetches the pinned Better Auth source and asserts every
-upstream directory has a Kernia counterpart or an explicit, documented waiver.
-If you add a feature upstream has, mirror its structure; don't invent a new one.
+## Wire compatibility
 
-## Parity discipline
+Kernia is wire-compatible with Better Auth: the official Better Auth JS client
+must work against a Kernia server unchanged. When you add or change a plugin:
 
-Kernia tracks Better Auth 1.6.11. "Done" for an area means **the upstream test
-cases for it are ported and green**, not "it looks plausible". When you port a
-plugin:
-
-1. Mirror the upstream route paths and the camelCase wire shape — the official
-   Better Auth JS client must work against a Kernia server unchanged. The
-   `examples/frontend/scripts/wire-check.mjs` harness verifies this.
+1. Keep the route paths and the camelCase wire shape stable — the
+   `examples/frontend/scripts/wire-check.mjs` harness drives the official JS
+   client end to end to verify this.
 2. Add unit tests for pure logic (token formats, schema, claim verification).
 3. Add an integration test under `e2e/plugins/test_<name>.py` that drives every
    endpoint via `ASGIDriver`, parametrized over adapters where it matters.

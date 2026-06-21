@@ -40,6 +40,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fastmcp import FastMCP
 from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.plugins.jwt import jwt
@@ -48,7 +49,6 @@ from kernia.plugins.mcp.plugin import MCPOptions, mcp
 from kernia.types.init_options import KerniaOptions
 from kernia_mcp import mcp_auth
 from kernia_memory_adapter import memory_adapter
-from fastmcp import FastMCP
 from starlette.testclient import TestClient
 
 BASE_URL = "https://mcp.test"
@@ -126,16 +126,14 @@ def _mcp_call(client: TestClient, token: str | None):
     "the oauth_provider package at /oauth2/register here, not by the mcp "
     "package; covered by packages/oauth_provider/tests."
 )
-def test_should_register_public_client_with_token_endpoint_auth_method_none():
-    ...
+def test_should_register_public_client_with_token_endpoint_auth_method_none(): ...
 
 
 @pytest.mark.skip(
     reason="upstream /mcp/register confidential-client path is oauth_provider's "
     "/oauth2/register; not owned by the mcp package."
 )
-def test_should_register_confidential_client_with_client_secret_basic():
-    ...
+def test_should_register_confidential_client_with_client_secret_basic(): ...
 
 
 @pytest.mark.skip(
@@ -144,32 +142,28 @@ def test_should_register_confidential_client_with_client_secret_basic():
     "/oauth2/authorize + /oauth2/token here; mcp package only mints "
     "resource-bound tokens at POST /mcp/authorize."
 )
-def test_should_authenticate_public_client_with_pkce_only():
-    ...
+def test_should_authenticate_public_client_with_pkce_only(): ...
 
 
 @pytest.mark.skip(
     reason="upstream /mcp/token rejects public clients missing code_verifier; the "
     "token endpoint is oauth_provider's /oauth2/token here."
 )
-def test_should_reject_public_client_without_code_verifier():
-    ...
+def test_should_reject_public_client_without_code_verifier(): ...
 
 
 @pytest.mark.skip(
     reason="upstream confidential-client authorization-code flow uses GET "
     "/mcp/authorize + /mcp/token, owned by oauth_provider here."
 )
-def test_should_still_support_confidential_clients_in_mcp_context():
-    ...
+def test_should_still_support_confidential_clients_in_mcp_context(): ...
 
 
 @pytest.mark.skip(
     reason="upstream it.skip — race-redemption regression deferred upstream; "
     "the consume primitive lives in oauth_provider here."
 )
-def test_rejects_concurrent_redemption_of_the_same_authorization_code():
-    ...
+def test_rejects_concurrent_redemption_of_the_same_authorization_code(): ...
 
 
 @pytest.mark.skip(
@@ -178,8 +172,7 @@ def test_rejects_concurrent_redemption_of_the_same_authorization_code():
     "serves only the RFC 9728 protected-resource doc. See "
     "packages/oauth_provider/tests and the e2e alg=none case below."
 )
-def test_should_expose_oauth_discovery_metadata():
-    ...
+def test_should_expose_oauth_discovery_metadata(): ...
 
 
 def test_should_expose_oauth_protected_resource_metadata(auth):
@@ -208,8 +201,7 @@ def test_should_expose_oauth_protected_resource_metadata(auth):
     "oauth_provider's /oauth2/token here. Refresh-token client-auth security "
     "cases are covered in packages/oauth_provider/tests."
 )
-def test_should_handle_token_refresh_flow():
-    ...
+def test_should_handle_token_refresh_flow(): ...
 
 
 def test_should_return_user_info_from_userinfo_endpoint(auth):
@@ -231,8 +223,7 @@ def test_should_return_user_info_from_userinfo_endpoint(auth):
     "grant (oauth_provider's /oauth2/token here); the mcp package mints a "
     "resource-bound access token, not an OIDC id_token."
 )
-def test_should_handle_id_token_requests():
-    ...
+def test_should_handle_id_token_requests(): ...
 
 
 @pytest.mark.skip(
@@ -240,16 +231,14 @@ def test_should_handle_id_token_requests():
     "/oauth2/consent) is oauth_provider's; GET /mcp/authorize browser flow is "
     "not owned by the mcp package."
 )
-def test_should_handle_consent_flow_with_prompt_consent():
-    ...
+def test_should_handle_consent_flow_with_prompt_consent(): ...
 
 
 @pytest.mark.skip(
     reason="upstream prompt!=consent skip-consent path is oauth_provider's "
     "GET /oauth2/authorize behaviour."
 )
-def test_should_skip_consent_flow_when_prompt_is_not_consent():
-    ...
+def test_should_skip_consent_flow_when_prompt_is_not_consent(): ...
 
 
 @pytest.mark.skip(
@@ -257,8 +246,7 @@ def test_should_skip_consent_flow_when_prompt_is_not_consent():
     "(oauth_provider's /oauth2/authorize); POST /mcp/authorize here returns "
     "JSON, not a redirect."
 )
-def test_should_not_include_state_undefined_in_redirect_url():
-    ...
+def test_should_not_include_state_undefined_in_redirect_url(): ...
 
 
 # ===========================================================================
@@ -287,10 +275,7 @@ def test_withmcpauth_returns_401_with_correct_www_authenticate_header(auth):
         www = resp.headers.get("WWW-Authenticate")
         assert www is not None
         assert www.startswith("Bearer")
-        assert (
-            f'resource_metadata="{BASE_URL}/.well-known/oauth-protected-resource'
-            in www
-        )
+        assert f'resource_metadata="{BASE_URL}/.well-known/oauth-protected-resource' in www
 
 
 # ===========================================================================
@@ -326,9 +311,7 @@ def test_wrong_resource_token_is_rejected(auth):
     """RFC 8707: a token minted for another resource must not be replayable."""
     server, _ = _make_server(auth)
     app = server.http_app()
-    token = asyncio.run(
-        _mint(auth, scope="mcp:read", resource="https://other.test/")
-    )
+    token = asyncio.run(_mint(auth, scope="mcp:read", resource="https://other.test/"))
     with TestClient(app) as client:
         resp = _mcp_call(client, token)
         assert resp.status_code == 401

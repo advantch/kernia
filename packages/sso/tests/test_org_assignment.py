@@ -115,9 +115,7 @@ async def _seed_domain(
 
 
 async def _members(adapter, user_id: str) -> list[dict]:
-    return await adapter.find_many(
-        model="member", where=(Where(field="userId", value=user_id),)
-    )
+    return await adapter.find_many(model="member", where=(Where(field="userId", value=user_id),))
 
 
 # ---------------------------------------------------------------------------
@@ -132,9 +130,7 @@ async def test_by_domain_not_assigned_when_domain_unverified() -> None:
     await _seed_domain(adapter, verified=False)
     user = await _seed_user(adapter)
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     assert await _members(adapter, user["id"]) == []
 
 
@@ -145,9 +141,7 @@ async def test_by_domain_assigned_when_domain_verified() -> None:
     await _seed_domain(adapter, verified=True)
     user = await _seed_user(adapter)
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     members = await _members(adapter, user["id"])
     assert len(members) == 1
     assert members[0]["organizationId"] == "org-1"
@@ -161,9 +155,7 @@ async def test_by_domain_not_assigned_when_email_domain_mismatch() -> None:
     await _seed_domain(adapter, verified=True)
     user = await _seed_user(adapter, email="alice@other-domain.com")
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     assert await _members(adapter, user["id"]) == []
 
 
@@ -173,9 +165,7 @@ async def test_by_domain_not_assigned_when_provider_has_no_org() -> None:
     await _seed_domain(adapter, verified=True)
     user = await _seed_user(adapter)
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     assert await _members(adapter, user["id"]) == []
 
 
@@ -186,9 +176,7 @@ async def test_by_domain_assigned_when_verification_disabled() -> None:
     await _seed_domain(adapter, verified=False)  # unverified, but check disabled
     user = await _seed_user(adapter)
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": False}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": False})
     members = await _members(adapter, user["id"])
     assert len(members) == 1
     assert members[0]["organizationId"] == "org-1"
@@ -211,9 +199,7 @@ async def test_by_domain_not_assigned_when_already_member() -> None:
         },
     )
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     members = await _members(adapter, user["id"])
     assert len(members) == 1
     assert members[0]["role"] == "admin"  # unchanged
@@ -225,9 +211,7 @@ async def test_by_domain_noop_when_org_plugin_absent() -> None:
     await _seed_domain(adapter, verified=True)
     user = await _seed_user(adapter)
 
-    await assign_organization_by_domain(
-        ctx, user=user, domain_verification={"enabled": True}
-    )
+    await assign_organization_by_domain(ctx, user=user, domain_verification={"enabled": True})
     assert await _members(adapter, user["id"]) == []
 
 

@@ -154,9 +154,7 @@ async def _signup(driver: ASGIDriver, email: str = TEST_EMAIL) -> None:
 
 async def _enable_and_verify(driver: ASGIDriver) -> str:
     """Enable + verify TOTP; returns the secret for follow-up code generation."""
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     secret = _secret_from_uri(r.json()["totpURI"])
     r = await driver.request(
@@ -180,9 +178,7 @@ def _secret_from_uri(uri: str) -> str:
 async def test_enable_returns_uri_and_backup_codes_without_enabling() -> None:
     driver = _build()
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     body = r.json()
     assert len(body["backupCodes"]) == 10
@@ -210,9 +206,7 @@ async def test_enable_custom_issuer_from_request() -> None:
 async def test_enable_fallback_to_default_app_name() -> None:
     driver = _build()
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     uri = r.json()["totpURI"]
     assert uri.startswith("otpauth://totp/Better%20Auth:")
     assert "issuer=Better+Auth" in uri or "issuer=Better%20Auth" in uri
@@ -221,9 +215,7 @@ async def test_enable_fallback_to_default_app_name() -> None:
 async def test_enable_requires_password() -> None:
     driver = _build()
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": "wrong-password"}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": "wrong-password"})
     assert r.status == 400
     assert r.json()["code"] == "INVALID_PASSWORD"
 
@@ -245,12 +237,8 @@ async def test_enable_two_factor_via_verify_totp() -> None:
 async def test_verify_totp_invalid_code() -> None:
     driver = _build()
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
-    r = await driver.request(
-        "POST", "/two-factor/verify-totp", json_body={"code": "invalid-code"}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
+    r = await driver.request("POST", "/two-factor/verify-totp", json_body={"code": "invalid-code"})
     assert r.status == 401
     assert r.json()["code"] == "INVALID_CODE"
 
@@ -259,9 +247,7 @@ async def test_pre_migration_row_verified_absent_completes_enrollment() -> None:
     """A twoFactor row whose `verified` is None must still complete enrollment."""
     driver = _build()
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     secret = _secret_from_uri(r.json()["totpURI"])
 
     # Verify TOTP — enrollment should succeed and flip twoFactorEnabled.
@@ -306,9 +292,7 @@ async def test_require_two_factor_on_sign_in_with_otp() -> None:
     assert r.status == 200, r.json()
     assert len(sink.otp) == 6
 
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
     assert r.json()["token"]
     assert driver.cookies.get("better-auth.session_token")
@@ -331,9 +315,7 @@ async def test_sign_in_fails_if_two_factor_cookie_missing() -> None:
     # Drop the two_factor cookie before verifying.
     driver.cookies.pop("better-auth.two_factor", None)
 
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": "123456"}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": "123456"})
     assert r.status == 401
     assert r.json()["code"] == "INVALID_TWO_FACTOR_COOKIE"
 
@@ -353,16 +335,12 @@ async def test_otp_attempts_are_limited() -> None:
     )
     await driver.request("POST", "/two-factor/send-otp")
     for _ in range(5):
-        r = await driver.request(
-            "POST", "/two-factor/verify-otp", json_body={"code": "000000"}
-        )
+        r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": "000000"})
         assert r.status == 401
         assert r.json()["code"] == "INVALID_CODE"
 
     # Next attempt, even with the correct code, is blocked.
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 400
     assert r.json()["code"] == "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"
 
@@ -402,9 +380,7 @@ async def test_sign_in_with_backup_code_single_use() -> None:
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     code = backup_codes[0]
-    r = await driver.request(
-        "POST", "/two-factor/verify-backup-code", json_body={"code": code}
-    )
+    r = await driver.request("POST", "/two-factor/verify-backup-code", json_body={"code": code})
     assert r.status == 200, r.json()
     assert driver.cookies.get("better-auth.session_token")
 
@@ -416,9 +392,7 @@ async def test_sign_in_with_backup_code_single_use() -> None:
         "/sign-in/email",
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
-    r = await driver.request(
-        "POST", "/two-factor/verify-backup-code", json_body={"code": code}
-    )
+    r = await driver.request("POST", "/two-factor/verify-backup-code", json_body={"code": code})
     assert r.status == 401
     assert r.json()["code"] == "INVALID_BACKUP_CODE"
     assert secret  # silence unused
@@ -427,20 +401,17 @@ async def test_sign_in_with_backup_code_single_use() -> None:
 async def test_view_backup_codes_returns_array() -> None:
     driver = _build()
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     enable_codes = r.json()["backupCodes"]
     await driver.request(
-        "POST", "/two-factor/verify-totp",
+        "POST",
+        "/two-factor/verify-totp",
         json_body={"code": pyotp.TOTP(_secret_from_uri(r.json()["totpURI"])).now()},
     )
     r = await driver.request("GET", "/get-session")
     user_id = r.json()["user"]["id"]
 
-    r = await driver.request(
-        "POST", "/two-factor/view-backup-codes", json_body={"userId": user_id}
-    )
+    r = await driver.request("POST", "/two-factor/view-backup-codes", json_body={"userId": user_id})
     assert r.status == 200, r.json()
     body = r.json()
     assert isinstance(body["backupCodes"], list)
@@ -480,14 +451,10 @@ async def test_backup_codes_updated_after_verification() -> None:
         "/sign-in/email",
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
-    await driver.request(
-        "POST", "/two-factor/verify-backup-code", json_body={"code": codes[0]}
-    )
+    await driver.request("POST", "/two-factor/verify-backup-code", json_body={"code": codes[0]})
 
     # View remaining (server-side) — should be 9 and exclude the used one.
-    r = await driver.request(
-        "POST", "/two-factor/view-backup-codes", json_body={"userId": user_id}
-    )
+    r = await driver.request("POST", "/two-factor/view-backup-codes", json_body={"userId": user_id})
     remaining = r.json()["backupCodes"]
     assert len(remaining) == 9
     assert codes[0] not in remaining
@@ -501,9 +468,7 @@ async def test_backup_codes_updated_after_verification() -> None:
 async def test_get_totp_uri() -> None:
     driver = _build(skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     r = await driver.request(
         "POST", "/two-factor/get-totp-uri", json_body={"password": TEST_PASSWORD}
     )
@@ -514,9 +479,7 @@ async def test_get_totp_uri() -> None:
 async def test_get_totp_uri_wrong_password_uses_invalid_password() -> None:
     driver = _build(skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     r = await driver.request(
         "POST", "/two-factor/get-totp-uri", json_body={"password": "not-the-password"}
     )
@@ -532,9 +495,7 @@ async def test_get_totp_uri_wrong_password_uses_invalid_password() -> None:
 async def test_skip_verification_on_enable_enables_immediately() -> None:
     driver = _build(skip_verification_on_enable=True)
     await _signup(driver)
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     r = await driver.request("GET", "/get-session")
     assert r.json()["user"]["twoFactorEnabled"] is True
@@ -549,9 +510,7 @@ async def test_disable_two_factor() -> None:
     driver = _build()
     await _signup(driver)
     await _enable_and_verify(driver)
-    r = await driver.request(
-        "POST", "/two-factor/disable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/disable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     assert r.json()["status"] is True
     r = await driver.request("GET", "/get-session")
@@ -638,9 +597,7 @@ async def test_trust_device_forced_when_server_record_expired() -> None:
     assert driver.cookies.get("better-auth.trust_device")
 
     # Drop the server-side trust record (simulating expiry) — the cookie stays.
-    await adapter.delete_many(
-        model="verification", where=(Where(field="value", value=user_id),)
-    )
+    await adapter.delete_many(model="verification", where=(Where(field="value", value=user_id),))
 
     await driver.request("POST", "/sign-out")
     r = await driver.request(
@@ -673,9 +630,7 @@ async def test_trust_device_revoked_on_disable() -> None:
     assert driver.cookies.get("better-auth.trust_device")
 
     # Disable 2FA — trust cookie cleared.
-    r = await driver.request(
-        "POST", "/two-factor/disable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/disable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200
     assert driver.cookies.get("better-auth.trust_device", "") == ""
 
@@ -721,9 +676,7 @@ async def test_two_factor_cookie_max_age_custom() -> None:
     custom = 15 * 60
     driver = _build(skip_verification_on_enable=True, two_factor_cookie_max_age=custom)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     r = await driver.request(
@@ -759,9 +712,7 @@ async def test_methods_no_redirect_when_totp_unverified() -> None:
     driver = _build()
     await _signup(driver)
     # Enable but DO NOT verify (twoFactorEnabled stays False).
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     r = await driver.request(
@@ -778,9 +729,7 @@ async def test_methods_otp_only_when_totp_disabled() -> None:
     sink = _OTPSink()
     driver = _build(otp_sink=sink, totp_disable=True, skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     r = await driver.request(
@@ -825,9 +774,7 @@ async def test_methods_exclude_unverified_totp() -> None:
     driver, adapter = _build_with_adapter(otp_sink=sink)
     await _signup(driver)
     # enable creates a verified=false totp row but leaves twoFactorEnabled false.
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     # Simulate an OTP-enrolled user who began (but never finished) adding TOTP.
     await adapter.update(
         model="user",
@@ -901,22 +848,16 @@ async def test_no_2fa_challenge_on_magic_link_sign_in() -> None:
 
     await _signup(driver)
     # Enable 2FA (skip_verification → twoFactorEnabled immediately true).
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     driver.cookies.clear()
 
     # Magic-link sign-in for the same (2FA-enabled) user.
-    r = await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": TEST_EMAIL}
-    )
+    r = await driver.request("POST", "/sign-in/magic-link", json_body={"email": TEST_EMAIL})
     assert r.status == 200, r.json()
     token = parse_qs(urlparse(captured["url"]).query)["token"][0]
 
-    r = await driver.request(
-        "GET", "/magic-link/verify", query=urlencode({"token": token})
-    )
+    r = await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert r.status == 200, r.json()
     body = r.json()
     assert body.get("twoFactorRedirect") is None
@@ -933,9 +874,7 @@ async def test_otp_storage_hashed() -> None:
     sink = _OTPSink()
     driver = _build(otp_sink=sink, store_otp="hashed", skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     await driver.request(
@@ -944,9 +883,7 @@ async def test_otp_storage_hashed() -> None:
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
 
 
@@ -954,9 +891,7 @@ async def test_otp_storage_hashed_rejects_invalid() -> None:
     sink = _OTPSink()
     driver = _build(otp_sink=sink, store_otp="hashed", skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     await driver.request(
@@ -965,9 +900,7 @@ async def test_otp_storage_hashed_rejects_invalid() -> None:
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": "000000"}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": "000000"})
     assert r.status == 401
     assert r.json()["code"] == "INVALID_CODE"
 
@@ -976,9 +909,7 @@ async def test_otp_storage_encrypted() -> None:
     sink = _OTPSink()
     driver = _build(otp_sink=sink, store_otp="encrypted", skip_verification_on_enable=True)
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     await driver.request(
@@ -987,9 +918,7 @@ async def test_otp_storage_encrypted() -> None:
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
 
 
@@ -1001,14 +930,10 @@ async def test_otp_storage_encrypted() -> None:
 async def test_old_totp_code_rejected() -> None:
     driver = _build()
     await _signup(driver, email="x@example.com")
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     secret = _secret_from_uri(r.json()["totpURI"])
     old_code = pyotp.TOTP(secret).at(int(time.time()) - 600)
-    r = await driver.request(
-        "POST", "/two-factor/verify-totp", json_body={"code": old_code}
-    )
+    r = await driver.request("POST", "/two-factor/verify-totp", json_body={"code": old_code})
     assert r.status == 401
     assert r.json()["code"] == "INVALID_CODE"
 
@@ -1046,9 +971,7 @@ async def test_default_two_factor_cookie_max_age_is_10_minutes() -> None:
     """Upstream: 'should use default 10 minutes when twoFactorCookieMaxAge not specified'."""
     driver = _build(skip_verification_on_enable=True)  # no override
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     r = await driver.request(
@@ -1092,9 +1015,7 @@ async def test_no_challenge_on_authenticated_non_sign_in_endpoint() -> None:
     driver = _build()
     await _signup(driver)
     await _enable_and_verify(driver)
-    r = await driver.request(
-        "POST", "/update-user", json_body={"name": "Renamed"}
-    )
+    r = await driver.request("POST", "/update-user", json_body={"name": "Renamed"})
     assert r.status == 200, r.json()
     body = r.json()
     assert "twoFactorRedirect" not in body
@@ -1113,14 +1034,10 @@ async def _otp_enroll_authenticated(driver: ASGIDriver, sink: _OTPSink) -> str:
     then sends + verifies an OTP under the active session so twoFactorEnabled
     flips true while the TOTP row stays verified=false — the #8627 state.
     """
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
     r = await driver.request("GET", "/get-session")
     return r.json()["user"]["id"]
@@ -1133,12 +1050,8 @@ async def test_enable_creates_unverified_totp_row() -> None:
     r = await driver.request("GET", "/get-session")
     user_id = r.json()["user"]["id"]
 
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
-    row = await adapter.find_one(
-        model="twoFactor", where=(Where(field="userId", value=user_id),)
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
+    row = await adapter.find_one(model="twoFactor", where=(Where(field="userId", value=user_id),))
     assert row is not None
     assert row["verified"] is False
 
@@ -1151,9 +1064,7 @@ async def test_verify_totp_marks_row_verified() -> None:
     user_id = r.json()["user"]["id"]
 
     await _enable_and_verify(driver)
-    row = await adapter.find_one(
-        model="twoFactor", where=(Where(field="userId", value=user_id),)
-    )
+    row = await adapter.find_one(model="twoFactor", where=(Where(field="userId", value=user_id),))
     assert row is not None
     assert row["verified"] is True
 
@@ -1171,12 +1082,8 @@ async def test_preserve_verified_state_during_re_enrollment() -> None:
 
     await _enable_and_verify(driver)
     # Re-enable (fresh secret) — verified must remain true.
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
-    row = await adapter.find_one(
-        model="twoFactor", where=(Where(field="userId", value=user_id),)
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
+    row = await adapter.find_one(model="twoFactor", where=(Where(field="userId", value=user_id),))
     assert row is not None
     assert row["verified"] is True
 
@@ -1193,9 +1100,7 @@ async def test_reject_unverified_totp_during_sign_in_allow_otp_fallback() -> Non
     user_id = await _otp_enroll_authenticated(driver, sink)
 
     # The TOTP row is enabled-but-unverified, yet 2FA is on.
-    row = await adapter.find_one(
-        model="twoFactor", where=(Where(field="userId", value=user_id),)
-    )
+    row = await adapter.find_one(model="twoFactor", where=(Where(field="userId", value=user_id),))
     secret = str(row["secret"])
     assert row["verified"] is False
 
@@ -1219,9 +1124,7 @@ async def test_reject_unverified_totp_during_sign_in_allow_otp_fallback() -> Non
 
     # OTP fallback completes the sign-in.
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
     assert driver.cookies.get("better-auth.session_token")
 
@@ -1245,9 +1148,7 @@ async def test_otp_storage_custom_hash_function() -> None:
         skip_verification_on_enable=True,
     )
     await _signup(driver)
-    await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     await driver.request("POST", "/sign-out")
     driver.cookies.clear()
     await driver.request(
@@ -1256,9 +1157,7 @@ async def test_otp_storage_custom_hash_function() -> None:
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     await driver.request("POST", "/two-factor/send-otp")
-    r = await driver.request(
-        "POST", "/two-factor/verify-otp", json_body={"code": sink.otp}
-    )
+    r = await driver.request("POST", "/two-factor/verify-otp", json_body={"code": sink.otp})
     assert r.status == 200, r.json()
 
 
@@ -1341,9 +1240,7 @@ async def test_passwordless_generate_backup_codes_without_password() -> None:
     driver, auth = _build_passwordless(skip_verification_on_enable=True)
     await _credentialless_session(auth, driver)
     await driver.request("POST", "/two-factor/enable", json_body={})
-    r = await driver.request(
-        "POST", "/two-factor/generate-backup-codes", json_body={}
-    )
+    r = await driver.request("POST", "/two-factor/generate-backup-codes", json_body={})
     assert r.status == 200, r.json()
     assert len(r.json()["backupCodes"]) == 10
 
@@ -1409,16 +1306,12 @@ async def _run_backup_code_storage_case(
     )
     await _signup(driver)
 
-    r = await driver.request(
-        "POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD}
-    )
+    r = await driver.request("POST", "/two-factor/enable", json_body={"password": TEST_PASSWORD})
     assert r.status == 200, r.json()
     initial_codes = r.json()["backupCodes"]
     assert len(initial_codes) == 10
 
-    user = await adapter.find_one(
-        model="user", where=(Where(field="email", value=TEST_EMAIL),)
-    )
+    user = await adapter.find_one(model="user", where=(Where(field="email", value=TEST_EMAIL),))
     row = await adapter.find_one(
         model="twoFactor", where=(Where(field="userId", value=user["id"]),)
     )
@@ -1435,9 +1328,7 @@ async def _run_backup_code_storage_case(
         json_body={"email": TEST_EMAIL, "password": TEST_PASSWORD},
     )
     used = initial_codes[0]
-    r = await driver.request(
-        "POST", "/two-factor/verify-backup-code", json_body={"code": used}
-    )
+    r = await driver.request("POST", "/two-factor/verify-backup-code", json_body={"code": used})
     assert r.status == 200, r.json()
 
     row_after = await adapter.find_one(

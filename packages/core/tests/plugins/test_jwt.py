@@ -44,9 +44,7 @@ async def test_issue_and_verify_round_trip(alg: str) -> None:
     auth = _auth(JwtOptions(algorithm=alg, issuer="https://test", audience="aud-x"))
     token, kid = await issue_jwt(auth.context, payload={"sub": "user-1"})
     assert kid
-    claims = await verify_local_jwt(
-        auth.context, token, audience="aud-x", issuer="https://test"
-    )
+    claims = await verify_local_jwt(auth.context, token, audience="aud-x", issuer="https://test")
     assert claims["sub"] == "user-1"
     assert claims["iss"] == "https://test"
     assert claims["aud"] == "aud-x"
@@ -103,12 +101,11 @@ async def test_jwks_doc_omits_private_material() -> None:
 async def test_external_verification_against_jwks(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sign with our plugin → verify with authlib using only the public JWKS."""
     auth = _auth(JwtOptions(algorithm="RS256"))
-    token, kid = await issue_jwt(auth.context, payload={"sub": "u-x"})
+    token, _kid = await issue_jwt(auth.context, payload={"sub": "u-x"})
     rows = await auth.context.adapter.find_many(model="jwk")
     jwks = {
         "keys": [
-            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]}
-            for r in rows
+            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]} for r in rows
         ]
     }
     decoded = jose_jwt.decode(token, JsonWebKey.import_key_set(jwks))
@@ -148,8 +145,7 @@ async def test_algorithm_jwks_shape(alg: str, kty: str, crv: str | None) -> None
     # The public JWK must verify the issued token.
     jwks = {
         "keys": [
-            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]}
-            for r in rows
+            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]} for r in rows
         ]
     }
     decoded = jose_jwt.decode(token, JsonWebKey.import_key_set(jwks))
@@ -192,8 +188,7 @@ async def _jwks_doc(auth) -> dict:
     rows = await auth.context.adapter.find_many(model="jwk")
     return {
         "keys": [
-            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]}
-            for r in rows
+            {**json.loads(r["publicKey"]), "kid": r["keyId"], "alg": r["algorithm"]} for r in rows
         ]
     }
 
@@ -247,9 +242,7 @@ def test_remote_url_accepts_alg() -> None:
 @pytest.mark.parametrize("alg", ["ES256", "ES512", "RS256", "PS256", "EdDSA"])
 def test_remote_url_works_with_algorithms(alg: str) -> None:
     """Ported from "should work with different algorithms when remoteUrl is set"."""
-    opts = JwtOptions(
-        algorithm=alg, remote_url="https://example.com/.well-known/jwks.json"
-    )
+    opts = JwtOptions(algorithm=alg, remote_url="https://example.com/.well-known/jwks.json")
     assert opts.algorithm == alg
 
 
@@ -345,9 +338,7 @@ async def test_rotation_creates_new_key_when_expired(monkeypatch) -> None:
 
 async def test_rotation_grace_period(monkeypatch) -> None:
     """Ported from "should return keys within grace period"."""
-    auth = _auth(
-        JwtOptions(algorithm="ES256", rotation_interval=1, grace_period=1)
-    )
+    auth = _auth(JwtOptions(algorithm="ES256", rotation_interval=1, grace_period=1))
 
     fake_now = [1_000_000]
     monkeypatch.setattr(jwt_mod.time, "time", lambda: fake_now[0])

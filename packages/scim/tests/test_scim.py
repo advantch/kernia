@@ -107,9 +107,7 @@ class Harness:
         assert r.status == 200, r.json()
         return r.json()["scimToken"]
 
-    async def register_organization(
-        self, org: str, driver: ASGIDriver | None = None
-    ) -> dict:
+    async def register_organization(self, org: str, driver: ASGIDriver | None = None) -> dict:
         d = driver or await self.default_driver()
         r = await d.request(
             "POST",
@@ -162,9 +160,7 @@ async def test_should_fetch_the_service_provider_config() -> None:
     assert body["sort"] == {"supported": False}
     assert body["etag"] == {"supported": False}
     assert body["meta"] == {"resourceType": "ServiceProviderConfig"}
-    assert body["schemas"] == [
-        "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
-    ]
+    assert body["schemas"] == ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"]
     scheme = body["authenticationSchemes"][0]
     assert scheme["type"] == "oauthbearertoken"
     assert scheme["primary"] is True
@@ -390,9 +386,7 @@ async def test_should_not_allow_users_with_the_same_computed_username() -> None:
 
 async def test_create_should_not_allow_anonymous_access() -> None:
     h = Harness()
-    r = await h.driver().request(
-        "POST", "/scim/v2/Users", json_body={"userName": "the-username"}
-    )
+    r = await h.driver().request("POST", "/scim/v2/Users", json_body={"userName": "the-username"})
     assert r.status == 401
     assert r.json() == {
         "detail": "SCIM token is required",
@@ -561,11 +555,14 @@ async def test_should_filter_the_list_of_users() -> None:
     await create_scim_user(d, token, {"userName": "user-b"})
     await create_scim_user(d, token, {"userName": "user-c"})
 
+    # Hoisted out of the f-string: nested same-quote + backslash inside an
+    # f-string is py3.12-only syntax, and the package floor is 3.11.
+    case_insensitive_filter = quote('userName eq "user-A"')
     r = await d.request(
         "GET",
         "/scim/v2/Users",
         headers=bearer(token),
-        query=f"filter={quote('userName eq \"user-A\"')}",
+        query=f"filter={case_insensitive_filter}",
     )
     assert r.status == 200, r.json()
     body = r.json()
@@ -590,9 +587,7 @@ async def test_should_return_a_single_user_resource() -> None:
     token = await h.scim_token()
     d = h.driver()
     new_user = (await create_scim_user(d, token, {"userName": "the-username"})).json()
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token))
     assert r.status == 200
     assert r.json() == new_user
 
@@ -606,25 +601,17 @@ async def test_get_should_only_allow_access_to_same_provider() -> None:
     user_a = (await create_scim_user(d, token_b, {"userName": "user-a"})).json()
     user_b = (await create_scim_user(d, token_a, {"userName": "user-b"})).json()
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_a)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_a))
     assert r.json() == user_b
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_b)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_b))
     assert r.status == 404
     assert r.json()["detail"] == "User not found"
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_b)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_b))
     assert r.json() == user_a
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_a)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_a))
     assert r.status == 404
     assert r.json()["detail"] == "User not found"
 
@@ -640,33 +627,23 @@ async def test_get_should_only_allow_access_to_same_provider_and_org() -> None:
     user_a = (await create_scim_user(d, token_b, {"userName": "user-a"})).json()
     user_b = (await create_scim_user(d, token_a, {"userName": "user-b"})).json()
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_a)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_a))
     assert r.json() == user_b
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_b)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_b['id']}", headers=bearer(token_b))
     assert r.status == 404
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_b)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_b))
     assert r.json() == user_a
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_a)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{user_a['id']}", headers=bearer(token_a))
     assert r.status == 404
 
 
 async def test_get_should_return_not_found_for_missing_users() -> None:
     h = Harness()
     token = await h.scim_token()
-    r = await h.driver().request(
-        "GET", "/scim/v2/Users/missing", headers=bearer(token)
-    )
+    r = await h.driver().request("GET", "/scim/v2/Users/missing", headers=bearer(token))
     assert r.status == 404
     assert r.json() == {
         "detail": "User not found",
@@ -687,13 +664,9 @@ async def test_should_delete_an_existing_user() -> None:
     token = await h.scim_token()
     d = h.driver()
     new_user = (await create_scim_user(d, token, {"userName": "the-username"})).json()
-    r = await d.request(
-        "DELETE", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token)
-    )
+    r = await d.request("DELETE", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token))
     assert r.status == 200  # 204 upstream; router emits 200
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{new_user['id']}", headers=bearer(token))
     assert r.status == 404
     assert r.json()["detail"] == "User not found"
 
@@ -712,9 +685,7 @@ async def test_delete_should_not_allow_anonymous_access() -> None:
 async def test_should_not_delete_a_missing_user() -> None:
     h = Harness()
     token = await h.scim_token()
-    r = await h.driver().request(
-        "DELETE", "/scim/v2/Users/missing", headers=bearer(token)
-    )
+    r = await h.driver().request("DELETE", "/scim/v2/Users/missing", headers=bearer(token))
     assert r.status == 404
     assert r.json()["detail"] == "User not found"
 
@@ -787,33 +758,23 @@ async def test_should_clear_secondary_storage_sessions_when_deleting_a_user() ->
     )
     victim_id = created.json()["id"]
 
-    rows = await db.find_many(
-        model="session", where=(Where(field="userId", value=victim_id),)
-    )
+    rows = await db.find_many(model="session", where=(Where(field="userId", value=victim_id),))
     victim_token = rows[0]["token"]
     # Seed secondary storage as a session provider would (see note above).
     store[victim_token] = victim_id
     assert victim_token in store
 
-    await admin.request(
-        "DELETE", f"/scim/v2/Users/{victim_id}", headers=bearer(token)
-    )
+    await admin.request("DELETE", f"/scim/v2/Users/{victim_id}", headers=bearer(token))
     assert victim_token not in store
 
 
 async def test_should_work_with_a_default_scim_provider() -> None:
     # base64url("the-scim-token:the-scim-provider")
-    scim_token = (
-        base64.urlsafe_b64encode(b"the-scim-token:the-scim-provider")
-        .rstrip(b"=")
-        .decode()
-    )
+    scim_token = base64.urlsafe_b64encode(b"the-scim-token:the-scim-provider").rstrip(b"=").decode()
     h = Harness(
         SCIMOptions(
             default_scim=(
-                SCIMProvider(
-                    provider_id="the-scim-provider", scim_token="the-scim-token"
-                ),
+                SCIMProvider(provider_id="the-scim-provider", scim_token="the-scim-token"),
             )
         )
     )
@@ -821,9 +782,7 @@ async def test_should_work_with_a_default_scim_provider() -> None:
     created = (await create_scim_user(d, scim_token, {"userName": "the-username"})).json()
     assert created["id"]
 
-    r = await d.request(
-        "GET", f"/scim/v2/Users/{created['id']}", headers=bearer(scim_token)
-    )
+    r = await d.request("GET", f"/scim/v2/Users/{created['id']}", headers=bearer(scim_token))
     assert r.json() == created
 
     r = await d.request("GET", "/scim/v2/Users", headers=bearer(scim_token))
@@ -837,9 +796,7 @@ async def test_should_work_with_a_default_scim_provider() -> None:
     )
     assert r.json()["userName"] == "new-username"
 
-    r = await d.request(
-        "DELETE", f"/scim/v2/Users/{created['id']}", headers=bearer(scim_token)
-    )
+    r = await d.request("DELETE", f"/scim/v2/Users/{created['id']}", headers=bearer(scim_token))
     assert r.status == 200
 
 
@@ -847,9 +804,7 @@ async def test_default_provider_should_reject_invalid_scim_tokens() -> None:
     h = Harness(
         SCIMOptions(
             default_scim=(
-                SCIMProvider(
-                    provider_id="the-scim-provider", scim_token="the-scim-token"
-                ),
+                SCIMProvider(provider_id="the-scim-provider", scim_token="the-scim-token"),
             )
         )
     )
@@ -870,9 +825,7 @@ async def test_default_provider_should_reject_invalid_scim_tokens() -> None:
 
 async def test_generate_token_should_require_user_session() -> None:
     h = Harness()
-    r = await h.driver().request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await h.driver().request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     assert r.status == 401
 
 
@@ -891,9 +844,7 @@ async def test_generate_should_fail_if_user_not_in_org() -> None:
 async def test_generate_should_fail_on_invalid_provider() -> None:
     h = Harness(SCIMOptions(store_scim_token="plain"))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the:provider"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the:provider"})
     assert r.status == 400
     assert r.json()["message"] == "Provider id contains forbidden characters"
 
@@ -909,9 +860,7 @@ async def test_rejects_provider_ids_colliding_with_builtin_account_providers() -
         "anonymous",
         "siwe",
     ):
-        r = await d.request(
-            "POST", "/scim/generate-token", json_body={"providerId": reserved}
-        )
+        r = await d.request("POST", "/scim/generate-token", json_body={"providerId": reserved})
         assert r.status == 400
         assert (
             r.json()["message"]
@@ -948,9 +897,7 @@ async def test_rejects_provider_ids_colliding_with_social_providers() -> None:
             "name": "Social User",
         },
     )
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "google"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "google"})
     assert r.status == 400
     assert (
         r.json()["message"]
@@ -961,9 +908,7 @@ async def test_rejects_provider_ids_colliding_with_social_providers() -> None:
 async def test_should_generate_a_new_scim_token_plain() -> None:
     h = Harness(SCIMOptions(store_scim_token="plain"))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     assert r.status == 200
     token = r.json()["scimToken"]
     assert isinstance(token, str)
@@ -974,9 +919,7 @@ async def test_should_generate_a_new_scim_token_plain() -> None:
 async def test_should_generate_a_new_scim_token_hashed() -> None:
     h = Harness(SCIMOptions(store_scim_token="hashed"))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     token = r.json()["scimToken"]
     created = await create_scim_user(h.driver(), token, {"userName": "the-username"})
     assert created.status == 200, created.json()
@@ -985,9 +928,7 @@ async def test_should_generate_a_new_scim_token_hashed() -> None:
 async def test_should_generate_a_new_scim_token_custom_hash() -> None:
     h = Harness(SCIMOptions(store_scim_token={"hash": lambda v: v + "hello"}))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     token = r.json()["scimToken"]
     created = await create_scim_user(h.driver(), token, {"userName": "the-username"})
     assert created.status == 200, created.json()
@@ -996,24 +937,16 @@ async def test_should_generate_a_new_scim_token_custom_hash() -> None:
 async def test_should_generate_a_new_scim_token_encrypted() -> None:
     h = Harness(SCIMOptions(store_scim_token="encrypted"))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     token = r.json()["scimToken"]
     created = await create_scim_user(h.driver(), token, {"userName": "the-username"})
     assert created.status == 200, created.json()
 
 
 async def test_should_generate_a_new_scim_token_custom_encryption() -> None:
-    h = Harness(
-        SCIMOptions(
-            store_scim_token={"encrypt": lambda v: v, "decrypt": lambda v: v}
-        )
-    )
+    h = Harness(SCIMOptions(store_scim_token={"encrypt": lambda v: v, "decrypt": lambda v: v}))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     token = r.json()["scimToken"]
     created = await create_scim_user(h.driver(), token, {"userName": "the-username"})
     assert created.status == 200, created.json()
@@ -1036,9 +969,7 @@ async def test_should_execute_hooks_before_scim_token_generation() -> None:
     def before(payload: dict) -> None:
         member = payload.get("member")
         if member and member.get("role") == "owner":
-            raise _Forbidden(
-                "You do not have enough privileges to generate a SCIM token"
-            )
+            raise _Forbidden("You do not have enough privileges to generate a SCIM token")
 
     from kernia.error import APIError
 
@@ -1055,10 +986,7 @@ async def test_should_execute_hooks_before_scim_token_generation() -> None:
         json_body={"providerId": "the id", "organizationId": org["id"]},
     )
     assert r.status == 403
-    assert (
-        r.json()["message"]
-        == "You do not have enough privileges to generate a SCIM token"
-    )
+    assert r.json()["message"] == "You do not have enough privileges to generate a SCIM token"
 
 
 async def test_should_execute_hooks_after_scim_token_generation() -> None:
@@ -1067,13 +995,9 @@ async def test_should_execute_hooks_after_scim_token_generation() -> None:
     def after(payload: dict) -> None:
         seen["scimToken"] = payload["scimProvider"]["scimToken"]
 
-    h = Harness(
-        SCIMOptions(store_scim_token="plain", after_scim_token_generated=after)
-    )
+    h = Harness(SCIMOptions(store_scim_token="plain", after_scim_token_generated=after))
     d = await h.cookie_driver()
-    r = await d.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "the id"}
-    )
+    r = await d.request("POST", "/scim/generate-token", json_body={"providerId": "the id"})
     assert r.status == 200
     assert isinstance(r.json()["scimToken"], str)
     assert isinstance(seen["scimToken"], str)
@@ -1109,14 +1033,9 @@ async def test_should_deny_regenerate_when_provider_belongs_to_another_org() -> 
     )
     assert r.status == 200
 
-    r = await d2.request(
-        "POST", "/scim/generate-token", json_body={"providerId": "other-org"}
-    )
+    r = await d2.request("POST", "/scim/generate-token", json_body={"providerId": "other-org"})
     assert r.status == 403
-    assert (
-        r.json()["message"]
-        == "You must be a member of the organization to access this provider"
-    )
+    assert r.json()["message"] == "You must be a member of the organization to access this provider"
 
 
 # -- list-provider-connections ------------------------------------------------
@@ -1180,9 +1099,7 @@ async def test_get_connection_returns_details_when_org_member() -> None:
     org = await h.register_organization("scim-get-org", driver=d)
     await h.scim_token("my-provider", org["id"], driver=d)
 
-    r = await d.request(
-        "GET", "/scim/get-provider-connection", query="providerId=my-provider"
-    )
+    r = await d.request("GET", "/scim/get-provider-connection", query="providerId=my-provider")
     assert r.status == 200
     assert r.json()["providerId"] == "my-provider"
     assert r.json()["organizationId"] == org["id"]
@@ -1192,9 +1109,7 @@ async def test_get_connection_returns_own_non_org_provider() -> None:
     h = Harness()
     d = await h.cookie_driver()
     await h.scim_token("no-org-provider", driver=d)
-    r = await d.request(
-        "GET", "/scim/get-provider-connection", query="providerId=no-org-provider"
-    )
+    r = await d.request("GET", "/scim/get-provider-connection", query="providerId=no-org-provider")
     assert r.status == 200
     assert r.json()["providerId"] == "no-org-provider"
     assert r.json()["organizationId"] is None
@@ -1233,10 +1148,7 @@ async def test_get_connection_403_when_provider_belongs_to_another_org() -> None
         query="providerId=other-org-provider",
     )
     assert r.status == 403
-    assert (
-        r.json()["message"]
-        == "You must be a member of the organization to access this provider"
-    )
+    assert r.json()["message"] == "You must be a member of the organization to access this provider"
 
 
 async def test_get_connection_403_when_creator_removed_from_org() -> None:
@@ -1269,23 +1181,16 @@ async def test_get_connection_403_when_creator_removed_from_org() -> None:
         query="providerId=owner-removed-provider",
     )
     assert r.status == 403
-    assert (
-        r.json()["message"]
-        == "You must be a member of the organization to access this provider"
-    )
+    assert r.json()["message"] == "You must be a member of the organization to access this provider"
 
     r = await da.request("GET", "/scim/list-provider-connections")
-    assert not any(
-        p["providerId"] == "owner-removed-provider" for p in r.json()["providers"]
-    )
+    assert not any(p["providerId"] == "owner-removed-provider" for p in r.json()["providers"])
 
 
 async def test_get_connection_404_for_unknown_provider_id() -> None:
     h = Harness()
     d = await h.cookie_driver()
-    r = await d.request(
-        "GET", "/scim/get-provider-connection", query="providerId=unknown"
-    )
+    r = await d.request("GET", "/scim/get-provider-connection", query="providerId=unknown")
     assert r.status == 404
     assert r.json()["message"] == "SCIM provider not found"
 
@@ -1311,9 +1216,7 @@ async def test_delete_connection_org_scoped_and_invalidates_token() -> None:
     assert not any(p["providerId"] == "my-provider" for p in after.json()["providers"])
 
     # token is now invalid
-    r = await h.driver().request(
-        "GET", "/scim/v2/Users/any", headers=bearer(token)
-    )
+    r = await h.driver().request("GET", "/scim/v2/Users/any", headers=bearer(token))
     assert r.status == 401
 
 
@@ -1334,10 +1237,7 @@ async def test_delete_connection_403_when_provider_belongs_to_another_org() -> N
         json_body={"providerId": "other-org-del"},
     )
     assert r.status == 403
-    assert (
-        r.json()["message"]
-        == "You must be a member of the organization to access this provider"
-    )
+    assert r.json()["message"] == "You must be a member of the organization to access this provider"
 
 
 async def test_delete_connection_404_for_unknown_provider_id() -> None:
@@ -1369,9 +1269,7 @@ async def test_delete_connection_denies_non_owner_of_non_org_provider() -> None:
 # -- role-based authorization -------------------------------------------------
 
 
-async def _add_member(
-    h: Harness, org_id: str, user_id: str, role: str | list[str]
-) -> None:
+async def _add_member(h: Harness, org_id: str, user_id: str, role: str | list[str]) -> None:
     role_str = ",".join(role) if isinstance(role, list) else role
     await h.db.create(
         model="member",
@@ -1416,9 +1314,7 @@ async def test_should_allow_org_provider_access_for_multiple_roles() -> None:
     owner = await h.cookie_driver("user1@policy.test", "password", "User One")
     member = await h.cookie_driver("user2@policy.test", "password", "User Two")
     org = await h.register_organization("multi-role-org", driver=owner)
-    await _add_member(
-        h, org["id"], await h.session_user_id(member), ["member", "admin"]
-    )
+    await _add_member(h, org["id"], await h.session_user_id(member), ["member", "admin"])
 
     r = await member.request(
         "POST",
@@ -1428,9 +1324,7 @@ async def test_should_allow_org_provider_access_for_multiple_roles() -> None:
     assert r.status == 200
 
     r = await member.request("GET", "/scim/list-provider-connections")
-    assert any(
-        p["providerId"] == "multi-role-provider" for p in r.json()["providers"]
-    )
+    assert any(p["providerId"] == "multi-role-provider" for p in r.json()["providers"])
 
     r = await member.request(
         "GET",
@@ -1515,9 +1409,7 @@ async def test_should_filter_org_providers_by_role_in_list_endpoint() -> None:
     assert any(p["providerId"] == "list-role-provider" for p in r.json()["providers"])
 
     r = await member.request("GET", "/scim/list-provider-connections")
-    assert not any(
-        p["providerId"] == "list-role-provider" for p in r.json()["providers"]
-    )
+    assert not any(p["providerId"] == "list-role-provider" for p in r.json()["providers"])
 
 
 def _ownership_on():
@@ -1566,9 +1458,7 @@ async def test_should_partially_update_a_user_resource(op: str) -> None:
     )
     assert r.status == 200, r.json()  # 204 upstream; router emits 200
 
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["active"] is True
     assert updated["displayName"] == "Daniel Perez"
     assert updated["emails"] == [{"primary": True, "value": "other-username"}]
@@ -1600,9 +1490,7 @@ async def test_should_partially_update_with_mixed_operations() -> None:
             {"op": "add", "path": "/name/formatted", "value": "Daniel Lopez"},
         ],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["displayName"] == "Daniel Lopez"
     assert updated["emails"] == [{"primary": True, "value": "other-username"}]
     assert updated["externalId"] == "external-username"
@@ -1625,9 +1513,7 @@ async def test_should_partially_update_multiple_name_sub_attributes(op: str) -> 
             {"op": op, "path": "/name/familyName", "value": "Value"},
         ],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["name"]["formatted"] == "Updated Value"
 
 
@@ -1647,9 +1533,7 @@ async def test_should_update_nested_object_values_with_path_prefix(op: str) -> N
             {"op": op, "path": "userName", "value": "nested-test-user-updated"},
         ],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["name"]["formatted"] == "Nested User"
     assert updated["displayName"] == "Nested User"
     assert updated["userName"] == "nested-test-user-updated"
@@ -1673,9 +1557,7 @@ async def test_should_support_operations_without_explicit_path(op: str) -> None:
             }
         ],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["name"]["formatted"] == "No Path Name"
     assert updated["userName"] == "username"
 
@@ -1695,9 +1577,7 @@ async def test_should_support_dot_notation_in_paths() -> None:
             {"op": "add", "path": "userName", "value": "Username"},
         ],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["name"]["formatted"] == "User Dot"
     assert updated["userName"] == "username"
 
@@ -1714,9 +1594,7 @@ async def test_should_handle_operation_case_insensitively(op: str) -> None:
         user["id"],
         [{"op": op.upper(), "path": "name.formatted", "value": "user-case"}],
     )
-    updated = (
-        await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))
-    ).json()
+    updated = (await d.request("GET", f"/scim/v2/Users/{user['id']}", headers=bearer(token))).json()
     assert updated["name"]["formatted"] == "user-case"
 
 
@@ -1766,8 +1644,7 @@ async def test_patch_should_ignore_non_existing_operation() -> None:
     assert r.json() == {
         "code": "VALIDATION_ERROR",
         "message": (
-            "[body.Operations.0.op] Invalid option: "
-            'expected one of "replace"|"add"|"remove"'
+            '[body.Operations.0.op] Invalid option: expected one of "replace"|"add"|"remove"'
         ),
     }
 
@@ -1808,9 +1685,7 @@ async def test_patch_should_not_allow_anonymous_access() -> None:
         "/scim/v2/Users/missing",
         json_body={
             "schemas": [PATCH_OP],
-            "Operations": [
-                {"op": "replace", "path": "/externalId", "value": "external-username"}
-            ],
+            "Operations": [{"op": "replace", "path": "/externalId", "value": "external-username"}],
         },
     )
     assert r.status == 401

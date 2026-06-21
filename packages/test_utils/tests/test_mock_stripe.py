@@ -7,7 +7,6 @@ import hmac
 import json
 
 import httpx
-
 from kernia_test_utils import MockStripe
 
 

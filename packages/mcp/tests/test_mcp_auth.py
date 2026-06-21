@@ -89,9 +89,7 @@ def test_mcp_auth_builds_remote_provider(setup) -> None:
 
 async def test_verifier_accepts_valid_token(setup) -> None:
     auth, _ = setup
-    verifier = BetterAuthTokenVerifier(
-        auth.context, resource_base_url="https://mcp.test/"
-    )
+    verifier = BetterAuthTokenVerifier(auth.context, resource_base_url="https://mcp.test/")
     token = await _mint(auth, scope="mcp:read", resource="https://mcp.test/")
     access = await verifier.verify_token(token)
     assert access is not None
@@ -108,9 +106,7 @@ async def test_verifier_rejects_forged_token(setup) -> None:
 async def test_verifier_rejects_wrong_resource(setup) -> None:
     auth, _ = setup
     # Verifier protects mcp.test, but the token's audience is another resource.
-    verifier = BetterAuthTokenVerifier(
-        auth.context, resource_base_url="https://mcp.test/"
-    )
+    verifier = BetterAuthTokenVerifier(auth.context, resource_base_url="https://mcp.test/")
     token = await _mint(auth, scope="mcp:read", resource="https://other.test/")
     assert await verifier.verify_token(token) is None
 
@@ -138,9 +134,7 @@ async def test_authorize_endpoint_issues_resource_bound_token(setup) -> None:
     )
     assert found is not None
     token = await _mint(auth, scope="mcp:read", resource="https://mcp.test/")
-    verifier = BetterAuthTokenVerifier(
-        auth.context, resource_base_url="https://mcp.test/"
-    )
+    verifier = BetterAuthTokenVerifier(auth.context, resource_base_url="https://mcp.test/")
     access = await verifier.verify_token(token)
     assert access is not None
     assert access.resource == "https://mcp.test/"

@@ -198,9 +198,7 @@ async def test_links_when_require_local_email_verified_opted_out(idp: MockIdP) -
         },
     )
     d.cookies.clear()
-    token = idp.id_token_for(
-        "google_sub_opt", email="opted-out@example.com", email_verified=True
-    )
+    token = idp.id_token_for("google_sub_opt", email="opted-out@example.com", email_verified=True)
     r = await d.request("POST", "/one-tap/callback", json_body={"idToken": token})
     assert r.status == 200, r.json()
     accounts = await auth.context.adapter.find_many(
@@ -228,9 +226,7 @@ async def test_honors_disable_implicit_linking(idp: MockIdP) -> None:
         update={"emailVerified": True},
     )
     d.cookies.clear()
-    token = idp.id_token_for(
-        "google_sub_nolink", email="no-link@example.com", email_verified=True
-    )
+    token = idp.id_token_for("google_sub_nolink", email="no-link@example.com", email_verified=True)
     r = await d.request("POST", "/one-tap/callback", json_body={"idToken": token})
     assert r.status == 401
     accounts = await auth.context.adapter.find_many(

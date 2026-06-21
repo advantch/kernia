@@ -22,9 +22,11 @@ async def _get_user_info(tokens: Mapping[str, Any]) -> Mapping[str, Any] | None:
         if r.status_code != 200:
             return None
         raw = r.json()
-    name = raw.get("name") or " ".join(
-        p for p in (raw.get("given_name"), raw.get("family_name")) if p
-    ).strip() or None
+    name = (
+        raw.get("name")
+        or " ".join(p for p in (raw.get("given_name"), raw.get("family_name")) if p).strip()
+        or None
+    )
     return {
         "id": raw.get("sub"),
         "name": name,
@@ -52,12 +54,8 @@ def microsoft_entra_id(
         client_secret=client_secret,
         scopes=scopes,
         redirect_uri=redirect_uri,
-        authorization_url=(
-            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
-        ),
-        token_url=(
-            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-        ),
+        authorization_url=(f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"),
+        token_url=(f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"),
         user_info_url="https://graph.microsoft.com/oidc/userinfo",
         pkce=pkce,
         disable_implicit_sign_up=disable_implicit_sign_up,

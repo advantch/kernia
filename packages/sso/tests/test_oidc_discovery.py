@@ -130,17 +130,13 @@ class TestValidateDiscoveryUrl:
     def test_reject_invalid_url(self) -> None:
         with pytest.raises(DiscoveryError):
             validate_discovery_url("not-a-url", _always_trusted)
-        with pytest.raises(
-            DiscoveryError, match='The url "discoveryEndpoint" must be valid'
-        ):
+        with pytest.raises(DiscoveryError, match='The url "discoveryEndpoint" must be valid'):
             validate_discovery_url("not-a-url", _always_trusted)
 
     def test_reject_non_http_protocols(self) -> None:
         with pytest.raises(DiscoveryError):
             validate_discovery_url("ftp://example.com/config", _always_trusted)
-        with pytest.raises(
-            DiscoveryError, match="must use the http or https supported protocols"
-        ):
+        with pytest.raises(DiscoveryError, match="must use the http or https supported protocols"):
             validate_discovery_url("ftp://example.com/config", _always_trusted)
 
     def test_invalid_url_code_and_details(self) -> None:
@@ -189,9 +185,7 @@ class TestValidateDiscoveryDocument:
 
     def test_incomplete_missing_issuer(self) -> None:
         with pytest.raises(DiscoveryError) as exc:
-            validate_discovery_document(
-                create_mock_discovery_document(issuer=""), self.issuer
-            )
+            validate_discovery_document(create_mock_discovery_document(issuer=""), self.issuer)
         assert exc.value.code == "discovery_incomplete"
         assert "issuer" in exc.value.details["missingFields"]
 
@@ -213,9 +207,7 @@ class TestValidateDiscoveryDocument:
 
     def test_incomplete_missing_jwks_uri(self) -> None:
         with pytest.raises(DiscoveryError) as exc:
-            validate_discovery_document(
-                create_mock_discovery_document(jwks_uri=""), self.issuer
-            )
+            validate_discovery_document(create_mock_discovery_document(jwks_uri=""), self.issuer)
         assert exc.value.code == "discovery_incomplete"
         assert "jwks_uri" in exc.value.details["missingFields"]
 
@@ -300,9 +292,7 @@ class TestSelectTokenEndpointAuthMethod:
         assert select_token_endpoint_auth_method(doc) == "client_secret_basic"
 
     def test_default_basic_if_not_specified(self) -> None:
-        doc = create_mock_discovery_document(
-            token_endpoint_auth_methods_supported=None
-        )
+        doc = create_mock_discovery_document(token_endpoint_auth_methods_supported=None)
         assert select_token_endpoint_auth_method(doc) == "client_secret_basic"
 
     def test_default_basic_for_empty_array(self) -> None:
@@ -357,9 +347,7 @@ class TestNormalizeDiscoveryUrls:
 
     def test_reject_invalid_discovery_urls(self) -> None:
         doc = create_mock_discovery_document(authorization_endpoint="/oauth2/authorize")
-        with pytest.raises(
-            DiscoveryError, match='The url "authorization_endpoint" must be valid'
-        ):
+        with pytest.raises(DiscoveryError, match='The url "authorization_endpoint" must be valid'):
             normalize_discovery_urls(doc, "not-url", _always_trusted)
 
     def test_reject_untrusted_discovery_urls(self) -> None:
@@ -457,13 +445,8 @@ class TestNormalizeUrl:
             ("//oauth2/token", "https://idp.example.com/base//"),
         ],
     )
-    def test_resolve_relative_preserving_base_path(
-        self, endpoint: str, issuer: str
-    ) -> None:
-        assert (
-            normalize_url("url", endpoint, issuer)
-            == "https://idp.example.com/base/oauth2/token"
-        )
+    def test_resolve_relative_preserving_base_path(self, endpoint: str, issuer: str) -> None:
+        assert normalize_url("url", endpoint, issuer) == "https://idp.example.com/base/oauth2/token"
 
     def test_reject_invalid_endpoint_urls(self) -> None:
         with pytest.raises(DiscoveryError, match='The url "url" must be valid'):
@@ -497,9 +480,7 @@ class TestNeedsRuntimeDiscovery:
 
     def test_missing_jwks_endpoint(self) -> None:
         assert (
-            needs_runtime_discovery(
-                {"tokenEndpoint": "https://idp.example.com/oauth2/token"}
-            )
+            needs_runtime_discovery({"tokenEndpoint": "https://idp.example.com/oauth2/token"})
             is True
         )
 
@@ -545,9 +526,7 @@ class TestFetchDiscoveryDocument:
         assert fetch_queue.calls[0][0] == DISC_URL
 
     def test_not_found_404(self, fetch_queue: _FetchQueue) -> None:
-        fetch_queue.push(
-            FetchResult(data=None, error={"status": 404, "message": "Not Found"})
-        )
+        fetch_queue.push(FetchResult(data=None, error={"status": 404, "message": "Not Found"}))
         with pytest.raises(DiscoveryError) as exc:
             fetch_discovery_document(DISC_URL)
         assert exc.value.code == "discovery_not_found"
@@ -589,9 +568,7 @@ class TestFetchDiscoveryDocument:
         assert exc.value.code == "discovery_invalid_json"
 
     def test_invalid_json_for_parse_errors(self, fetch_queue: _FetchQueue) -> None:
-        fetch_queue.push(
-            FetchResult(data="<!DOCTYPE html><html>Not JSON</html>", error=None)
-        )
+        fetch_queue.push(FetchResult(data="<!DOCTYPE html><html>Not JSON</html>", error=None))
         with pytest.raises(DiscoveryError) as exc:
             fetch_discovery_document(DISC_URL)
         assert exc.value.code == "discovery_invalid_json"
@@ -630,10 +607,7 @@ class TestDiscoverOIDCConfigIntegration:
         assert result["tokenEndpoint"] == f"{issuer}/oauth2/token"
         assert result["jwksEndpoint"] == f"{issuer}/.well-known/jwks.json"
         assert result["userInfoEndpoint"] == f"{issuer}/userinfo"
-        assert (
-            result["discoveryEndpoint"]
-            == f"{issuer}/.well-known/openid-configuration"
-        )
+        assert result["discoveryEndpoint"] == f"{issuer}/.well-known/openid-configuration"
         assert result["tokenEndpointAuthentication"] == "client_secret_basic"
 
     def test_merge_existing_config_precedence(self, fetch_queue: _FetchQueue) -> None:
@@ -676,9 +650,7 @@ class TestDiscoverOIDCConfigIntegration:
         assert result["discoveryEndpoint"] == custom_endpoint
         assert fetch_queue.calls[0][0] == custom_endpoint
 
-    def test_use_discovery_endpoint_from_existing_config(
-        self, fetch_queue: _FetchQueue
-    ) -> None:
+    def test_use_discovery_endpoint_from_existing_config(self, fetch_queue: _FetchQueue) -> None:
         issuer = self.issuer
         existing_endpoint = f"{issuer}/tenant/.well-known/openid-configuration"
         fetch_queue.push(
@@ -718,12 +690,8 @@ class TestDiscoverOIDCConfigIntegration:
             discover_oidc_config(issuer=issuer, is_trusted_origin=_always_trusted)
         assert exc.value.code == "discovery_incomplete"
 
-    def test_throw_not_found_when_endpoint_missing(
-        self, fetch_queue: _FetchQueue
-    ) -> None:
-        fetch_queue.push(
-            FetchResult(data=None, error={"status": 404, "message": "Not Found"})
-        )
+    def test_throw_not_found_when_endpoint_missing(self, fetch_queue: _FetchQueue) -> None:
+        fetch_queue.push(FetchResult(data=None, error={"status": 404, "message": "Not Found"}))
         with pytest.raises(DiscoveryError) as exc:
             discover_oidc_config(issuer=self.issuer, is_trusted_origin=_always_trusted)
         assert exc.value.code == "discovery_not_found"
@@ -793,9 +761,7 @@ class TestDiscoverOIDCConfigIntegration:
         assert result["tokenEndpointAuthentication"] == "client_secret_post"
         assert result["scopesSupported"] == ["openid", "profile"]
 
-    def test_default_basic_when_only_unsupported_methods(
-        self, fetch_queue: _FetchQueue
-    ) -> None:
+    def test_default_basic_when_only_unsupported_methods(self, fetch_queue: _FetchQueue) -> None:
         issuer = self.issuer
         fetch_queue.push(
             FetchResult(
@@ -838,9 +804,7 @@ class TestDiscoverOIDCConfigIntegration:
         assert result["userInfoEndpoint"] == f"{issuer}/userinfo"
         assert result["tokenEndpointAuthentication"] == "client_secret_basic"
 
-    def test_extra_unknown_fields_and_missing_optional(
-        self, fetch_queue: _FetchQueue
-    ) -> None:
+    def test_extra_unknown_fields_and_missing_optional(self, fetch_queue: _FetchQueue) -> None:
         issuer = self.issuer
         fetch_queue.push(
             FetchResult(
@@ -929,15 +893,11 @@ class TestEnsureRuntimeDiscovery:
 
     @pytest.fixture
     def queue_default_doc(self, fetch_queue: _FetchQueue) -> _FetchQueue:
-        fetch_queue.default = FetchResult(
-            data=create_mock_discovery_document(), error=None
-        )
+        fetch_queue.default = FetchResult(data=create_mock_discovery_document(), error=None)
         return fetch_queue
 
     @pytest.mark.anyio
-    async def test_unchanged_when_not_needed(
-        self, queue_default_doc: _FetchQueue
-    ) -> None:
+    async def test_unchanged_when_not_needed(self, queue_default_doc: _FetchQueue) -> None:
         complete = {
             **self.base_config,
             "authorizationEndpoint": f"{self.issuer}/oauth2/authorize",
@@ -949,45 +909,29 @@ class TestEnsureRuntimeDiscovery:
         assert queue_default_doc.calls == []
 
     @pytest.mark.anyio
-    async def test_hydrates_missing_endpoints(
-        self, queue_default_doc: _FetchQueue
-    ) -> None:
+    async def test_hydrates_missing_endpoints(self, queue_default_doc: _FetchQueue) -> None:
         doc = create_mock_discovery_document()
-        result = await ensure_runtime_discovery(
-            self.base_config, self.issuer, _always_trusted
-        )
+        result = await ensure_runtime_discovery(self.base_config, self.issuer, _always_trusted)
         assert result["authorizationEndpoint"] == doc["authorization_endpoint"]
         assert result["tokenEndpoint"] == doc["token_endpoint"]
         assert result["jwksEndpoint"] == doc["jwks_uri"]
         assert result["userInfoEndpoint"] == doc["userinfo_endpoint"]
 
     @pytest.mark.anyio
-    async def test_preserves_existing_fields(
-        self, queue_default_doc: _FetchQueue
-    ) -> None:
-        result = await ensure_runtime_discovery(
-            self.base_config, self.issuer, _always_trusted
-        )
+    async def test_preserves_existing_fields(self, queue_default_doc: _FetchQueue) -> None:
+        result = await ensure_runtime_discovery(self.base_config, self.issuer, _always_trusted)
         assert result["clientId"] == "client-id"
         assert result["clientSecret"] == "client-secret"
         assert result["pkce"] is True
 
     @pytest.mark.anyio
     async def test_throws_when_discovery_fails(self, fetch_queue: _FetchQueue) -> None:
-        fetch_queue.default = FetchResult(
-            data=None, error={"message": "Network error"}
-        )
+        fetch_queue.default = FetchResult(data=None, error={"message": "Network error"})
         with pytest.raises(DiscoveryError):
-            await ensure_runtime_discovery(
-                self.base_config, self.issuer, _always_trusted
-            )
+            await ensure_runtime_discovery(self.base_config, self.issuer, _always_trusted)
 
     @pytest.mark.anyio
-    async def test_throws_for_untrusted_origin(
-        self, queue_default_doc: _FetchQueue
-    ) -> None:
+    async def test_throws_for_untrusted_origin(self, queue_default_doc: _FetchQueue) -> None:
         with pytest.raises(DiscoveryError) as exc:
-            await ensure_runtime_discovery(
-                self.base_config, self.issuer, lambda _u: False
-            )
+            await ensure_runtime_discovery(self.base_config, self.issuer, lambda _u: False)
         assert exc.value.code == "discovery_untrusted_origin"

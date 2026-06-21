@@ -14,6 +14,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from kernia.types.adapter import FieldDef, ModelDef
 from kernia.types.context import AuthContext
+from kernia.types.db_hooks import DatabaseHooks
 from kernia.types.endpoint import AuthEndpoint
 from kernia.types.hooks import (
     Middleware,

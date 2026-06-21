@@ -7,7 +7,6 @@ Exercises the routes via the ASGI driver end-to-end against a memory adapter.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.init_options import KerniaOptions
@@ -28,7 +27,9 @@ def driver() -> ASGIDriver:
     return ASGIDriver(app=auth.router.mount())
 
 
-async def _sign_up(driver: ASGIDriver, email: str = "u@example.com", pw: str = "correcthorse") -> None:
+async def _sign_up(
+    driver: ASGIDriver, email: str = "u@example.com", pw: str = "correcthorse"
+) -> None:
     r = await driver.request(
         "POST",
         "/sign-up/email",
@@ -75,7 +76,9 @@ async def test_revoke_other_sessions(driver: ASGIDriver) -> None:
     )
     d1 = ASGIDriver(app=auth.router.mount())
     d2 = ASGIDriver(app=auth.router.mount())
-    await d1.request("POST", "/sign-up/email", json_body={"email": "x@example.com", "password": "longpasswd"})
+    await d1.request(
+        "POST", "/sign-up/email", json_body={"email": "x@example.com", "password": "longpasswd"}
+    )
     await d2.request(
         "POST", "/sign-in/email", json_body={"email": "x@example.com", "password": "longpasswd"}
     )

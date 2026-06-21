@@ -20,9 +20,9 @@ from kernia.plugins.jwt.plugin import (
 )
 
 __all__ = [
-    "jwt",
     "JwtOptions",
     "issue_jwt",
+    "jwt",
     "sign_jwt",
     "to_exp_jwt",
     "verify_local_jwt",

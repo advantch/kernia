@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from kernia.auth import init
 from kernia.i18n import i18n
 from kernia.plugins import email_and_password
@@ -52,9 +50,7 @@ async def _trigger_duplicate_signup(d: ASGIDriver, *, headers=None) -> dict:
 
 async def test_header_detection_translates_message() -> None:
     d = _driver(detection=("header",))
-    body = await _trigger_duplicate_signup(
-        d, headers={"accept-language": "fr-FR,fr;q=0.9"}
-    )
+    body = await _trigger_duplicate_signup(d, headers={"accept-language": "fr-FR,fr;q=0.9"})
     assert body["code"] == "EMAIL_ALREADY_IN_USE"
     assert body["message"] == TRANSLATIONS["fr"]["EMAIL_ALREADY_IN_USE"]
 
@@ -83,9 +79,7 @@ async def test_cookie_detection_translates_message() -> None:
 
 async def test_missing_locale_falls_back_to_default() -> None:
     d = _driver(detection=("header",))
-    body = await _trigger_duplicate_signup(
-        d, headers={"accept-language": "ja-JP"}
-    )
+    body = await _trigger_duplicate_signup(d, headers={"accept-language": "ja-JP"})
     assert body["code"] == "EMAIL_ALREADY_IN_USE"
     # default_locale="en" → English fallback.
     assert body["message"] == TRANSLATIONS["en"]["EMAIL_ALREADY_IN_USE"]

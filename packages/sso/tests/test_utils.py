@@ -99,10 +99,7 @@ class TestGetHostnameFromDomain:
         assert get_hostname_from_domain("auth.github.com") == "auth.github.com"
 
     def test_url_with_path(self) -> None:
-        assert (
-            get_hostname_from_domain("https://github.com/path/to/resource")
-            == "github.com"
-        )
+        assert get_hostname_from_domain("https://github.com/path/to/resource") == "github.com"
 
     def test_empty_string_returns_none(self) -> None:
         assert get_hostname_from_domain("") is None

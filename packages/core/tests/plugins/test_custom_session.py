@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import with_custom_session
 from kernia.types.init_options import KerniaOptions

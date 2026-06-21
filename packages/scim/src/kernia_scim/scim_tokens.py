@@ -53,9 +53,7 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-async def store_scim_token(
-    ctx: EndpointContext, opts: SCIMOptions, scim_token: str
-) -> str:
+async def store_scim_token(ctx: EndpointContext, opts: SCIMOptions, scim_token: str) -> str:
     """Return the at-rest representation of ``scim_token`` for this config."""
     store = opts.store_scim_token
     if store == "encrypted":

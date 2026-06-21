@@ -15,9 +15,7 @@ from typing import Any
 PasskeyRegistrationUser = dict  # {"id": str, "name": str, "displayName"?: str}
 
 # Extensions resolver: either a literal dict or a callable returning one.
-PasskeyExtensionsResolver = (
-    dict | Callable[..., Awaitable[dict | None] | dict | None]
-)
+PasskeyExtensionsResolver = dict | Callable[..., Awaitable[dict | None] | dict | None]
 
 
 @dataclass(frozen=True, slots=True)

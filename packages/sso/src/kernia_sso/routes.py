@@ -318,9 +318,7 @@ class GetProviderQuery(BaseModel):
 
 async def _get_provider(ctx: EndpointContext) -> dict[str, Any]:
     """Return sanitized details for one provider, gated by ownership/org-admin."""
-    provider_id = ctx.request.query.get("providerId") or ctx.request.query.get(
-        "provider_id"
-    )
+    provider_id = ctx.request.query.get("providerId") or ctx.request.query.get("provider_id")
     if isinstance(provider_id, list):
         provider_id = provider_id[0]
     if not provider_id:
@@ -441,8 +439,7 @@ def sanitize_provider(row: dict[str, Any], base_url: str) -> dict[str, Any]:
 
 def _org_plugin_present(ctx: EndpointContext) -> bool:
     return any(
-        getattr(p, "id", None) == "organization"
-        for p in getattr(ctx.auth, "plugins", []) or []
+        getattr(p, "id", None) == "organization" for p in getattr(ctx.auth, "plugins", []) or []
     )
 
 
@@ -454,9 +451,7 @@ def _has_org_admin_role(member: dict[str, Any]) -> bool:
     return any(r.strip() in _ADMIN_ROLES for r in role.split(","))
 
 
-async def _is_org_admin(
-    ctx: EndpointContext, user_id: str, organization_id: str
-) -> bool:
+async def _is_org_admin(ctx: EndpointContext, user_id: str, organization_id: str) -> bool:
     member = await ctx.auth.adapter.find_one(
         model="member",
         where=(
@@ -467,9 +462,7 @@ async def _is_org_admin(
     return _has_org_admin_role(member) if member else False
 
 
-async def _check_provider_access(
-    ctx: EndpointContext, provider_id: str
-) -> dict[str, Any]:
+async def _check_provider_access(ctx: EndpointContext, provider_id: str) -> dict[str, Any]:
     """Load a provider, enforcing ownership / org-admin access (mirrors upstream).
 
     A provider with no ``organizationId`` is owned by the user who registered it
@@ -605,27 +598,20 @@ async def _oidc_sign_in(ctx: EndpointContext) -> RedirectResponse:
         raise APIError(400, "SSO_INVALID_KIND", message="provider is not OIDC")
 
     config = oidc_helpers.parse_config(provider.get("oidcConfig"))
-    callback = (
-        ctx.request.query.get("callback")
-        or ctx.request.query.get("callbackURL")
-        or "/"
-    )
+    callback = ctx.request.query.get("callback") or ctx.request.query.get("callbackURL") or "/"
     if isinstance(callback, list):
         callback = callback[0]
 
     client = _http_client(ctx)
     try:
-        discovery = await oidc_helpers.discover(
-            config["issuer"], http_client=client
-        )
+        discovery = await oidc_helpers.discover(config["issuer"], http_client=client)
     finally:
         if client is not None:
             await client.aclose()
 
     state = secrets.token_urlsafe(24)
     redirect_uri = (
-        config.get("redirectUri")
-        or f"{ctx.auth.base_url}/sso/oidc/callback/{provider_id}"
+        config.get("redirectUri") or f"{ctx.auth.base_url}/sso/oidc/callback/{provider_id}"
     )
 
     # Persist state -> {provider_id, callback, code_verifier?} in verification table.
@@ -633,20 +619,19 @@ async def _oidc_sign_in(ctx: EndpointContext) -> RedirectResponse:
         model="verification",
         data={
             "identifier": f"sso:oidc-state:{state}",
-            "value": json.dumps({
-                "provider_id": provider_id,
-                "callback": callback,
-                "redirect_uri": redirect_uri,
-            }),
+            "value": json.dumps(
+                {
+                    "provider_id": provider_id,
+                    "callback": callback,
+                    "redirect_uri": redirect_uri,
+                }
+            ),
             "expiresAt": _now() + 600,
             "createdAt": _now(),
             "updatedAt": _now(),
         },
     )
-    authorize_endpoint = (
-        config.get("authorizationEndpoint")
-        or discovery["authorization_endpoint"]
-    )
+    authorize_endpoint = config.get("authorizationEndpoint") or discovery["authorization_endpoint"]
     url = oidc_helpers.build_authorize_url(
         authorization_endpoint=authorize_endpoint,
         client_id=config["clientId"],
@@ -674,9 +659,7 @@ async def _oidc_callback(ctx: EndpointContext) -> dict[str, Any]:
     if consume_one is not None:
         verification = await consume_one(model="verification", where=where)
     else:
-        verification = await ctx.auth.adapter.find_one(
-            model="verification", where=where
-        )
+        verification = await ctx.auth.adapter.find_one(model="verification", where=where)
         if verification is not None:
             await ctx.auth.adapter.delete(model="verification", where=where)
     if verification is None:
@@ -693,9 +676,7 @@ async def _oidc_callback(ctx: EndpointContext) -> dict[str, Any]:
 
     client = _http_client(ctx)
     try:
-        discovery = await oidc_helpers.discover(
-            config["issuer"], http_client=client
-        )
+        discovery = await oidc_helpers.discover(config["issuer"], http_client=client)
         try:
             claims = await oidc_helpers.complete_signin(
                 code=code,
@@ -705,9 +686,7 @@ async def _oidc_callback(ctx: EndpointContext) -> dict[str, Any]:
                 http_client=client,
             )
         except Exception as e:
-            raise APIError(
-                400, "SSO_OIDC_EXCHANGE_FAILED", message=str(e)
-            ) from None
+            raise APIError(400, "SSO_OIDC_EXCHANGE_FAILED", message=str(e)) from None
     finally:
         if client is not None:
             await client.aclose()
@@ -732,15 +711,9 @@ def _saml_plan_for(ctx: EndpointContext, provider: dict[str, Any]) -> saml_helpe
     config = saml_helpers.parse_config(provider.get("samlConfig"))
     # Default the SP entityId/acsUrl/sloUrl from our base URL if not set.
     sp = dict(config.get("sp") or {})
-    sp.setdefault(
-        "entityId", f"{ctx.auth.base_url}/sso/saml/metadata/{provider['id']}"
-    )
-    sp.setdefault(
-        "acsUrl", f"{ctx.auth.base_url}/sso/saml/acs/{provider['id']}"
-    )
-    sp.setdefault(
-        "sloUrl", f"{ctx.auth.base_url}/sso/saml/slo/{provider['id']}"
-    )
+    sp.setdefault("entityId", f"{ctx.auth.base_url}/sso/saml/metadata/{provider['id']}")
+    sp.setdefault("acsUrl", f"{ctx.auth.base_url}/sso/saml/acs/{provider['id']}")
+    sp.setdefault("sloUrl", f"{ctx.auth.base_url}/sso/saml/slo/{provider['id']}")
     config["sp"] = sp
     return saml_helpers.plan_from_config(config)
 
@@ -760,11 +733,7 @@ async def _saml_sign_in(ctx: EndpointContext) -> RedirectResponse:
     if provider["kind"] != "saml":
         raise APIError(400, "SSO_INVALID_KIND", message="provider is not SAML")
     plan = _saml_plan_for(ctx, provider)
-    callback = (
-        ctx.request.query.get("callback")
-        or ctx.request.query.get("callbackURL")
-        or "/"
-    )
+    callback = ctx.request.query.get("callback") or ctx.request.query.get("callbackURL") or "/"
     if isinstance(callback, list):
         callback = callback[0]
 
@@ -777,10 +746,12 @@ async def _saml_sign_in(ctx: EndpointContext) -> RedirectResponse:
         model="verification",
         data={
             "identifier": f"sso:saml-request:{request_id}",
-            "value": json.dumps({
-                "provider_id": provider_id,
-                "callback": callback,
-            }),
+            "value": json.dumps(
+                {
+                    "provider_id": provider_id,
+                    "callback": callback,
+                }
+            ),
             "expiresAt": _now() + 600,
             "createdAt": _now(),
             "updatedAt": _now(),
@@ -817,9 +788,7 @@ async def _saml_acs(ctx: EndpointContext) -> dict[str, Any]:
         if isinstance(saml_response, list):
             saml_response = saml_response[0]
     if not saml_response:
-        raise APIError(
-            400, "SSO_SAML_RESPONSE_INVALID", message="missing SAMLResponse"
-        )
+        raise APIError(400, "SSO_SAML_RESPONSE_INVALID", message="missing SAMLResponse")
 
     # Pull the matching AuthnRequest if we have one (InResponseTo).
     in_response_to = None
@@ -928,7 +897,7 @@ async def _upsert_user_and_sign_in(
             where=(Where(field="id", value=user["id"]),),
             update={"emailVerified": True, "updatedAt": now},
         )
-    session, cookies = await create_session(
+    _session, cookies = await create_session(
         ctx.auth,
         user_id=user["id"],
         ip_address=ctx.request.headers.get("x-forwarded-for"),
@@ -1040,9 +1009,9 @@ __all__ = [
     "DELETE_PROVIDER",
     "GET_PROVIDER",
     "LIST_PROVIDERS",
-    "PROVIDERS",
     "OIDC_CALLBACK",
     "OIDC_SIGN_IN",
+    "PROVIDERS",
     "REGISTER_DOMAIN",
     "REGISTER_PROVIDER",
     "SAML_ACS",
@@ -1052,5 +1021,3 @@ __all__ = [
     "UPDATE_PROVIDER",
     "VERIFY_DOMAIN",
 ]
-
-

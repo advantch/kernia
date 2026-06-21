@@ -32,9 +32,7 @@ async def _github_profile(tokens: Mapping[str, Any]) -> OAuthUserProfile:
         email = profile.get("email")
         email_verified = False
         if not email:
-            emails_r = await client.get(
-                "https://api.github.com/user/emails", headers=headers
-            )
+            emails_r = await client.get("https://api.github.com/user/emails", headers=headers)
             if emails_r.status_code == 200:
                 emails = emails_r.json()
                 primary = next((e for e in emails if e.get("primary")), None) or (

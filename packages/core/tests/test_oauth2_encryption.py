@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.oauth2.encryption import decrypt_token, encrypt_token, is_encrypted
 
 

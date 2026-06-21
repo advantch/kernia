@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from click.testing import CliRunner
-
 from kernia_cli.commands.init_cmd import init
 
 

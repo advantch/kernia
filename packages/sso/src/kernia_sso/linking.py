@@ -44,10 +44,7 @@ def _now() -> int:
 
 
 def _org_plugin_present(auth: AuthContext) -> bool:
-    return any(
-        getattr(p, "id", None) == "organization"
-        for p in getattr(auth, "plugins", []) or []
-    )
+    return any(getattr(p, "id", None) == "organization" for p in getattr(auth, "plugins", []) or [])
 
 
 async def _resolve_role(
@@ -75,9 +72,7 @@ async def _resolve_role(
     return str(po.get("default_role", po.get("defaultRole")) or "member")
 
 
-async def _already_member(
-    auth: AuthContext, *, organization_id: str, user_id: str
-) -> bool:
+async def _already_member(auth: AuthContext, *, organization_id: str, user_id: str) -> bool:
     existing = await auth.adapter.find_one(
         model="member",
         where=(
@@ -135,9 +130,7 @@ async def assign_organization_from_provider(
         provider=provider,
         token=token,
     )
-    await _create_member(
-        auth, organization_id=str(organization_id), user_id=user_id, role=role
-    )
+    await _create_member(auth, organization_id=str(organization_id), user_id=user_id, role=role)
 
 
 async def assign_organization_by_domain(
@@ -188,9 +181,7 @@ async def assign_organization_by_domain(
         provider=provider,
         token=None,
     )
-    await _create_member(
-        auth, organization_id=organization_id, user_id=user_id, role=role
-    )
+    await _create_member(auth, organization_id=organization_id, user_id=user_id, role=role)
 
 
 __all__ = [

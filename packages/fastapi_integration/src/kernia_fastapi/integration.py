@@ -1,12 +1,15 @@
-"""FastAPI mount + session dependencies."""
+"""FastAPI mount + session dependencies.
+
+Session resolution is shared with the other integrations via
+``kernia.integrations.session`` so expiry handling (an expired session is
+treated as absent and its row deleted) lives in exactly one place.
+"""
 
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
-
 from kernia.auth import Kernia
-from kernia.cookies import verify
-from kernia.types.adapter import Where
+from kernia.integrations.session import resolve_session_from_request
 from kernia.types.context import Session
 
 
@@ -24,7 +27,7 @@ def mount_kernia(app: FastAPI, auth: Kernia) -> None:
     async def stripped(scope, receive, send):  # type: ignore[no-untyped-def]
         if scope["type"] == "http" and scope["path"].startswith(base_path):
             scope = dict(scope)
-            scope["path"] = scope["path"][len(base_path):] or "/"
+            scope["path"] = scope["path"][len(base_path) :] or "/"
         await inner(scope, receive, send)
 
     app.mount(base_path, stripped)
@@ -32,28 +35,9 @@ def mount_kernia(app: FastAPI, auth: Kernia) -> None:
 
 
 async def get_session(request: Request) -> Session | None:
-    """FastAPI dependency: returns the active session (or None)."""
+    """FastAPI dependency: returns the active (non-expired) session, or None."""
     auth: Kernia = request.app.state.kernia
-    cookie = request.cookies.get("better-auth.session_token")
-    if not cookie:
-        return None
-    token = verify(cookie, secret=auth.context.secret)
-    if not token:
-        return None
-    row = await auth.context.adapter.find_one(
-        model="session",
-        where=(Where(field="token", value=token),),
-    )
-    if row is None:
-        return None
-    return Session(
-        id=row["id"],
-        user_id=row["userId"],
-        expires_at=int(row["expiresAt"]),
-        token=row["token"],
-        ip_address=row.get("ipAddress"),
-        user_agent=row.get("userAgent"),
-    )
+    return await resolve_session_from_request(request, auth)
 
 
 async def require_session(request: Request) -> Session:

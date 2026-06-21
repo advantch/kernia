@@ -57,9 +57,7 @@ class _UsernamePlugin:
         RateLimitRule(path="/sign-in/username", window=60, max=10),
         RateLimitRule(path="/sign-up/username", window=60, max=5),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(USERNAME_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(USERNAME_ERROR_CODES))
 
     async def init(self, ctx: AuthContext) -> None:
         """Stash resolved per-instance options for the handlers to read.

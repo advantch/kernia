@@ -25,9 +25,7 @@ from kernia_test_utils import ASGIDriver
 
 
 _USER_ORG_CONFIGS = [
-    ApiKeyConfigurationOptions(
-        config_id="user-keys", default_prefix="usr_", references="user"
-    ),
+    ApiKeyConfigurationOptions(config_id="user-keys", default_prefix="usr_", references="user"),
     ApiKeyConfigurationOptions(
         config_id="org-keys", default_prefix="org_", references="organization"
     ),
@@ -45,9 +43,7 @@ async def _org_driver(
     if with_org_plugin:
         plugins.append(organization())
     plugins.append(api_key(list(configs if configs is not None else _USER_ORG_CONFIGS)))
-    auth = init(
-        KerniaOptions(database=db, secret="test-secret-key", plugins=plugins)
-    )
+    auth = init(KerniaOptions(database=db, secret="test-secret-key", plugins=plugins))
     driver = ASGIDriver(app=auth.router.mount())
     r = await driver.request(
         "POST",
@@ -59,9 +55,7 @@ async def _org_driver(
 
 
 async def _create_org(driver: ASGIDriver, name: str, slug: str) -> dict:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()
 
@@ -101,9 +95,7 @@ async def test_create_user_owned_api_key() -> None:
 
 async def test_create_org_key_without_org_id_fails() -> None:
     driver, _ = await _org_driver()
-    r = await driver.request(
-        "POST", "/api-key/create", json_body={"configId": "org-keys"}
-    )
+    r = await driver.request("POST", "/api-key/create", json_body={"configId": "org-keys"})
     assert r.status == 400
     assert r.json()["code"] == "ORGANIZATION_ID_REQUIRED"
 
@@ -137,9 +129,7 @@ async def test_mixed_user_and_org_keys() -> None:
     uid = (await driver.request("GET", "/get-session")).json()["user"]["id"]
     org = await _create_org(driver, "Mixed Org", "mixed-org")
     user_key = (
-        await driver.request(
-            "POST", "/api-key/create", json_body={"configId": "user-keys"}
-        )
+        await driver.request("POST", "/api-key/create", json_body={"configId": "user-keys"})
     ).json()
     org_key = (
         await driver.request(
@@ -190,9 +180,7 @@ async def test_list_org_keys_with_org_id() -> None:
     driver, _ = await _org_driver()
     org = await _create_org(driver, "List Org Keys", "list-org-keys")
     user_key = (
-        await driver.request(
-            "POST", "/api-key/create", json_body={"configId": "user-keys"}
-        )
+        await driver.request("POST", "/api-key/create", json_body={"configId": "user-keys"})
     ).json()
     await driver.request(
         "POST",
@@ -205,9 +193,7 @@ async def test_list_org_keys_with_org_id() -> None:
         json_body={"configId": "org-keys", "organizationId": org["id"], "name": "k2"},
     )
     keys = (
-        await driver.request(
-            "GET", "/api-key/list", query=f"organizationId={org['id']}"
-        )
+        await driver.request("GET", "/api-key/list", query=f"organizationId={org['id']}")
     ).json()["apiKeys"]
     assert len(keys) == 2
     for k in keys:
@@ -251,9 +237,7 @@ async def test_filter_org_keys_by_config_id() -> None:
 async def test_owner_can_list_org_keys() -> None:
     driver, _ = await _org_driver()
     org = await _create_org(driver, "Owner Access Org", "owner-access-org")
-    r = await driver.request(
-        "GET", "/api-key/list", query=f"organizationId={org['id']}"
-    )
+    r = await driver.request("GET", "/api-key/list", query=f"organizationId={org['id']}")
     assert r.status == 200, r.json()
     assert "apiKeys" in r.json()
 
@@ -272,9 +256,7 @@ async def test_non_member_denied_org_keys() -> None:
             "name": "Stranger",
         },
     )
-    r = await driver.request(
-        "GET", "/api-key/list", query=f"organizationId={org['id']}"
-    )
+    r = await driver.request("GET", "/api-key/list", query=f"organizationId={org['id']}")
     assert r.status in (401, 403)
 
 
@@ -295,9 +277,7 @@ async def test_get_org_key_by_id() -> None:
             },
         )
     ).json()
-    r = await driver.request(
-        "GET", "/api-key/get", query=f"id={key['id']}&configId=org-keys"
-    )
+    r = await driver.request("GET", "/api-key/get", query=f"id={key['id']}&configId=org-keys")
     assert r.status == 200, r.json()
     body = r.json()
     assert body["id"] == key["id"]
@@ -396,9 +376,7 @@ async def test_session_mocking_for_user_keys_only() -> None:
     driver, _ = await _org_driver(configs)
     uid = (await driver.request("GET", "/get-session")).json()["user"]["id"]
     key = (
-        await driver.request(
-            "POST", "/api-key/create", json_body={"configId": "user-keys"}
-        )
+        await driver.request("POST", "/api-key/create", json_body={"configId": "user-keys"})
     ).json()
     driver.cookies.clear()
     r = await driver.request("GET", "/get-session", headers={"x-api-key": key["key"]})

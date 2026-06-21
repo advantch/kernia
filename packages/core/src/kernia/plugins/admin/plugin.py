@@ -57,9 +57,7 @@ _ADMIN_FIELDS: tuple[FieldDef, ...] = (
     FieldDef("banExpires", "number", required=False),
 )
 
-_SESSION_FIELDS: tuple[FieldDef, ...] = (
-    FieldDef("impersonatedBy", "string", required=False),
-)
+_SESSION_FIELDS: tuple[FieldDef, ...] = (FieldDef("impersonatedBy", "string", required=False),)
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,10 +172,11 @@ def admin(options: AdminOptions | None = None) -> KerniaPlugin:
     hooks = PluginHooks(
         before=(
             BeforeHook(
-                match=lambda ctx: ctx.request.path
-                not in {"/sign-out", "/admin/stop-impersonating"}
-                and not ctx.request.path.startswith("/sign-in")
-                and not ctx.request.path.startswith("/sign-up"),
+                match=lambda ctx: (
+                    ctx.request.path not in {"/sign-out", "/admin/stop-impersonating"}
+                    and not ctx.request.path.startswith("/sign-in")
+                    and not ctx.request.path.startswith("/sign-up")
+                ),
                 handler=_ban_check,
             ),
             BeforeHook(

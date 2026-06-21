@@ -184,7 +184,7 @@ async def _proxy_callback(ctx: EndpointContext) -> RedirectResponse:
     except APIError:
         return _redirect_on_error(error_url, "user_creation_failed")
 
-    session, cookies = await create_session(
+    _session, cookies = await create_session(
         ctx.auth,
         user_id=user["id"],
         ip_address=ctx.request.headers.get("x-forwarded-for"),
@@ -326,9 +326,7 @@ class _OAuthProxyPlugin:
     on_request: None = None
     on_response: None = None
     rate_limit: tuple[RateLimitRule, ...] = field(
-        default_factory=lambda: (
-            RateLimitRule(path="/oauth-proxy/authorize", window=60, max=30),
-        )
+        default_factory=lambda: (RateLimitRule(path="/oauth-proxy/authorize", window=60, max=30),)
     )
     error_codes: Mapping[str, str] = field(default_factory=lambda: {})
     init: None = None
@@ -339,4 +337,4 @@ def oauth_proxy(options: OAuthProxyOptions | None = None) -> KerniaPlugin:
     return _OAuthProxyPlugin(opts=options or OAuthProxyOptions())  # type: ignore[return-value]
 
 
-__all__ = ["oauth_proxy", "OAuthProxyOptions", "symmetric_encrypt", "symmetric_decrypt"]
+__all__ = ["OAuthProxyOptions", "oauth_proxy", "symmetric_decrypt", "symmetric_encrypt"]

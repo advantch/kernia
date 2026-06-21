@@ -31,10 +31,7 @@ def test_resolver_known_paths() -> None:
     assert _default_resolve_method(_ctx("/sign-in/email")) == "email"
     assert _default_resolve_method(_ctx("/sign-up/email")) == "email"
     assert _default_resolve_method(_ctx("/callback/google", id="google")) == "google"
-    assert (
-        _default_resolve_method(_ctx("/oauth2/callback/github", providerId="github"))
-        == "github"
-    )
+    assert _default_resolve_method(_ctx("/oauth2/callback/github", providerId="github")) == "github"
     assert _default_resolve_method(_ctx("/siwe/verify")) == "siwe"
     assert _default_resolve_method(_ctx("/magic-link/verify")) == "magic-link"
 

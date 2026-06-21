@@ -85,15 +85,13 @@ def _coerce_where_value(field_type: Any, value: Any) -> Any:
 class _ModelTransform:
     """Precomputed transform tables for one model."""
 
-    __slots__ = ("physical_name", "to_physical", "to_logical", "fields_by_name")
+    __slots__ = ("fields_by_name", "physical_name", "to_logical", "to_physical")
 
     def __init__(self, model: ModelDef) -> None:
         # `table_name` is the physical name; falls back to the logical name.
         self.physical_name = model.table_name or model.name
         self.fields_by_name: dict[str, FieldDef] = {f.name: f for f in model.fields}
-        self.to_physical: dict[str, str] = {
-            f.name: (f.field_name or f.name) for f in model.fields
-        }
+        self.to_physical: dict[str, str] = {f.name: (f.field_name or f.name) for f in model.fields}
         self.to_logical: dict[str, str] = {v: k for k, v in self.to_physical.items()}
 
 
@@ -117,9 +115,7 @@ class TransformAdapter:
         xf = self._xf.get(model)
         return xf.physical_name if xf else model
 
-    async def _transform_input(
-        self, model: str, data: Record, *, is_update: bool
-    ) -> Record:
+    async def _transform_input(self, model: str, data: Record, *, is_update: bool) -> Record:
         xf = self._xf.get(model)
         if xf is None:
             return dict(data)
@@ -138,14 +134,10 @@ class TransformAdapter:
                 if name in data or field.default is None:
                     continue
                 default = field.default
-                out[xf.to_physical.get(name, name)] = (
-                    default() if callable(default) else default
-                )
+                out[xf.to_physical.get(name, name)] = default() if callable(default) else default
         return out
 
-    async def _transform_output(
-        self, model: str, record: Record | None
-    ) -> Record | None:
+    async def _transform_output(self, model: str, record: Record | None) -> Record | None:
         if record is None:
             return None
         xf = self._xf.get(model)
@@ -160,18 +152,14 @@ class TransformAdapter:
             out[logical] = value
         return out
 
-    def _transform_where(
-        self, model: str, where: Sequence[Where]
-    ) -> tuple[Where, ...]:
+    def _transform_where(self, model: str, where: Sequence[Where]) -> tuple[Where, ...]:
         xf = self._xf.get(model)
         if xf is None:
             return tuple(where)
         out: list[Where] = []
         for w in where:
             field = xf.fields_by_name.get(w.field)
-            value = (
-                _coerce_where_value(field.type, w.value) if field is not None else w.value
-            )
+            value = _coerce_where_value(field.type, w.value) if field is not None else w.value
             out.append(
                 Where(
                     field=xf.to_physical.get(w.field, w.field),
@@ -182,9 +170,7 @@ class TransformAdapter:
             )
         return tuple(out)
 
-    def _transform_select(
-        self, model: str, select: Sequence[str] | None
-    ) -> list[str] | None:
+    def _transform_select(self, model: str, select: Sequence[str] | None) -> list[str] | None:
         if select is None:
             return None
         xf = self._xf.get(model)

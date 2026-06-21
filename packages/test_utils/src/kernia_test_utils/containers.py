@@ -47,9 +47,7 @@ def docker_available() -> bool:
 
 def requires_docker() -> pytest.MarkDecorator:
     """Return a pytest mark that skips when Docker isn't reachable."""
-    return pytest.mark.skipif(
-        not docker_available(), reason="Docker is not available on this host"
-    )
+    return pytest.mark.skipif(not docker_available(), reason="Docker is not available on this host")
 
 
 @contextlib.contextmanager
@@ -80,9 +78,7 @@ def mysql_container(image: str = "mysql:8") -> Iterator[str]:
     container = MySqlContainer(image)
     container.start()
     try:
-        url = container.get_connection_url().replace(
-            "mysql+pymysql://", "mysql+aiomysql://"
-        )
+        url = container.get_connection_url().replace("mysql+pymysql://", "mysql+aiomysql://")
         yield url
     finally:
         container.stop()

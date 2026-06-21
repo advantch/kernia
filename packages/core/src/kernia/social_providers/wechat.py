@@ -14,8 +14,6 @@ from urllib.parse import urlencode
 import httpx
 
 from kernia.social_providers._base import OAuthProvider, OAuthUserProfile
-from kernia.social_providers._helpers import make_provider
-
 
 _AUTH_URL = "https://open.weixin.qq.com/connect/qrconnect"
 _TOKEN_URL = "https://api.weixin.qq.com/sns/oauth2/access_token"
@@ -39,7 +37,8 @@ async def _wechat_validate_token(
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(_TOKEN_URL, params=params)
         r.raise_for_status()
-        return r.json()
+        payload: dict[str, Any] = r.json()
+        return payload
 
 
 async def _wechat_user_profile(tokens: Mapping[str, Any]) -> OAuthUserProfile:

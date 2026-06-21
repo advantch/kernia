@@ -81,8 +81,7 @@ def migrate(config_path: str, cwd: str, db_url: str | None, revision: str) -> No
     versions_dir = root / "alembic" / "versions"
     if not versions_dir.exists() or not any(versions_dir.glob("*.py")):
         raise click.ClickException(
-            f"No Alembic migrations found in {versions_dir}. "
-            f"Run `kernia generate` first."
+            f"No Alembic migrations found in {versions_dir}. Run `kernia generate` first."
         )
 
     cfg = Config()

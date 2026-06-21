@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -34,20 +35,20 @@ _DEFAULT_LENGTH = 6
 _DEFAULT_EXPIRES_IN = 5 * 60
 
 
-def _opts(ctx: EndpointContext) -> dict[str, object]:
+def _opts(ctx: EndpointContext) -> dict[str, Any]:
     return dict(ctx.auth.options.advanced.get(_OPTIONS_KEY) or {})
 
 
 def _otp_length(ctx: EndpointContext) -> int:
-    return int(_opts(ctx).get("otp_length", _DEFAULT_LENGTH))  # type: ignore[arg-type]
+    return int(_opts(ctx).get("otp_length", _DEFAULT_LENGTH))
 
 
 def _expires_in(ctx: EndpointContext) -> int:
-    return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))  # type: ignore[arg-type]
+    return int(_opts(ctx).get("expires_in", _DEFAULT_EXPIRES_IN))
 
 
 def _allowed_attempts(ctx: EndpointContext) -> int:
-    return int(_opts(ctx).get("allowed_attempts", 3))  # type: ignore[arg-type]
+    return int(_opts(ctx).get("allowed_attempts", 3))
 
 
 def generate_otp(length: int = _DEFAULT_LENGTH) -> str:
@@ -73,12 +74,10 @@ async def _send_sms(ctx: EndpointContext, phone: str, message: str) -> None:
             "PHONE_NUMBER_NOT_CONFIGURED",
             message="send_sms callable is not configured",
         )
-    await fn(phone, message)  # type: ignore[misc]
+    await fn(phone, message)
 
 
-async def _create_otp(
-    ctx: EndpointContext, *, phone: str, purpose: str = "sign-in"
-) -> str:
+async def _create_otp(ctx: EndpointContext, *, phone: str, purpose: str = "sign-in") -> str:
     otp = generate_otp(_otp_length(ctx))
     identifier = _identifier(phone, purpose)
     await ctx.auth.adapter.delete_many(
@@ -174,14 +173,12 @@ async def _sign_in_phone(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(401, "INVALID_PHONE_NUMBER_OR_PASSWORD")
 
     opts = _opts(ctx)
-    if bool(opts.get("require_verification", False)) and not user.get(
-        "phoneNumberVerified"
-    ):
+    if bool(opts.get("require_verification", False)) and not user.get("phoneNumberVerified"):
         # Mirror upstream: mint + dispatch a fresh OTP, then refuse the sign-in.
         otp = await _create_otp(ctx, phone=body.phone_number, purpose="sign-in")
         send_sms = opts.get("send_sms")
         if send_sms is not None:
-            await send_sms(body.phone_number, f"Your code is {otp}")  # type: ignore[misc]
+            await send_sms(body.phone_number, f"Your code is {otp}")
         raise APIError(401, "PHONE_NUMBER_NOT_VERIFIED")
 
     account = await ctx.auth.adapter.find_one(
@@ -219,9 +216,7 @@ async def _send_otp_handler(ctx: EndpointContext) -> dict[str, object]:
 
 async def _verify_phone(ctx: EndpointContext) -> dict[str, object]:
     body: VerifyPhoneNumberBody = ctx.body
-    await _consume_otp(
-        ctx, phone=body.phone_number, otp=body.otp, purpose="sign-in"
-    )
+    await _consume_otp(ctx, phone=body.phone_number, otp=body.otp, purpose="sign-in")
     user = await ctx.auth.adapter.find_one(
         model="user", where=(Where(field="phoneNumber", value=body.phone_number),)
     )
@@ -278,18 +273,14 @@ async def _request_password_reset(ctx: EndpointContext) -> dict[str, object]:
         model="user", where=(Where(field="phoneNumber", value=body.phone_number),)
     )
     if user is not None:
-        otp = await _create_otp(
-            ctx, phone=body.phone_number, purpose="forget-password"
-        )
+        otp = await _create_otp(ctx, phone=body.phone_number, purpose="forget-password")
         await _send_sms(ctx, body.phone_number, f"Password reset code: {otp}")
     return {"success": True}
 
 
 async def _reset_password(ctx: EndpointContext) -> dict[str, object]:
     body: ResetPasswordBody = ctx.body
-    await _consume_otp(
-        ctx, phone=body.phone_number, otp=body.otp, purpose="forget-password"
-    )
+    await _consume_otp(ctx, phone=body.phone_number, otp=body.otp, purpose="forget-password")
     user = await ctx.auth.adapter.find_one(
         model="user", where=(Where(field="phoneNumber", value=body.phone_number),)
     )

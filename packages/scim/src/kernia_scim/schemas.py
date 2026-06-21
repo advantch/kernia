@@ -58,9 +58,7 @@ SCIM_USER_RESOURCE_SCHEMA: dict[str, Any] = {
             "name": "active",
             "type": "boolean",
             "multiValued": False,
-            "description": (
-                "A Boolean value indicating the User's administrative status."
-            ),
+            "description": ("A Boolean value indicating the User's administrative status."),
             "required": False,
             "mutability": "readOnly",
             "returned": "default",

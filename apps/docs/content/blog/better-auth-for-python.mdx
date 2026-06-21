@@ -1,0 +1,161 @@
+---
+title: "Kernia: a plugin-based auth library for Python"
+description: "Kernia is a type-safe, plugin-based authentication library for FastAPI, Starlette, and Django, wire-compatible with the Better Auth TypeScript client. What's in it, and the code to stand up a login flow."
+author: Themba
+date: 2026-06-12
+tags: [python, authentication, fastapi, open-source]
+draft: false
+---
+
+Kernia is a type-safe, plugin-based authentication library for FastAPI, Starlette, and Django. The official [Better Auth](https://better-auth.com) TypeScript client works unchanged against a Kernia backend: same HTTP routes, same cookie model, same camelCase JSON, verified against Better Auth 1.6.11.
+
+This post is the walkthrough: the design, and the actual code to stand up a login flow. Every snippet below is real and runs against the current library.
+
+## The Better Auth client works unchanged
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+
+// This is the official Better Auth JS client, unchanged.
+// It is talking to a Python server.
+export const authClient = createAuthClient({ baseURL: "/api/auth" });
+```
+
+Your React, Vue, or Svelte frontend points the official Better Auth client at a Kernia backend and works. You do not write a shim or maintain a second client SDK. If you run Better Auth on a Node backend and are moving the API to Python, the browser cannot tell the difference; the migration is server-side only.
+
+A headless wire-check verifies this on every change: it drives the real Better Auth JS client through sign-up, session, sign-out, sign-in, and organization create/list against the example server.
+
+## The shape of a Kernia app
+
+Authentication in Kernia is a set of plugins you compose, not a framework you inherit from. You call `init` with options, pass the plugins you want, and you get an `auth` object back. Here is a minimal FastAPI setup with email/password.
+
+```python title="auth.py"
+import os
+
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia_sqlalchemy import sqlalchemy_adapter
+
+auth = init(KerniaOptions(
+    database=await sqlalchemy_adapter(url="postgresql+asyncpg://localhost/app"),
+    secret=os.environ["KERNIA_SECRET"],
+    base_url="https://app.example.com",
+    plugins=[email_and_password()],
+))
+```
+
+Three things to notice. The `database` is an adapter, so no single ORM is hard-wired in. The `secret` is yours and signs the cookies. The `plugins` list is where every feature lives, including email/password itself.
+
+Mounting it on FastAPI is two lines. `mount_kernia` serves the whole auth surface under `/api/auth/*`, and `require_session` is a dependency that protects your own routes.
+
+```python title="main.py"
+from fastapi import Depends, FastAPI
+from kernia_fastapi import mount_kernia, require_session
+from kernia.types.context import Session
+
+app = FastAPI()
+mount_kernia(app, auth)                      # serves /api/auth/*
+
+@app.get("/me")
+async def me(session: Session = Depends(require_session)):
+    return {"user_id": session.user_id}
+```
+
+That is the entire integration. `require_session` reads the signed cookie, loads the session, and 401s if there isn't one. `session.user_id` is typed. There is no middleware to register in a specific order, and no request-local globals to thread through.
+
+## The login flow, end to end
+
+This is a real sign-up and sign-in, with the real routes and the real error codes. The calls below are taken from the library's own end-to-end tests, so they are exactly what the server does.
+
+A sign-up posts an email and password. The default is to auto sign-in, so the response sets a signed session cookie immediately.
+
+```http
+POST /api/auth/sign-up/email
+{ "email": "alice@example.com", "password": "correcthorse" }
+```
+
+The response carries the user and a session, and a `better-auth.session_token` cookie comes back on the `Set-Cookie` header. That cookie then attaches a session to every subsequent call, including your own `/me` route above.
+
+Sign-in and sign-out follow the same pattern:
+
+```http
+POST /api/auth/sign-in/email
+{ "email": "alice@example.com", "password": "correcthorse" }
+
+POST /api/auth/sign-out
+
+GET  /api/auth/get-session
+```
+
+The failure paths matter more than the happy path, because that is where hand-rolled auth leaks information. Kernia returns specific codes: a wrong password returns `401 INVALID_CREDENTIALS`, signing up with an existing email returns `409 EMAIL_ALREADY_IN_USE`, and a password under the minimum length returns `400 PASSWORD_TOO_SHORT`. Even an unknown route returns `404 NOT_FOUND` with a machine-readable code rather than an HTML stack trace.
+
+Password reset is a real round-trip: `forget-password` issues a token, `reset-password` consumes it, the old password stops working and the new one starts. The library tests that full sequence on every adapter.
+
+## Legacy hashes upgrade themselves on login
+
+Password hashing is the one part of auth you should never write yourself, and it is the part boilerplate gets wrong most often. Kernia uses **Argon2id**, the OWASP-recommended modern KDF, via `argon2-cffi`. Hashes are stored as the standard PHC string, e.g. `$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>`.
+
+Older systems often have scrypt or weaker hashes already in the database. Kernia keeps a scrypt verifier so existing hashes still authenticate, and it migrates them transparently on the next successful login:
+
+```python
+from kernia.crypto import verify_password, needs_rehash, hash_password
+
+if verify_password(password, row.password):
+    if needs_rehash(row.password):
+        row.password = hash_password(password)   # re-hash to argon2id
+        await adapter.update(...)                 # save the upgraded hash
+```
+
+`needs_rehash` returns `True` for any legacy scrypt hash and for argon2id hashes whose parameters have since been raised. A user with an old hash logs in once and silently moves to argon2id, with no forced password reset and no migration script.
+
+Hashing is not the whole security story. Out of the box Kernia ships HMAC-SHA256 signed cookies, trusted-origins CSRF protection on by default, PKCE-bound OAuth state, AES-GCM encryption of OAuth tokens at rest, secret rotation, rate limiting, and a real WebAuthn verifier for passkeys. None of that is opt-in homework. It is the default.
+
+## Plugins are the whole point
+
+Every feature past email/password is a plugin, and each plugin owns its own routes, database tables, rate-limit rules, and error codes. You add capability by adding a constructor to the list. Adding `organization()` gives you multi-tenant organizations with teams and invitations.
+
+```python title="auth.py"
+from kernia import KerniaOptions
+from kernia.auth import init
+from kernia.plugins import email_and_password
+from kernia.plugins.organization import organization
+
+async def send_invitation(invitation: dict) -> None:
+    await email_client.send(
+        to=invitation["email"],
+        subject="You've been invited to Acme",
+        html=f'Accept: https://app.example.com/accept/{invitation["id"]}',
+    )
+
+auth = init(KerniaOptions(
+    database=adapter,
+    secret=os.environ["KERNIA_SECRET"],
+    base_url=os.environ["KERNIA_BASE_URL"],
+    plugins=[
+        email_and_password(),
+        organization(teams=True, send_invitation=send_invitation),
+    ],
+))
+```
+
+That one line adds organization, member, and invitation tables, the routes to manage them, and an `activeOrganizationId` on the session so the rest of your app can scope to the current org. The same pattern holds for the rest of the catalog. Passkeys are `passkey(rp_id=..., rp_name=..., origin=...)`. Stripe seat-based billing, SSO via SAML and OIDC, SCIM provisioning, API keys, two-factor, magic links, and an OpenAPI generator that emits a validated spec at `/api/auth/openapi.json` are all plugins or standalone packages you pull in the same way.
+
+The count today is 27 built-in plugins plus 7 standalone packages, with 35 social providers. You will not need most of them. The point is that when a requirement lands six months from now, you add a constructor instead of starting another rewrite.
+
+Correctness is tested where it is easy to get wrong. The adapter layer runs a 64-case conformance suite against memory, SQLAlchemy (Postgres, MySQL, SQLite), and MongoDB, so a query that works on SQLite works the same on Postgres.
+
+## Try it
+
+Kernia is open source under MIT. Ahead of the first release it installs from source:
+
+```bash
+git clone https://github.com/advantch/kernia
+cd kernia
+uv sync
+uv pip install -e packages/core -e packages/sqlalchemy_adapter -e packages/fastapi_integration
+```
+
+There is a CLI to scaffold an app (`kernia init --adapter sqlite --framework fastapi`), and a full FastAPI-plus-React SaaS reference app in `examples/`. Start with [Installation](/docs/installation) and [Basic Usage](/docs/basic-usage), then read the [plugin docs](/docs/plugins) for the feature you need. The code lives at [github.com/advantch/kernia](https://github.com/advantch/kernia).
+
+Kernia runs under our own applications; we hope it is as useful under yours.

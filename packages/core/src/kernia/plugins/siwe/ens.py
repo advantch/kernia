@@ -34,8 +34,9 @@ def web3_ens_resolver(
 
     async def _resolve(address: str) -> str | None:
         try:
-            from web3 import Web3
-            from web3.providers.rpc import HTTPProvider
+            # web3 is an optional extra and is absent from the type-check env.
+            from web3 import Web3  # type: ignore[import-not-found]
+            from web3.providers.rpc import HTTPProvider  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover — env-dependent
             raise ImportError(
                 "web3.py is required for the default ENS resolver. "
@@ -46,7 +47,7 @@ def web3_ens_resolver(
         def _sync_lookup() -> str | None:
             w3 = Web3(HTTPProvider(rpc_url, request_kwargs={"timeout": timeout}))
             try:
-                name = w3.ens.name(address)  # type: ignore[union-attr]
+                name: str | None = w3.ens.name(address)
             except Exception:
                 return None
             if not name:
@@ -55,7 +56,7 @@ def web3_ens_resolver(
             # resolve back to the same address. Without this check we'd accept
             # squatted reverse records.
             try:
-                forward = w3.ens.address(name)  # type: ignore[union-attr]
+                forward = w3.ens.address(name)
             except Exception:
                 return None
             if forward is None or forward.lower() != address.lower():

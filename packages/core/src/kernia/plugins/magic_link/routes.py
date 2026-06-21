@@ -23,7 +23,7 @@ import json
 import secrets
 import string
 import time
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from pydantic import BaseModel, Field
@@ -97,14 +97,14 @@ async def _store_token(opts: dict[str, object], token: str) -> str:
     if isinstance(store, dict) and store.get("type") == "custom-hasher":
         hasher = store.get("hash")
         if hasher is not None:
-            return await _maybe_await(hasher(token))  # type: ignore[operator]
+            return cast("str", await _maybe_await(hasher(token)))
     return token
 
 
 async def _sign_in_magic_link(ctx: EndpointContext) -> dict[str, object]:
     body: SignInMagicLinkBody = ctx.body
     opts = _opts(ctx)
-    expires_in = int(opts.get("expires_in", 5 * 60))  # type: ignore[arg-type]
+    expires_in = int(cast("Any", opts.get("expires_in", 5 * 60)))
     send_magic_link = opts.get("send_magic_link")
     if send_magic_link is None:
         raise APIError(
@@ -155,8 +155,7 @@ async def _dispatch_magic_link(
         params = [
             p
             for p in sig.parameters.values()
-            if p.kind
-            in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
         ]
         positional = len([p for p in params if p.kind != p.VAR_POSITIONAL])
         has_varargs = any(p.kind == p.VAR_POSITIONAL for p in params)
@@ -166,7 +165,7 @@ async def _dispatch_magic_link(
     if positional >= 3 or has_varargs:
         await _maybe_await(send_magic_link(body.email, url, token))
         return
-    data = {"email": body.email, "url": url, "token": token}
+    data: dict[str, object] = {"email": body.email, "url": url, "token": token}
     if body.metadata is not None:
         data["metadata"] = body.metadata
     await _maybe_await(send_magic_link(data, ctx))
@@ -175,9 +174,9 @@ async def _dispatch_magic_link(
 async def _verify(ctx: EndpointContext) -> dict[str, object]:
     raw_query = ctx.request.query
     try:
-        query = MagicLinkVerifyQuery.model_validate({
-            k: (v[0] if isinstance(v, list) else v) for k, v in raw_query.items()
-        })
+        query = MagicLinkVerifyQuery.model_validate(
+            {k: (v[0] if isinstance(v, list) else v) for k, v in raw_query.items()}
+        )
     except Exception as e:
         raise APIError(400, "INVALID_REQUEST", message=str(e)) from None
 

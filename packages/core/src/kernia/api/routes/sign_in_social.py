@@ -86,10 +86,7 @@ async def _callback(ctx: EndpointContext) -> RedirectResponse:
         parsed = parse_qs(raw.decode("utf-8")) if raw else {}
         params: dict[str, str] = {k: v[0] for k, v in parsed.items() if v}
     else:
-        params = {
-            k: (v[0] if isinstance(v, list) else v)
-            for k, v in ctx.request.query.items()
-        }
+        params = {k: (v[0] if isinstance(v, list) else v) for k, v in ctx.request.query.items()}
 
     if params.get("error") or not params.get("code"):
         raise APIError(
@@ -122,7 +119,7 @@ async def _callback(ctx: EndpointContext) -> RedirectResponse:
     )
 
     if not link_to_user_id:
-        session, cookies = await create_session(
+        _session, cookies = await create_session(
             ctx.auth,
             user_id=user["id"],
             ip_address=ctx.request.headers.get("x-forwarded-for"),

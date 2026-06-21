@@ -8,10 +8,8 @@ from __future__ import annotations
 import base64
 import xml.etree.ElementTree as ET
 
-from kernia_test_utils import MockSAMLIdP
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-
 from kernia_test_utils import MockSAMLIdP
 
 NS = {
@@ -49,17 +47,13 @@ def test_assertion_is_well_formed_and_carries_claims() -> None:
     name_id = assertion.find("saml:Subject/saml:NameID", NS)
     assert name_id is not None and name_id.text == "user@x"
 
-    audience = assertion.find(
-        "saml:Conditions/saml:AudienceRestriction/saml:Audience", NS
-    )
+    audience = assertion.find("saml:Conditions/saml:AudienceRestriction/saml:Audience", NS)
     assert audience is not None and audience.text == "sp-1"
 
     attrs = assertion.findall("saml:AttributeStatement/saml:Attribute", NS)
     by_name = {a.attrib["Name"]: a for a in attrs}
     assert set(by_name) == {"email", "groups"}
-    group_values = [
-        v.text for v in by_name["groups"].findall("saml:AttributeValue", NS)
-    ]
+    group_values = [v.text for v in by_name["groups"].findall("saml:AttributeValue", NS)]
     assert group_values == ["admin", "users"]
 
 

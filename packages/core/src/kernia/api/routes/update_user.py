@@ -14,7 +14,7 @@ import time
 from pydantic import BaseModel, ConfigDict, Field
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.crypto import hash_password, needs_rehash, verify_password
+from kernia.crypto import hash_password, verify_password
 from kernia.error import APIError
 from kernia.types.adapter import Where
 from kernia.types.context import EndpointContext

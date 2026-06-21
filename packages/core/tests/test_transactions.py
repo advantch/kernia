@@ -40,7 +40,7 @@ def _auth():
 
 @pytest.mark.asyncio
 async def test_after_hooks_run_after_commit():
-    raw, ctx = _auth()
+    _raw, ctx = _auth()
     order: list[str] = []
 
     async def after(_row, _c):
@@ -61,7 +61,7 @@ async def test_after_hooks_run_after_commit():
 
 @pytest.mark.asyncio
 async def test_after_hooks_discarded_on_rollback():
-    raw, ctx = _auth()
+    _raw, ctx = _auth()
     ran: list[str] = []
 
     async def after(_row, _c):
@@ -81,7 +81,7 @@ async def test_after_hooks_discarded_on_rollback():
 
 @pytest.mark.asyncio
 async def test_nested_transactions_drain_once_at_outermost():
-    raw, ctx = _auth()
+    _raw, ctx = _auth()
     order: list[str] = []
 
     async def after(_row, _c):

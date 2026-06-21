@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import secrets
 import time
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -196,22 +196,16 @@ async def _get_member(
     )
 
 
-async def _require_caller_member(
-    ctx: EndpointContext, organization_id: str
-) -> dict[str, Any]:
+async def _require_caller_member(ctx: EndpointContext, organization_id: str) -> dict[str, Any]:
     if ctx.session is None:
         raise APIError(401, "UNAUTHORIZED")
-    member = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
-    )
+    member = await _get_member(ctx, organization_id=organization_id, user_id=ctx.session.user_id)
     if not member:
         raise APIError(403, "NOT_MEMBER")
     return member
 
 
-async def _resolve_role_table(
-    ctx: EndpointContext, organization_id: str
-) -> dict[str, Any]:
+async def _resolve_role_table(ctx: EndpointContext, organization_id: str) -> dict[str, Any]:
     """Return the effective role table for an organization.
 
     Built-in roles always present; when dynamic AC is on, organization-scoped
@@ -237,7 +231,7 @@ def _options(ctx: EndpointContext) -> dict[str, Any]:
     """
     advanced = ctx.auth.options.advanced.get("organization")
     if advanced:
-        return advanced
+        return cast("dict[str, Any]", advanced)
     for plugin in ctx.auth.plugins:
         if getattr(plugin, "id", None) == "organization":
             cfg = getattr(plugin, "_config", None)
@@ -279,9 +273,7 @@ async def _set_active_organization(
     )
 
 
-async def _set_active_team(
-    ctx: EndpointContext, *, session_id: str, team_id: str | None
-) -> None:
+async def _set_active_team(ctx: EndpointContext, *, session_id: str, team_id: str | None) -> None:
     await ctx.auth.adapter.update(
         model="session",
         where=(Where(field="id", value=session_id),),
@@ -350,9 +342,7 @@ async def _create_organization(ctx: EndpointContext) -> dict[str, Any]:
     )
 
     if not body.keepCurrentActiveOrganization:
-        await _set_active_organization(
-            ctx, session_id=ctx.session.id, organization_id=org["id"]
-        )
+        await _set_active_organization(ctx, session_id=ctx.session.id, organization_id=org["id"])
 
     # Reference TS returns the organization at the top level (no wrapping key)
     # so the JS client can do `result.data.id` directly.
@@ -396,9 +386,7 @@ async def _get_organization(ctx: EndpointContext) -> dict[str, Any]:
     if not org:
         raise APIError(404, "ORGANIZATION_NOT_FOUND")
     # Membership: the user must be a member of this org.
-    member = await _get_member(
-        ctx, organization_id=org["id"], user_id=ctx.session.user_id
-    )
+    member = await _get_member(ctx, organization_id=org["id"], user_id=ctx.session.user_id)
     if not member:
         raise APIError(403, "NOT_MEMBER")
     return org
@@ -461,9 +449,7 @@ async def _delete_organization(ctx: EndpointContext) -> dict[str, bool]:
         where=(Where(field="activeOrganizationId", value=body.organizationId),),
     )
     for s in sessions:
-        await _set_active_organization(
-            ctx, session_id=s["id"], organization_id=None
-        )
+        await _set_active_organization(ctx, session_id=s["id"], organization_id=None)
     return {"success": True}
 
 
@@ -472,9 +458,7 @@ async def _set_active(ctx: EndpointContext) -> dict[str, Any]:
         raise APIError(401, "UNAUTHORIZED")
     body: SetActiveOrganizationBody = ctx.body
     if body.organizationId is None:
-        await _set_active_organization(
-            ctx, session_id=ctx.session.id, organization_id=None
-        )
+        await _set_active_organization(ctx, session_id=ctx.session.id, organization_id=None)
         return {"success": True, "activeOrganizationId": None}
     # Ensure caller is a member.
     member = await _get_member(
@@ -709,7 +693,7 @@ async def _list_members(ctx: EndpointContext) -> list[dict[str, Any]]:
     if not organization_id:
         raise APIError(400, "INVALID_REQUEST", message="organizationId required")
     member = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
+        ctx, organization_id=cast("str", organization_id), user_id=ctx.session.user_id
     )
     if not member:
         raise APIError(403, "NOT_MEMBER")
@@ -735,9 +719,7 @@ async def _remove_member(ctx: EndpointContext) -> dict[str, bool]:
             model="user", where=(Where(field="email", value=body.memberIdOrEmail),)
         )
         if user:
-            target = await _get_member(
-                ctx, organization_id=body.organizationId, user_id=user["id"]
-            )
+            target = await _get_member(ctx, organization_id=body.organizationId, user_id=user["id"])
     else:
         target = await ctx.auth.adapter.find_one(
             model="member",
@@ -837,9 +819,7 @@ async def _leave_organization(ctx: EndpointContext) -> dict[str, bool]:
         model="session", where=(Where(field="id", value=ctx.session.id),)
     )
     if session_row and session_row.get("activeOrganizationId") == body.organizationId:
-        await _set_active_organization(
-            ctx, session_id=ctx.session.id, organization_id=None
-        )
+        await _set_active_organization(ctx, session_id=ctx.session.id, organization_id=None)
     return {"success": True}
 
 
@@ -957,9 +937,7 @@ async def _add_team_member(ctx: EndpointContext) -> dict[str, Any]:
     if not team:
         raise APIError(404, "TEAM_NOT_FOUND")
     # Target user must be a member of the org.
-    target_member = await _get_member(
-        ctx, organization_id=body.organizationId, user_id=body.userId
-    )
+    target_member = await _get_member(ctx, organization_id=body.organizationId, user_id=body.userId)
     if not target_member:
         raise APIError(404, "MEMBER_NOT_FOUND")
     row = await ctx.auth.adapter.create(
@@ -999,7 +977,7 @@ async def _list_teams(ctx: EndpointContext) -> list[dict[str, Any]]:
     if not organization_id:
         raise APIError(400, "INVALID_REQUEST", message="organizationId required")
     member = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
+        ctx, organization_id=cast("str", organization_id), user_id=ctx.session.user_id
     )
     if not member:
         raise APIError(403, "NOT_MEMBER")
@@ -1108,7 +1086,7 @@ async def _list_roles(ctx: EndpointContext) -> list[dict[str, Any]]:
     if not organization_id:
         raise APIError(400, "INVALID_REQUEST", message="organizationId required")
     member = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
+        ctx, organization_id=cast("str", organization_id), user_id=ctx.session.user_id
     )
     if not member:
         raise APIError(403, "NOT_MEMBER")
@@ -1152,7 +1130,7 @@ async def _resolve_org_id_from_query(
         )
         if not org:
             raise APIError(400, "ORGANIZATION_NOT_FOUND")
-        return org["id"]
+        return str(org["id"])
     org_id = q.get("organizationId")
     if org_id:
         return str(org_id)
@@ -1172,14 +1150,10 @@ async def _get_full_organization(ctx: EndpointContext) -> dict[str, Any] | None:
     )
     if not org:
         raise APIError(400, "ORGANIZATION_NOT_FOUND")
-    member = await _get_member(
-        ctx, organization_id=org["id"], user_id=ctx.session.user_id
-    )
+    member = await _get_member(ctx, organization_id=org["id"], user_id=ctx.session.user_id)
     if not member:
         # Clear active org pointer (mirrors upstream) then 403.
-        await _set_active_organization(
-            ctx, session_id=ctx.session.id, organization_id=None
-        )
+        await _set_active_organization(ctx, session_id=ctx.session.id, organization_id=None)
         raise APIError(403, "NOT_MEMBER")
     where = (Where(field="organizationId", value=org["id"]),)
     members = await ctx.auth.adapter.find_many(model="member", where=where)
@@ -1200,9 +1174,7 @@ async def _get_active_member(ctx: EndpointContext) -> dict[str, Any]:
     organization_id = await _active_organization_id(ctx)
     if not organization_id:
         raise APIError(400, "NO_ACTIVE_ORGANIZATION")
-    member = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
-    )
+    member = await _get_member(ctx, organization_id=organization_id, user_id=ctx.session.user_id)
     if not member:
         raise APIError(400, "MEMBER_NOT_FOUND")
     return member
@@ -1215,17 +1187,13 @@ async def _get_active_member_role(ctx: EndpointContext) -> dict[str, Any]:
     if not organization_id:
         raise APIError(400, "NO_ACTIVE_ORGANIZATION")
     target_user = ctx.request.query.get("userId") or ctx.session.user_id
-    caller = await _get_member(
-        ctx, organization_id=organization_id, user_id=ctx.session.user_id
-    )
+    caller = await _get_member(ctx, organization_id=organization_id, user_id=ctx.session.user_id)
     if not caller:
         raise APIError(403, "NOT_MEMBER")
     member = (
         caller
         if target_user == ctx.session.user_id
-        else await _get_member(
-            ctx, organization_id=organization_id, user_id=str(target_user)
-        )
+        else await _get_member(ctx, organization_id=organization_id, user_id=str(target_user))
     )
     if not member:
         raise APIError(400, "MEMBER_NOT_FOUND")
@@ -1282,9 +1250,7 @@ async def _get_role(ctx: EndpointContext) -> dict[str, Any]:
     organization_id = await _resolve_org_id_from_query(ctx)
     if not organization_id:
         raise APIError(400, "NO_ACTIVE_ORGANIZATION")
-    await _enforce_permission(
-        ctx, organization_id=organization_id, required={"ac": ["read"]}
-    )
+    await _enforce_permission(ctx, organization_id=organization_id, required={"ac": ["read"]})
     role_name = ctx.request.query.get("roleName")
     role_id = ctx.request.query.get("roleId")
     if role_id:
@@ -1388,9 +1354,7 @@ async def _list_team_members(ctx: EndpointContext) -> list[dict[str, Any]]:
 _BASE: tuple[AuthEndpoint, ...] = (
     create_auth_endpoint(
         "/organization/create",
-        EndpointOptions(
-            method="POST", body=CreateOrganizationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=CreateOrganizationBody, requires_session=True),
         _create_organization,
     ),
     create_auth_endpoint(
@@ -1405,23 +1369,17 @@ _BASE: tuple[AuthEndpoint, ...] = (
     ),
     create_auth_endpoint(
         "/organization/update",
-        EndpointOptions(
-            method="POST", body=UpdateOrganizationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=UpdateOrganizationBody, requires_session=True),
         _update_organization,
     ),
     create_auth_endpoint(
         "/organization/delete",
-        EndpointOptions(
-            method="POST", body=DeleteOrganizationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=DeleteOrganizationBody, requires_session=True),
         _delete_organization,
     ),
     create_auth_endpoint(
         "/organization/set-active",
-        EndpointOptions(
-            method="POST", body=SetActiveOrganizationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=SetActiveOrganizationBody, requires_session=True),
         _set_active,
     ),
     create_auth_endpoint(
@@ -1431,23 +1389,17 @@ _BASE: tuple[AuthEndpoint, ...] = (
     ),
     create_auth_endpoint(
         "/organization/cancel-invitation",
-        EndpointOptions(
-            method="POST", body=CancelInvitationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=CancelInvitationBody, requires_session=True),
         _cancel_invitation,
     ),
     create_auth_endpoint(
         "/organization/accept-invitation",
-        EndpointOptions(
-            method="POST", body=AcceptInvitationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=AcceptInvitationBody, requires_session=True),
         _accept_invitation,
     ),
     create_auth_endpoint(
         "/organization/reject-invitation",
-        EndpointOptions(
-            method="POST", body=RejectInvitationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=RejectInvitationBody, requires_session=True),
         _reject_invitation,
     ),
     create_auth_endpoint(
@@ -1467,16 +1419,12 @@ _BASE: tuple[AuthEndpoint, ...] = (
     ),
     create_auth_endpoint(
         "/organization/update-member-role",
-        EndpointOptions(
-            method="POST", body=UpdateMemberRoleBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=UpdateMemberRoleBody, requires_session=True),
         _update_member_role,
     ),
     create_auth_endpoint(
         "/organization/leave",
-        EndpointOptions(
-            method="POST", body=LeaveOrganizationBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=LeaveOrganizationBody, requires_session=True),
         _leave_organization,
     ),
     create_auth_endpoint(
@@ -1540,9 +1488,7 @@ _TEAMS: tuple[AuthEndpoint, ...] = (
     ),
     create_auth_endpoint(
         "/organization/remove-team-member",
-        EndpointOptions(
-            method="POST", body=RemoveTeamMemberBody, requires_session=True
-        ),
+        EndpointOptions(method="POST", body=RemoveTeamMemberBody, requires_session=True),
         _remove_team_member,
     ),
     create_auth_endpoint(

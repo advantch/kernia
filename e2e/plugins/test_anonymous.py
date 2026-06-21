@@ -7,6 +7,7 @@ same browser, exactly ONE user row remains.
 from __future__ import annotations
 
 import secrets
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -25,13 +26,13 @@ def _extended_user_model() -> ModelDef:
     return ModelDef(name="user", fields=tuple(user.fields) + tuple(_ANONYMOUS_USER_FIELDS))
 
 
-async def _memory_factory() -> Any:
+async def _memory_factory() -> AsyncIterator[Any]:
     from kernia_memory_adapter import memory_adapter
 
-    return memory_adapter()
+    yield memory_adapter()
 
 
-async def _sqlite_factory() -> Any:
+async def _sqlite_factory() -> AsyncIterator[Any]:
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -44,34 +45,43 @@ async def _sqlite_factory() -> Any:
     adapter = SQLAlchemyAdapter(engine=engine, metadata=metadata, models=models)
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
-    return adapter
+    yield adapter
 
 
-def _adapters() -> tuple[str, list[Any]]:
-    has_docker = docker_available()
-    return (
-        "adapter_factory",
-        [
-            pytest.param(_memory_factory, id="memory"),
-            pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
-            pytest.param(
-                _mongo_placeholder,
-                id="mongo",
-                marks=pytest.mark.skipif(not has_docker, reason="Docker required"),
-            ),
-        ],
-    )
-
-
-async def _mongo_placeholder() -> Any:
+async def _mongo_factory() -> AsyncIterator[Any]:
     try:
         from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
     except ImportError:
         pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
     from kernia_test_utils.containers import mongodb_container
 
+    # Yield inside the `with` so the container stays alive for the test body.
     with mongodb_container() as url:
-        return await mongo_adapter(url=url)
+        # Each test gets its own random db so parametrize doesn't leak state.
+        yield await mongo_adapter(
+            url=url,
+            db_name=f"kernia_test_{secrets.token_hex(4)}",
+        )
+
+
+def _adapter_params() -> list[Any]:
+    has_docker = docker_available()
+    return [
+        pytest.param(_memory_factory, id="memory"),
+        pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
+        pytest.param(
+            _mongo_factory,
+            id="mongo",
+            marks=pytest.mark.skipif(not has_docker, reason="Docker required"),
+        ),
+    ]
+
+
+@pytest.fixture(params=_adapter_params())
+async def adapter(request: pytest.FixtureRequest) -> AsyncIterator[Any]:
+    """Parametrized adapter fixture; backing containers stay alive per test."""
+    async for a in request.param():
+        yield a
 
 
 def _build(adapter: Any, on_link: Any = None, **anon_opts: Any) -> tuple[ASGIDriver, Any]:
@@ -85,11 +95,7 @@ def _build(adapter: Any, on_link: Any = None, **anon_opts: Any) -> tuple[ASGIDri
     return ASGIDriver(app=auth.router.mount()), adapter
 
 
-@pytest.mark.parametrize(*_adapters())
-async def test_anonymous_sign_in_creates_user_and_session(
-    adapter_factory: Any,
-) -> None:
-    adapter = await adapter_factory()
+async def test_anonymous_sign_in_creates_user_and_session(adapter: Any) -> None:
     driver, _ = _build(adapter)
     r = await driver.request("POST", "/sign-in/anonymous", json_body={})
     assert r.status == 200, r.json()
@@ -135,9 +141,7 @@ async def test_anonymous_to_email_signup_merges_users() -> None:
     assert len(remaining) == 1
     assert remaining[0]["id"] == new_user_id
 
-    gone = await adapter.find_one(
-        model="user", where=(Where(field="id", value=anon_user_id),)
-    )
+    gone = await adapter.find_one(model="user", where=(Where(field="id", value=anon_user_id),))
     assert gone is None
 
 
@@ -168,9 +172,7 @@ async def test_delete_anonymous_user() -> None:
     assert r.status == 200, r.json()
     assert r.json()["success"] is True
 
-    gone = await adapter.find_one(
-        model="user", where=(Where(field="id", value=anon_id),)
-    )
+    gone = await adapter.find_one(model="user", where=(Where(field="id", value=anon_id),))
     assert gone is None
 
 
@@ -211,9 +213,7 @@ async def test_custom_email_domain_name() -> None:
 async def test_generate_random_email_invalid_format() -> None:
     from kernia_memory_adapter import memory_adapter
 
-    driver, _ = _build(
-        memory_adapter(), generate_random_email=lambda: "not-an-email"
-    )
+    driver, _ = _build(memory_adapter(), generate_random_email=lambda: "not-an-email")
     r = await driver.request("POST", "/sign-in/anonymous", json_body={})
     assert r.status == 400
     assert r.json()["code"] == "INVALID_EMAIL_FORMAT"

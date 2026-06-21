@@ -24,9 +24,7 @@ async def _revoke(driver, client, token, hint=None):
 async def test_fail_unauthenticated_request(confidential) -> None:
     _, driver, client = confidential
     tokens = await get_tokens(driver, client)
-    r = await driver.request(
-        "POST", "/oauth2/revoke", json_body={"token": tokens["access_token"]}
-    )
+    r = await driver.request("POST", "/oauth2/revoke", json_body={"token": tokens["access_token"]})
     assert r.status == 401
 
 

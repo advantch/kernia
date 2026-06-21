@@ -68,12 +68,14 @@ def test_python3_saml_strict_accepts_mock_idp_assertion() -> None:
     # `OneLogin_Saml2_Response` runs the full XML-DSIG verify when
     # `is_valid` is called with strict settings (which our settings declare).
     response = OneLogin_Saml2_Response(settings, response_b64)
-    is_valid = response.is_valid(request_data={
+    is_valid = response.is_valid(
+        request_data={
             "https": "on",
             "http_host": "sp.example.com",
             "script_name": "/acs",
             "server_port": "443",
-        })
+        }
+    )
     assert is_valid is True, getattr(response, "_error", None) or "verification failed"
 
     # And we can pull the NameID + attributes back out.
@@ -106,12 +108,16 @@ def test_python3_saml_strict_rejects_wrong_cert() -> None:
     decoy_for_settings.sso_url = real.sso_url
     decoy_for_settings._cert = decoy._cert
     decoy_for_settings._key = decoy._key
-    settings = _settings(decoy_for_settings, sp_entity="sp-strict", sp_acs="https://sp.example.com/acs")
+    settings = _settings(
+        decoy_for_settings, sp_entity="sp-strict", sp_acs="https://sp.example.com/acs"
+    )
     response = OneLogin_Saml2_Response(settings, response_b64)
-    is_valid = response.is_valid(request_data={
+    is_valid = response.is_valid(
+        request_data={
             "https": "on",
             "http_host": "sp.example.com",
             "script_name": "/acs",
             "server_port": "443",
-        })
+        }
+    )
     assert is_valid is False

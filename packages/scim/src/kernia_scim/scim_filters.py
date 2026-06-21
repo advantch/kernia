@@ -29,7 +29,7 @@ _SCIM_OPERATORS: dict[str, str | None] = {"eq": "eq"}
 _SCIM_USER_ATTRIBUTES: dict[str, str | None] = {"userName": "email"}
 
 _FILTER_RE = re.compile(
-    r'^\s*(?P<attribute>[^\s]+)\s+(?P<op>eq|ne|co|sw|ew|pr)\s*'
+    r"^\s*(?P<attribute>[^\s]+)\s+(?P<op>eq|ne|co|sw|ew|pr)\s*"
     r'(?:(?P<value>"[^"]*"|[^\s]+))?\s*$',
     re.IGNORECASE,
 )
@@ -59,11 +59,7 @@ def parse_scim_user_filter(filter_str: str) -> list[DBFilter]:
 
     target_attribute = _SCIM_USER_ATTRIBUTES.get(attribute)
     resource_attribute = next(
-        (
-            attr
-            for attr in SCIM_USER_RESOURCE_SCHEMA["attributes"]
-            if attr["name"] == attribute
-        ),
+        (attr for attr in SCIM_USER_RESOURCE_SCHEMA["attributes"] if attr["name"] == attribute),
         None,
     )
 

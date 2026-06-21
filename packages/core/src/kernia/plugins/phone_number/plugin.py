@@ -61,9 +61,7 @@ class _PhoneNumberPlugin:
         RateLimitRule(path="/phone-number/request-password-reset", window=60, max=3),
         RateLimitRule(path="/phone-number/reset-password", window=60, max=5),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(PHONE_NUMBER_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(PHONE_NUMBER_ERROR_CODES))
     init: None = None
 
 

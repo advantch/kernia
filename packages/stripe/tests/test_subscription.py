@@ -19,8 +19,8 @@ from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -79,9 +79,7 @@ async def test_creates_an_incomplete_subscription_on_upgrade() -> None:
     driver, _mock, auth = _make()
     uid = await _signup_signin(driver, "create-sub@email.com")
 
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     assert r.status == 200, r.json()
     assert r.json().get("url")
 
@@ -100,9 +98,7 @@ async def test_creates_an_incomplete_subscription_on_upgrade() -> None:
 async def test_disallows_cross_user_subscription_id_operations() -> None:
     driver, mock, auth = _make()
     uid_a = await _signup_signin(driver, "user-a@email.com")
-    await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     sub_a = await auth.context.adapter.find_one(
         model="subscription", where=(Where(field="referenceId", value=uid_a),)
     )
@@ -147,9 +143,7 @@ async def test_disallows_cross_user_subscription_id_operations() -> None:
     # No billing portal / extra checkout session was created for user B.
     after = len([e for e in mock.capture_events if e["type"] == "checkout.session.create"])
     assert after == before
-    assert all(
-        e["type"] != "billing_portal.session.create" for e in mock.capture_events
-    )
+    assert all(e["type"] != "billing_portal.session.create" for e in mock.capture_events)
 
 
 async def test_passes_metadata_to_checkout_when_upgrading() -> None:
@@ -168,9 +162,7 @@ async def test_passes_metadata_to_checkout_when_upgrading() -> None:
     )
     assert r.status == 200, r.json()
 
-    session_event = next(
-        e for e in mock.capture_events if e["type"] == "checkout.session.create"
-    )
+    session_event = next(e for e in mock.capture_events if e["type"] == "checkout.session.create")
     meta = session_event["object"]["metadata"]
     for key, value in custom.items():
         assert meta[key] == value
@@ -184,9 +176,7 @@ async def test_list_filters_to_active_subscriptions() -> None:
     assert r.status == 200
     assert isinstance(r.json(), list)
 
-    await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     # The new row is `incomplete` → not listed.
     r = await driver.request("GET", "/subscription/list")
     assert r.json() == []
@@ -212,9 +202,7 @@ async def test_list_resolves_annual_discount_price_id_by_billing_interval() -> N
         }
     )
     uid = await _signup_signin(driver, "annual-test@email.com")
-    await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
 
     await auth.context.adapter.update(
         model="subscription",

@@ -17,7 +17,6 @@ import re
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.db.migrations import resolve_full_schema
@@ -47,10 +46,9 @@ def _postgres_adapter(plugins: list) -> object:
     """Build a SQLAlchemy adapter against DATABASE_URL and materialize the full
     schema (core tables + every plugin's tables/extensions). Returns the adapter.
     """
+    from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
-
-    from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
 
     raw = os.environ["DATABASE_URL"]
     # postgres://...?sslmode=require  ->  postgresql+asyncpg://...  (+ ssl via connect_args)
@@ -61,9 +59,7 @@ def _postgres_adapter(plugins: list) -> object:
     metadata = build_metadata(models)
     # NullPool: serverless functions can't keep a pool warm and asyncpg
     # connections are loop-bound — open one per request, in that request's loop.
-    engine = create_async_engine(
-        url, poolclass=NullPool, connect_args={"ssl": True}, future=True
-    )
+    engine = create_async_engine(url, poolclass=NullPool, connect_args={"ssl": True}, future=True)
     adapter = SQLAlchemyAdapter(engine=engine, metadata=metadata, models=models)
 
     async def _create_tables() -> None:
@@ -80,7 +76,7 @@ def _postgres_adapter(plugins: list) -> object:
     def _runner() -> None:
         try:
             asyncio.run(_create_tables())
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             error.append(exc)
 
     t = threading.Thread(target=_runner)
@@ -94,10 +90,7 @@ def _postgres_adapter(plugins: list) -> object:
 def build_app() -> FastAPI:
     secret = os.environ.get("KERNIA_SECRET", "demo-secret-change-me")
     # Vercel injects the deployment domain; prefer the stable production URL.
-    vercel_host = (
-        os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
-        or os.environ.get("VERCEL_URL")
-    )
+    vercel_host = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") or os.environ.get("VERCEL_URL")
     base_url = os.environ.get("KERNIA_BASE_URL") or (
         f"https://{vercel_host}" if vercel_host else "http://localhost:5050"
     )

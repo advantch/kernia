@@ -97,9 +97,7 @@ def _build_enforcing(rate_limit):
             plugins=[
                 email_and_password(),
                 jwt(),
-                oauth_provider(
-                    OAuthProviderOptions(issuer=ISSUER, rate_limit=rate_limit)
-                ),
+                oauth_provider(OAuthProviderOptions(issuer=ISSUER, rate_limit=rate_limit)),
             ],
             advanced={"disable_csrf_check": True},
             rate_limit=RateLimitOptions(enabled=True),
@@ -130,9 +128,7 @@ async def test_enforces_rate_limit_on_token_endpoint() -> None:
         allowed_scopes=("openid",),
     )
 
-    statuses = [
-        (await _client_credentials_request(driver, client)).status for _ in range(5)
-    ]
+    statuses = [(await _client_credentials_request(driver, client)).status for _ in range(5)]
     # First 3 within the window succeed; the last 2 are rate limited.
     assert statuses[0] == 200
     assert statuses[1] == 200

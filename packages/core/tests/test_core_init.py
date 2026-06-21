@@ -7,7 +7,6 @@ ownership stamping, the error registry, and cookie signing.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.cookies import new_token, render_set_cookie, sign, verify
 from kernia.plugins import email_and_password

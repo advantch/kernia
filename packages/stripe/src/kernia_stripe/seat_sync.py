@@ -35,11 +35,7 @@ def _seat_plans(options: StripeOptions) -> dict[str, StripePlan]:
     Mirrors upstream's ``plans.filter(p => p.seatPriceId)`` + the
     ``seatPlanNames`` set (compared case-insensitively against ``dbSub.plan``).
     """
-    return {
-        plan.name.lower(): plan
-        for plan in options.plans.values()
-        if plan.seat_price_id
-    }
+    return {plan.name.lower(): plan for plan in options.plans.values() if plan.seat_price_id}
 
 
 async def _count_org_members(auth: AuthContext, organization_id: str) -> int:
@@ -81,9 +77,7 @@ async def _sync_org_seats(
         plan = seat_plans[db_sub["plan"]]
         seat_price_id = plan.seat_price_id
 
-        stripe_sub = await options.stripe_client.get_subscription(
-            db_sub["stripeSubscriptionId"]
-        )
+        stripe_sub = await options.stripe_client.get_subscription(db_sub["stripeSubscriptionId"])
         if not is_active_or_trialing(stripe_sub):
             return
 

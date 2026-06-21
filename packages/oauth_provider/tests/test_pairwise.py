@@ -70,19 +70,30 @@ async def pairwise_env():
     driver = ASGIDriver(app=auth.router.mount())
     await signup(driver)
     client_a = await create_client(
-        auth.context, name="A", redirect_uris=[RP_A],
-        allowed_scopes=SCOPES, subject_type="pairwise",
+        auth.context,
+        name="A",
+        redirect_uris=[RP_A],
+        allowed_scopes=SCOPES,
+        subject_type="pairwise",
     )
     client_b = await create_client(
-        auth.context, name="B", redirect_uris=[RP_B],
-        allowed_scopes=SCOPES, subject_type="pairwise",
+        auth.context,
+        name="B",
+        redirect_uris=[RP_B],
+        allowed_scopes=SCOPES,
+        subject_type="pairwise",
     )
     client_same = await create_client(
-        auth.context, name="SameHost", redirect_uris=[RP_A_SAME_HOST],
-        allowed_scopes=SCOPES, subject_type="pairwise",
+        auth.context,
+        name="SameHost",
+        redirect_uris=[RP_A_SAME_HOST],
+        allowed_scopes=SCOPES,
+        subject_type="pairwise",
     )
     client_public = await create_client(
-        auth.context, name="Public", redirect_uris=[RP_PUBLIC],
+        auth.context,
+        name="Public",
+        redirect_uris=[RP_PUBLIC],
         allowed_scopes=SCOPES,
     )
     return auth, driver, client_a, client_b, client_same, client_public
@@ -104,9 +115,7 @@ async def test_same_sub_for_same_pairwise_client_determinism(pairwise_env) -> No
     _auth, driver, client_a, *_ = pairwise_env
     t1 = await _get_tokens(driver, client_a)
     t2 = await _get_tokens(driver, client_a)
-    assert decode_jwt_payload(t1["id_token"])["sub"] == (
-        decode_jwt_payload(t2["id_token"])["sub"]
-    )
+    assert decode_jwt_payload(t1["id_token"])["sub"] == (decode_jwt_payload(t2["id_token"])["sub"])
 
 
 async def test_public_client_returns_user_id_fallback(pairwise_env) -> None:
@@ -125,8 +134,9 @@ async def test_same_host_clients_share_pairwise_sub(pairwise_env) -> None:
     tokens_a = await _get_tokens(driver, client_a)
     tokens_same = await _get_tokens(driver, client_same)
 
-    assert decode_jwt_payload(tokens_a["id_token"])["sub"] == (
-        decode_jwt_payload(tokens_same["id_token"])["sub"]
+    assert (
+        decode_jwt_payload(tokens_a["id_token"])["sub"]
+        == (decode_jwt_payload(tokens_same["id_token"])["sub"])
     )
 
 
@@ -204,14 +214,20 @@ async def test_reject_pairwise_when_secret_not_configured() -> None:
     auth = make_auth()  # no pairwise_secret
     with pytest.raises(APIError):
         await create_client(
-            auth.context, name="X", redirect_uris=[RP_A], subject_type="pairwise",
+            auth.context,
+            name="X",
+            redirect_uris=[RP_A],
+            subject_type="pairwise",
         )
 
 
 async def test_accept_pairwise_when_secret_configured() -> None:
     auth = make_auth(pairwise_secret="test-secret-for-dcr-test-32chars!")
     client = await create_client(
-        auth.context, name="X", redirect_uris=[RP_A], subject_type="pairwise",
+        auth.context,
+        name="X",
+        redirect_uris=[RP_A],
+        subject_type="pairwise",
     )
     assert client.client_id
     assert client.subject_type == "pairwise"

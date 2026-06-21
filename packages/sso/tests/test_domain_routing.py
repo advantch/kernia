@@ -8,7 +8,6 @@ that uses this function is covered by the e2e suite.
 from __future__ import annotations
 
 import pytest
-
 from kernia.auth import init
 from kernia.types.init_options import KerniaOptions
 from kernia_memory_adapter import memory_adapter

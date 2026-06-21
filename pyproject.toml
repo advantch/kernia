@@ -83,6 +83,7 @@ kernia-api-key = { workspace = true }
 kernia-passkey = { workspace = true }
 kernia-sso = { workspace = true }
 kernia-oauth-provider = { workspace = true }
+kernia-mcp = { workspace = true }
 kernia-scim = { workspace = true }
 kernia-stripe = { workspace = true }
 kernia-fastapi = { workspace = true }

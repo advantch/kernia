@@ -87,17 +87,13 @@ async def _ensure_membership(ctx: EndpointContext) -> None:
 
 
 def _get_request_membership(ctx: EndpointContext) -> dict[str, Any] | None:
-    bag = (
-        ctx.auth.plugin_state.get("organization", {})
-        .get("_req", {})
-        .get(id(ctx))
+    bag: dict[str, Any] | None = (
+        ctx.auth.plugin_state.get("organization", {}).get("_req", {}).get(id(ctx))
     )
     return bag
 
 
-async def _attach_active_organization(
-    ctx: EndpointContext, result: object
-) -> object | None:
+async def _attach_active_organization(ctx: EndpointContext, result: object) -> object | None:
     """After-hook on `/get-session`: enrich the response with `activeOrganization`.
 
     Only runs when the handler returned a session (non-null).
@@ -134,13 +130,9 @@ async def _attach_active_organization(
 def build_hooks() -> PluginHooks:
     """Construct the plugin's :class:`PluginHooks` value."""
     return PluginHooks(
-        before=(
-            BeforeHook(match="/organization/*", handler=_ensure_membership),
-        ),
-        after=(
-            AfterHook(match="/get-session", handler=_attach_active_organization),
-        ),
+        before=(BeforeHook(match="/organization/*", handler=_ensure_membership),),
+        after=(AfterHook(match="/get-session", handler=_attach_active_organization),),
     )
 
 
-__all__ = ["build_hooks", "_get_request_membership"]
+__all__ = ["_get_request_membership", "build_hooks"]

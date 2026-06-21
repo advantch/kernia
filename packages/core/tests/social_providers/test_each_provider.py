@@ -13,7 +13,6 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-
 from kernia import social_providers as sp
 
 PKCE_VERIFIER = "v" * 64
@@ -59,9 +58,7 @@ PROVIDERS = [
 
 
 @pytest.mark.parametrize(("provider_id", "factory", "extra"), PROVIDERS)
-async def test_authorize_url(
-    provider_id: str, factory, extra: dict
-) -> None:
+async def test_authorize_url(provider_id: str, factory, extra: dict) -> None:
     provider = factory(client_id="cid", client_secret="csec", **extra)
     url = await provider.authorize(
         redirect_uri="https://app.test/callback",
@@ -79,9 +76,9 @@ async def test_authorize_url(
         assert qs.get("redirect_uri") == ["https://app.test/callback"]
         return
     assert qs.get("client_id") == ["cid"], f"{provider_id}: missing client_id"
-    assert qs.get("redirect_uri") == [
-        "https://app.test/callback"
-    ], f"{provider_id}: missing redirect_uri"
+    assert qs.get("redirect_uri") == ["https://app.test/callback"], (
+        f"{provider_id}: missing redirect_uri"
+    )
     assert qs.get("state") == ["ST"], f"{provider_id}: missing state"
     # Most providers default to `response_type=code`. Apple uses
     # `code id_token` because it ships id_tokens directly in form_post.
@@ -89,9 +86,7 @@ async def test_authorize_url(
         assert qs.get("response_type") == ["code id_token"]
         assert qs.get("response_mode") == ["form_post"]
     else:
-        assert qs.get("response_type") == [
-            "code"
-        ], f"{provider_id}: response_type != code"
+        assert qs.get("response_type") == ["code"], f"{provider_id}: response_type != code"
     # Scope: must be set (even if implementation chose an empty default — naver/
     # vercel/notion). Providers that omit scope param entirely are still allowed.
     if "scope" in qs:
@@ -105,11 +100,40 @@ async def test_authorize_url(
 def test_provider_ids_match_reference() -> None:
     """Smoke check that the canonical providers ship with sensible ids."""
     expected_ids = {
-        "apple", "atlassian", "cognito", "discord", "dropbox", "facebook",
-        "figma", "github", "gitlab", "google", "huggingface", "kakao", "kick",
-        "line", "linear", "linkedin", "microsoft", "naver", "notion", "paybin",
-        "paypal", "polar", "railway", "reddit", "roblox", "salesforce", "slack",
-        "spotify", "tiktok", "twitch", "twitter", "vercel", "vk", "wechat",
+        "apple",
+        "atlassian",
+        "cognito",
+        "discord",
+        "dropbox",
+        "facebook",
+        "figma",
+        "github",
+        "gitlab",
+        "google",
+        "huggingface",
+        "kakao",
+        "kick",
+        "line",
+        "linear",
+        "linkedin",
+        "microsoft",
+        "naver",
+        "notion",
+        "paybin",
+        "paypal",
+        "polar",
+        "railway",
+        "reddit",
+        "roblox",
+        "salesforce",
+        "slack",
+        "spotify",
+        "tiktok",
+        "twitch",
+        "twitter",
+        "vercel",
+        "vk",
+        "wechat",
         "zoom",
     }
     actual_ids = set()

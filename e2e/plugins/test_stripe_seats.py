@@ -22,8 +22,8 @@ from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -70,9 +70,7 @@ async def _signup(driver: ASGIDriver, email: str) -> str:
 
 
 async def _create_org(driver: ASGIDriver, *, name: str, slug: str) -> str:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()["id"]
 
@@ -112,9 +110,7 @@ def _checkout_line_items(mock: MockStripe) -> list[dict[str, Any]]:
 
 def _seat_plan() -> dict[str, StripePlan]:
     return {
-        "team": StripePlan(
-            name="team", price_id="price_team_base", seat_price_id="price_team_seat"
-        )
+        "team": StripePlan(name="team", price_id="price_team_base", seat_price_id="price_team_seat")
     }
 
 
@@ -241,8 +237,14 @@ def _sign(body: bytes) -> dict[str, str]:
     }
 
 
-def _seat_items_event(event_type: str, *, sub_id: str, customer: str, seat_qty: int,
-                      metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def _seat_items_event(
+    event_type: str,
+    *,
+    sub_id: str,
+    customer: str,
+    seat_qty: int,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "id": "evt_seat",
         "type": event_type,

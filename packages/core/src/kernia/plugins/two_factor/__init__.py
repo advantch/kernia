@@ -37,8 +37,10 @@ Requires `pyotp` (declared under the `two-factor` extra of `better-auth`).
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from kernia.cookies import sign, verify
 from kernia.plugins.two_factor import routes
@@ -120,7 +122,7 @@ def _sign_in_matcher(ctx: EndpointContext) -> bool:
     return ctx.request.path in _SIGN_IN_PATHS
 
 
-def _opts(ctx: EndpointContext) -> dict[str, object]:
+def _opts(ctx: EndpointContext) -> dict[str, Any]:
     return dict(ctx.auth.options.advanced.get(routes.OPTIONS_KEY) or {})
 
 
@@ -188,9 +190,7 @@ async def _intercept_sign_in(ctx: EndpointContext, result: object) -> object | N
     user_id = user_obj.get("id")
     if not user_id:
         return None
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=user_id),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="id", value=user_id),))
     if not user or not user.get("twoFactorEnabled"):
         return None
 
@@ -208,16 +208,14 @@ async def _intercept_sign_in(ctx: EndpointContext, result: object) -> object | N
         )
     # Drop the session cookies the sign-in handler queued.
     ctx.set_cookies[:] = [
-        c
-        for c in ctx.set_cookies
-        if c[0] not in (SESSION_TOKEN_COOKIE, SESSION_DATA_COOKIE)
+        c for c in ctx.set_cookies if c[0] not in (SESSION_TOKEN_COOKIE, SESSION_DATA_COOKIE)
     ]
 
     max_age = routes._two_factor_cookie_max_age(ctx)
     secure = ctx.auth.base_url.startswith("https")
 
     # Persist the challenge state on the verification table, keyed by the cookie.
-    identifier = f"2fa-{routes.secrets.token_urlsafe(15)}"
+    identifier = f"2fa-{secrets.token_urlsafe(15)}"
     now = routes._now()
     await ctx.auth.adapter.create(
         model="verification",
@@ -240,7 +238,9 @@ async def _intercept_sign_in(ctx: EndpointContext, result: object) -> object | N
         (
             DONT_REMEMBER_COOKIE,
             sign("true", secret=ctx.auth.secret),
-            CookieAttributes(path="/", max_age=max_age, http_only=True, secure=secure, same_site="lax"),
+            CookieAttributes(
+                path="/", max_age=max_age, http_only=True, secure=secure, same_site="lax"
+            ),
         )
     )
 
@@ -277,9 +277,7 @@ class _TwoFactorPlugin:
         RateLimitRule(path="/two-factor/verify-backup-code", window=60, max=5),
         RateLimitRule(path="/two-factor/send-otp", window=60, max=3),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(TWO_FACTOR_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(TWO_FACTOR_ERROR_CODES))
     init: None = None
 
 

@@ -135,9 +135,7 @@ async def test_passthrough_sets_session_cookie() -> None:
     _, driver, key = _passthrough_auth()
     payload = _make_payload(timestamp=time.time() * 1000)
     profile = symmetric_encrypt(key, json.dumps(payload))
-    r = await driver.request(
-        "GET", "/oauth-proxy-callback", query=f"profile={quote(profile)}"
-    )
+    r = await driver.request("GET", "/oauth-proxy-callback", query=f"profile={quote(profile)}")
     assert r.status == 302
     assert "better-auth.session_token" in driver.cookies
 
@@ -152,9 +150,7 @@ async def test_reject_missing_profile() -> None:
 async def test_reject_invalid_profile() -> None:
     _, driver, _ = _passthrough_auth()
     # Not decryptable with the configured key.
-    r = await driver.request(
-        "GET", "/oauth-proxy-callback", query="profile=!!!not-base64!!!"
-    )
+    r = await driver.request("GET", "/oauth-proxy-callback", query="profile=!!!not-base64!!!")
     assert r.status == 302
     loc = _header(r, "location") or ""
     assert "error=invalid_profile" in loc or "error=invalid_payload" in loc
@@ -381,9 +377,7 @@ class _MockProvider:
 def setup():
     idp = MockIdP(issuer="https://test-idp", audience="client-A")
     client = httpx.AsyncClient(transport=idp.mock_transport())
-    provider = _MockProvider(
-        client_id="client-A", http_client=client, issuer="https://test-idp"
-    )
+    provider = _MockProvider(client_id="client-A", http_client=client, issuer="https://test-idp")
     auth = init(
         KerniaOptions(
             database=memory_adapter(),
@@ -430,15 +424,11 @@ async def test_full_proxy_flow(setup) -> None:
 
 async def test_authorize_rejects_unknown_provider(setup) -> None:
     _, driver = setup
-    r = await driver.request(
-        "POST", "/oauth-proxy/authorize", json_body={"provider": "nope"}
-    )
+    r = await driver.request("POST", "/oauth-proxy/authorize", json_body={"provider": "nope"})
     assert r.status == 400
 
 
 async def test_callback_rejects_bad_state(setup) -> None:
     _, driver = setup
-    r = await driver.request(
-        "GET", "/oauth-proxy/callback", query="code=c&state=notarealstate"
-    )
+    r = await driver.request("GET", "/oauth-proxy/callback", query="code=c&state=notarealstate")
     assert r.status == 400

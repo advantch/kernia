@@ -61,9 +61,7 @@ async def test_fail_public_client_with_web_type(driver) -> None:
 
 @pytest.mark.parametrize("client_type", ["native", "user-agent-based"])
 async def test_fail_confidential_client_with_public_type(driver, client_type) -> None:
-    r = await _register(
-        driver, token_endpoint_auth_method="client_secret_post", type=client_type
-    )
+    r = await _register(driver, token_endpoint_auth_method="client_secret_post", type=client_type)
     assert r.status == 400
 
 
@@ -77,9 +75,7 @@ async def test_register_public_client(driver, client_type) -> None:
 
 
 async def test_confidential_method_and_type_preserved(driver) -> None:
-    r = await _register(
-        driver, token_endpoint_auth_method="client_secret_post", type="web"
-    )
+    r = await _register(driver, token_endpoint_auth_method="client_secret_post", type="web")
     assert r.status == 200, r.json()
     assert r.json()["client_id"]
     assert r.json()["client_secret"]
@@ -135,5 +131,4 @@ async def test_register_disabled_returns_404() -> None:
     "public-client override cases from issue #8588); those upstream cases "
     "require a data model the port does not implement."
 )
-async def test_session_and_organization_and_metadata_cases() -> None:
-    ...
+async def test_session_and_organization_and_metadata_cases() -> None: ...

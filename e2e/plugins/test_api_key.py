@@ -104,9 +104,7 @@ async def test_should_fail_to_create_api_keys_when_user_id_provided_by_client() 
 
 
 async def test_should_have_real_value_from_rate_limit_enabled() -> None:
-    driver, _ = await _signed_in_driver(
-        ApiKeyOptions(rate_limit=RateLimitOptions(enabled=False))
-    )
+    driver, _ = await _signed_in_driver(ApiKeyOptions(rate_limit=RateLimitOptions(enabled=False)))
     body = await _create(driver, name="x")
     assert body["rateLimitEnabled"] is False
 
@@ -162,18 +160,14 @@ async def test_should_create_with_given_prefix() -> None:
 
 async def test_should_fail_prefix_shorter_than_min() -> None:
     driver, _ = await _signed_in_driver(ApiKeyOptions(minimum_prefix_length=3))
-    r = await driver.request(
-        "POST", "/api-key/create", json_body={"name": "x", "prefix": "a"}
-    )
+    r = await driver.request("POST", "/api-key/create", json_body={"name": "x", "prefix": "a"})
     assert r.status == 400
     assert r.json()["code"] == "INVALID_PREFIX_LENGTH"
 
 
 async def test_should_fail_prefix_longer_than_max() -> None:
     driver, _ = await _signed_in_driver(ApiKeyOptions(maximum_prefix_length=3))
-    r = await driver.request(
-        "POST", "/api-key/create", json_body={"name": "x", "prefix": "abcdef"}
-    )
+    r = await driver.request("POST", "/api-key/create", json_body={"name": "x", "prefix": "abcdef"})
     assert r.status == 400
     assert r.json()["code"] == "INVALID_PREFIX_LENGTH"
 
@@ -389,9 +383,7 @@ async def test_start_is_null_when_should_store_false() -> None:
 
 async def test_uses_defined_characters_length() -> None:
     driver, _ = await _signed_in_driver(
-        ApiKeyOptions(
-            starting_characters_config=StartingCharactersConfig(characters_length=10)
-        )
+        ApiKeyOptions(starting_characters_config=StartingCharactersConfig(characters_length=10))
     )
     body = await _create(driver, name="x")
     assert body["start"] == body["key"][:10]
@@ -402,9 +394,7 @@ async def test_uses_defined_characters_length() -> None:
 
 async def test_verify_invalid_key_fails() -> None:
     driver, _ = await _signed_in_driver()
-    r = await driver.request(
-        "POST", "/api-key/verify", json_body={"key": "x" * 64}
-    )
+    r = await driver.request("POST", "/api-key/verify", json_body={"key": "x" * 64})
     assert r.status == 200
     assert r.json()["valid"] is False
     assert r.json()["error"]["code"] == "INVALID_API_KEY"
@@ -550,7 +540,7 @@ async def test_get_nonexistent_key_fails() -> None:
 
 
 async def test_get_other_users_key_fails() -> None:
-    driver, auth = await _signed_in_driver(email="a@example.com")
+    driver, _auth = await _signed_in_driver(email="a@example.com")
     body = await _create(driver, name="x")
     # sign in as a different user
     driver.cookies.clear()
@@ -731,9 +721,7 @@ async def test_list_sort_by_name() -> None:
     driver, _ = await _signed_in_driver()
     for name in ("charlie", "alpha", "bravo"):
         await _create(driver, name=name)
-    r = await driver.request(
-        "GET", "/api-key/list", query="sortBy=name&sortDirection=asc"
-    )
+    r = await driver.request("GET", "/api-key/list", query="sortBy=name&sortDirection=asc")
     names = [k["name"] for k in r.json()["apiKeys"]]
     assert names == ["alpha", "bravo", "charlie"]
 
@@ -779,9 +767,7 @@ async def test_list_sort_by_created_at_ascending() -> None:
     driver, _ = await _signed_in_driver()
     for i in range(3):
         await _create(driver, name=f"k{i}")
-    r = await driver.request(
-        "GET", "/api-key/list", query="sortBy=createdAt&sortDirection=asc"
-    )
+    r = await driver.request("GET", "/api-key/list", query="sortBy=createdAt&sortDirection=asc")
     keys = r.json()["apiKeys"]
     assert len(keys) > 1
     times = [k["createdAt"] for k in keys]
@@ -792,9 +778,7 @@ async def test_list_sort_by_created_at_descending() -> None:
     driver, _ = await _signed_in_driver()
     for i in range(3):
         await _create(driver, name=f"k{i}")
-    r = await driver.request(
-        "GET", "/api-key/list", query="sortBy=createdAt&sortDirection=desc"
-    )
+    r = await driver.request("GET", "/api-key/list", query="sortBy=createdAt&sortDirection=desc")
     keys = r.json()["apiKeys"]
     assert len(keys) > 1
     times = [k["createdAt"] for k in keys]
@@ -834,9 +818,7 @@ async def test_list_handles_string_query_params() -> None:
 
 async def test_create_with_default_permissions() -> None:
     driver, _ = await _signed_in_driver(
-        ApiKeyOptions(
-            permissions=PermissionsOptions(default_permissions={"files": ["read"]})
-        )
+        ApiKeyOptions(permissions=PermissionsOptions(default_permissions={"files": ["read"]}))
     )
     body = await _create(driver, name="x")
     assert body["permissions"] == {"files": ["read"]}
@@ -844,9 +826,7 @@ async def test_create_with_default_permissions() -> None:
 
 async def test_get_returns_permissions_as_object() -> None:
     driver, _ = await _signed_in_driver(
-        ApiKeyOptions(
-            permissions=PermissionsOptions(default_permissions={"files": ["read"]})
-        )
+        ApiKeyOptions(permissions=PermissionsOptions(default_permissions={"files": ["read"]}))
     )
     body = await _create(driver, name="x")
     r = await driver.request("GET", "/api-key/get", query=f"id={body['id']}")
@@ -856,9 +836,7 @@ async def test_get_returns_permissions_as_object() -> None:
 async def test_verify_with_matching_permissions() -> None:
     driver, _ = await _signed_in_driver(
         ApiKeyOptions(
-            permissions=PermissionsOptions(
-                default_permissions={"files": ["read", "write"]}
-            )
+            permissions=PermissionsOptions(default_permissions={"files": ["read", "write"]})
         )
     )
     raw = (await _create(driver, name="x"))["key"]
@@ -873,9 +851,7 @@ async def test_verify_with_matching_permissions() -> None:
 
 async def test_verify_with_non_matching_permissions() -> None:
     driver, _ = await _signed_in_driver(
-        ApiKeyOptions(
-            permissions=PermissionsOptions(default_permissions={"files": ["read"]})
-        )
+        ApiKeyOptions(permissions=PermissionsOptions(default_permissions={"files": ["read"]}))
     )
     raw = (await _create(driver, name="x"))["key"]
     driver.cookies.clear()
@@ -989,9 +965,7 @@ async def test_delete_all_expired() -> None:
     r = await driver.request("POST", "/api-key/delete-all-expired-api-keys")
     assert r.status == 200
     assert r.json()["success"] is True
-    row = await db.find_one(
-        model="apikey", where=(Where(field="id", value=body["id"]),)
-    )
+    row = await db.find_one(model="apikey", where=(Where(field="id", value=body["id"]),))
     assert row is None
 
 
@@ -1088,14 +1062,14 @@ async def test_multi_list_filtered_by_config_id() -> None:
     all_keys = (await driver.request("GET", "/api-key/list")).json()["apiKeys"]
     assert len(all_keys) >= 3
 
-    pub = (
-        await driver.request("GET", "/api-key/list", query="configId=public-api")
-    ).json()["apiKeys"]
+    pub = (await driver.request("GET", "/api-key/list", query="configId=public-api")).json()[
+        "apiKeys"
+    ]
     assert pub and all(k["configId"] == "public-api" for k in pub)
 
-    internal = (
-        await driver.request("GET", "/api-key/list", query="configId=internal-api")
-    ).json()["apiKeys"]
+    internal = (await driver.request("GET", "/api-key/list", query="configId=internal-api")).json()[
+        "apiKeys"
+    ]
     assert internal and all(k["configId"] == "internal-api" for k in internal)
 
 
@@ -1166,9 +1140,7 @@ async def test_multi_delete_from_specific_config() -> None:
     assert r.status == 200, r.json()
     assert r.json()["success"] is True
 
-    g = await driver.request(
-        "GET", "/api-key/get", query=f"id={key['id']}&configId=internal-api"
-    )
+    g = await driver.request("GET", "/api-key/get", query=f"id={key['id']}&configId=internal-api")
     assert g.status >= 400
 
 
@@ -1225,7 +1197,7 @@ async def _drain(deferred: list) -> None:
 
 
 async def test_defer_updates_with_global_background_tasks() -> None:
-    driver, auth, deferred = await _defer_driver(ApiKeyOptions(defer_updates=True))
+    driver, _auth, deferred = await _defer_driver(ApiKeyOptions(defer_updates=True))
     key = await _create(driver, name="x")
 
     r = await driver.request("POST", "/api-key/verify", json_body={"key": key["key"]})
@@ -1241,7 +1213,7 @@ async def test_defer_updates_with_global_background_tasks() -> None:
 
 
 async def test_defer_updates_still_validates_rate_limits() -> None:
-    driver, auth, deferred = await _defer_driver(
+    driver, _auth, deferred = await _defer_driver(
         ApiKeyOptions(
             defer_updates=True,
             rate_limit=RateLimitOptions(enabled=True, max_requests=2, time_window=60_000),
@@ -1306,7 +1278,7 @@ async def test_defer_remaining_count_updates() -> None:
 async def test_no_defer_when_handler_not_configured() -> None:
     # deferUpdates enabled but no advanced.background_tasks handler -> the update
     # runs synchronously, so the DB reflects it immediately (no draining needed).
-    driver, auth = await _signed_in_driver(ApiKeyOptions(defer_updates=True))
+    driver, _auth = await _signed_in_driver(ApiKeyOptions(defer_updates=True))
     key = await _create(driver, name="x")
 
     r = await driver.request("POST", "/api-key/verify", json_body={"key": key["key"]})

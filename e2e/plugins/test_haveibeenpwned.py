@@ -13,12 +13,11 @@ import hashlib
 
 import httpx
 import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password, have_i_been_pwned
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -30,7 +29,9 @@ def _pwned_suffix(password: str) -> tuple[str, str]:
     return sha1[:5], sha1[5:]
 
 
-def _transport(*, known_password: str, breach_count: int = 9999) -> tuple[httpx.MockTransport, list[str]]:
+def _transport(
+    *, known_password: str, breach_count: int = 9999
+) -> tuple[httpx.MockTransport, list[str]]:
     """Build a transport that returns a range hit for `known_password`.
 
     Returns the transport and a list that records each (prefix) called, so we
@@ -140,9 +141,7 @@ async def test_cache_hit_skips_second_http_call() -> None:
 
 
 @pytest.mark.parametrize("threshold,count,expected", [(0, 5, 400), (10, 5, 200)])
-async def test_threshold_gates_rejection(
-    threshold: int, count: int, expected: int
-) -> None:
+async def test_threshold_gates_rejection(threshold: int, count: int, expected: int) -> None:
     transport, _ = _transport(known_password="thresholdTest!", breach_count=count)
     driver = _make_driver(transport, threshold=threshold)
     r = await driver.request(

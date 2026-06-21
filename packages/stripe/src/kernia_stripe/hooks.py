@@ -104,9 +104,8 @@ async def on_checkout_session_completed(
         if not plan:
             return
         checkout_meta = subscription_metadata.get(checkout_session.get("metadata"))
-        reference_id = (
-            checkout_session.get("client_reference_id")
-            or checkout_meta.get("referenceId")
+        reference_id = checkout_session.get("client_reference_id") or checkout_meta.get(
+            "referenceId"
         )
         subscription_id = checkout_meta.get("subscriptionId")
         seats = resolve_quantity(items, item, plan.seat_price_id)
@@ -125,9 +124,7 @@ async def on_checkout_session_completed(
                 "canceledAt": _sec(subscription.get("canceled_at")),
                 "endedAt": _sec(subscription.get("ended_at")),
                 "seats": seats,
-                "billingInterval": (item.get("price") or {}).get("recurring", {}).get(
-                    "interval"
-                ),
+                "billingInterval": (item.get("price") or {}).get("recurring", {}).get("interval"),
             }
             await ctx.auth.adapter.update(
                 model="subscription",
@@ -175,9 +172,7 @@ async def on_subscription_created(
         if existing:
             return
 
-        reference = await _find_reference_by_customer(
-            ctx, options, stripe_customer_id
-        )
+        reference = await _find_reference_by_customer(ctx, options, stripe_customer_id)
         if not reference:
             _log.warning("No reference for stripeCustomerId %s", stripe_customer_id)
             return
@@ -204,9 +199,7 @@ async def on_subscription_created(
             "periodStart": _sec(item.get("current_period_start")),
             "periodEnd": _sec(item.get("current_period_end")),
             "seats": seats,
-            "billingInterval": (item.get("price") or {})
-            .get("recurring", {})
-            .get("interval"),
+            "billingInterval": (item.get("price") or {}).get("recurring", {}).get("interval"),
             "createdAt": now,
             "updatedAt": now,
         }
@@ -246,9 +239,7 @@ async def on_subscription_updated(
             if subscription_id
             else (Where(field="stripeSubscriptionId", value=stripe_sub["id"]),)
         )
-        subscription = await ctx.auth.adapter.find_one(
-            model="subscription", where=where
-        )
+        subscription = await ctx.auth.adapter.find_one(model="subscription", where=where)
         if not subscription:
             subs = await ctx.auth.adapter.find_many(
                 model="subscription",
@@ -265,11 +256,7 @@ async def on_subscription_updated(
             else:
                 return
 
-        seats = (
-            resolve_quantity(items, item, plan.seat_price_id)
-            if plan
-            else item.get("quantity")
-        )
+        seats = resolve_quantity(items, item, plan.seat_price_id) if plan else item.get("quantity")
         trial = _trial_fields(stripe_sub)
         update = {
             **trial,
@@ -288,9 +275,7 @@ async def on_subscription_updated(
             "endedAt": _sec(stripe_sub.get("ended_at")),
             "seats": seats,
             "stripeSubscriptionId": stripe_sub["id"],
-            "billingInterval": (item.get("price") or {})
-            .get("recurring", {})
-            .get("interval"),
+            "billingInterval": (item.get("price") or {}).get("recurring", {}).get("interval"),
             "stripeScheduleId": _schedule_id(stripe_sub),
         }
         # `limits` is not a persisted column; strip None entry to avoid noise.
@@ -335,9 +320,7 @@ async def on_subscription_updated(
                 and subscription.get("status") == "trialing"
                 and plan.free_trial.on_trial_end
             ):
-                await _call(
-                    plan.free_trial.on_trial_end, {"subscription": updated}, ctx
-                )
+                await _call(plan.free_trial.on_trial_end, {"subscription": updated}, ctx)
             if (
                 stripe_sub.get("status") == "incomplete_expired"
                 and subscription.get("status") == "trialing"
@@ -408,19 +391,14 @@ def _defu(primary: dict[str, Any], secondary: dict[str, Any] | None) -> dict[str
     """Deep-merge two dicts with `primary` taking priority (mirrors `defu`)."""
     out: dict[str, Any] = dict(secondary or {})
     for key, value in primary.items():
-        if (
-            isinstance(value, dict)
-            and isinstance(out.get(key), dict)
-        ):
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
             out[key] = _defu(value, out[key])
         else:
             out[key] = value
     return out
 
 
-async def _find_existing_user_customer(
-    options: StripeOptions, email: str
-) -> dict[str, Any] | None:
+async def _find_existing_user_customer(options: StripeOptions, email: str) -> dict[str, Any] | None:
     """Search (→ list fallback) for a non-organization Stripe customer by email.
 
     Mirrors the upstream `customers.search` / `customers.list` fallback in the
@@ -438,9 +416,7 @@ async def _find_existing_user_customer(
         data = (result or {}).get("data") or []
         return data[0] if data else None
     except Exception:
-        _log.warning(
-            "Stripe customers.search failed, falling back to customers.list"
-        )
+        _log.warning("Stripe customers.search failed, falling back to customers.list")
         listed = await client.list_customers(email=email, limit=100)
         for customer in (listed or {}).get("data") or []:
             if (customer.get("metadata") or {}).get("customerType") != "organization":
@@ -456,11 +432,7 @@ def build_customer_database_hooks(options: StripeOptions) -> DatabaseHooks:
     """
 
     async def on_user_create_after(user: dict[str, Any], ctx: Any) -> None:
-        if (
-            ctx is None
-            or not options.create_customer_on_sign_up
-            or user.get("stripeCustomerId")
-        ):
+        if ctx is None or not options.create_customer_on_sign_up or user.get("stripeCustomerId"):
             return
         try:
             existing = await _find_existing_user_customer(options, user["email"])
@@ -483,10 +455,7 @@ def build_customer_database_hooks(options: StripeOptions) -> DatabaseHooks:
             extra_create_params: dict[str, Any] = {}
             if options.get_customer_create_params is not None:
                 extra_create_params = (
-                    await _maybe_await_result(
-                        options.get_customer_create_params(user, ctx)
-                    )
-                    or {}
+                    await _maybe_await_result(options.get_customer_create_params(user, ctx)) or {}
                 )
 
             params = _defu(
@@ -521,9 +490,7 @@ def build_customer_database_hooks(options: StripeOptions) -> DatabaseHooks:
         if ctx is None or not user.get("stripeCustomerId"):
             return
         try:
-            stripe_customer = await options.stripe_client.get_customer(
-                user["stripeCustomerId"]
-            )
+            stripe_customer = await options.stripe_client.get_customer(user["stripeCustomerId"])
             if stripe_customer.get("deleted"):
                 return
             if stripe_customer.get("email") != user.get("email"):

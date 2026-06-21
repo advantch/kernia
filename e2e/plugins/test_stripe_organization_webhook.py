@@ -28,8 +28,8 @@ from kernia.plugins.email_password import email_and_password
 from kernia.plugins.organization import organization
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -53,9 +53,7 @@ def _build(
 ) -> tuple[ASGIDriver, MockStripe, object]:
     mock = MockStripe()
     mock.add_price("price_starter", usage_type="licensed")
-    sclient = client or StripeClient(
-        api_key="sk_test_x", transport=mock.mock_transport()
-    )
+    sclient = client or StripeClient(api_key="sk_test_x", transport=mock.mock_transport())
     plugin = stripe(
         StripeOptions(
             stripe_client=sclient,
@@ -90,9 +88,7 @@ async def _signup(driver: ASGIDriver, email: str) -> str:
 
 
 async def _create_org(driver: ASGIDriver, *, name: str, slug: str) -> str:
-    r = await driver.request(
-        "POST", "/organization/create", json_body={"name": name, "slug": slug}
-    )
+    r = await driver.request("POST", "/organization/create", json_body={"name": name, "slug": slug})
     assert r.status == 200, r.json()
     return r.json()["id"]
 
@@ -109,9 +105,7 @@ def _sign(body: bytes) -> dict[str, str]:
 
 async def _post_webhook(driver: ASGIDriver, event: dict[str, Any]) -> Any:
     body = _json.dumps(event).encode("utf-8")
-    return await driver.request(
-        "POST", "/stripe/webhook", json_body=event, headers=_sign(body)
-    )
+    return await driver.request("POST", "/stripe/webhook", json_body=event, headers=_sign(body))
 
 
 def _created_event(sub_id: str, customer: str, *, quantity: int = 5) -> dict[str, Any]:
@@ -188,9 +182,7 @@ async def test_calls_on_subscription_created_for_org_dashboard() -> None:
         update={"stripeCustomerId": "cus_org_created_callback_123"},
     )
 
-    event = _created_event(
-        "sub_org_created_callback_123", "cus_org_created_callback_123"
-    )
+    event = _created_event("sub_org_created_callback_123", "cus_org_created_callback_123")
     assert (await _post_webhook(driver, event)).status == 200
 
     assert seen, "on_subscription_created was not called"
@@ -288,14 +280,10 @@ async def test_get_customer_create_params_throwing_surfaces_error() -> None:
         raise RuntimeError("Callback error")
 
     driver, _mock, _auth = _build(
-        org_opts=OrganizationStripeOptions(
-            enabled=True, get_customer_create_params=get_params
-        )
+        org_opts=OrganizationStripeOptions(enabled=True, get_customer_create_params=get_params)
     )
     await _signup(driver, "callback-throw-test@email.com")
-    org_id = await _create_org(
-        driver, name="Callback Throw Org", slug="callback-throw-org"
-    )
+    org_id = await _create_org(driver, name="Callback Throw Org", slug="callback-throw-org")
 
     r = await driver.request(
         "POST",

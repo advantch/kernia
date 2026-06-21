@@ -243,9 +243,7 @@ def _client_validated_plugin():
 
 async def test_should_reject_invalid_client_in_device_code_request() -> None:
     driver = _build(_client_validated_plugin())
-    r = await driver.request(
-        "POST", "/device/code", json_body={"client_id": "invalid-client"}
-    )
+    r = await driver.request("POST", "/device/code", json_body={"client_id": "invalid-client"})
     assert r.status == 400
     payload = _oauth(r)
     assert payload["error"] == "invalid_client"
@@ -254,9 +252,7 @@ async def test_should_reject_invalid_client_in_device_code_request() -> None:
 
 async def test_should_accept_valid_client_in_device_code_request() -> None:
     driver = _build(_client_validated_plugin())
-    r = await driver.request(
-        "POST", "/device/code", json_body={"client_id": "valid-client-1"}
-    )
+    r = await driver.request("POST", "/device/code", json_body={"client_id": "valid-client-1"})
     assert r.status == 200
     assert r.json()["device_code"]
 
@@ -412,9 +408,7 @@ async def test_should_deny_device_authorization() -> None:
     code = await _device_code(driver)
 
     await driver.request("GET", "/device", query=f"user_code={code['user_code']}")
-    deny = await driver.request(
-        "POST", "/device/deny", json_body={"user_code": code["user_code"]}
-    )
+    deny = await driver.request("POST", "/device/deny", json_body={"user_code": code["user_code"]})
     assert deny.status == 200, deny.json()
     assert deny.json()["success"] is True
 
@@ -428,9 +422,7 @@ async def test_should_deny_device_authorization() -> None:
 async def test_should_require_authentication_for_approval() -> None:
     driver = _build(_flow_plugin())
     code = await _device_code(driver)
-    r = await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
+    r = await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
     assert r.status == 401
     payload = _oauth(r)
     assert payload["error"] == "unauthorized"
@@ -460,12 +452,8 @@ async def test_should_not_allow_approving_already_processed_device_code() -> Non
     await _sign_in(driver)
     code = await _device_code(driver)
     await driver.request("GET", "/device", query=f"user_code={code['user_code']}")
-    await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
-    r = await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
+    await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
+    r = await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
     assert r.status == 400
     payload = _oauth(r)
     assert payload["error"] == "invalid_request"
@@ -486,9 +474,7 @@ async def test_should_store_and_use_scope_from_device_code_request() -> None:
     await _sign_in(driver)
     code = await _device_code(driver, scope="read write profile")
     await driver.request("GET", "/device", query=f"user_code={code['user_code']}")
-    await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
+    await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
     r = await _token(driver, code["device_code"])
     assert r.status == 200, r.json()
     assert r.json()["scope"] == "read write profile"
@@ -497,9 +483,7 @@ async def test_should_store_and_use_scope_from_device_code_request() -> None:
 async def test_should_require_authentication_for_deny() -> None:
     driver = _build(_flow_plugin())
     code = await _device_code(driver)
-    r = await driver.request(
-        "POST", "/device/deny", json_body={"user_code": code["user_code"]}
-    )
+    r = await driver.request("POST", "/device/deny", json_body={"user_code": code["user_code"]})
     assert r.status == 401
     payload = _oauth(r)
     assert payload["error"] == "unauthorized"
@@ -525,9 +509,7 @@ async def test_should_allow_first_user_to_approve_but_prevent_re_approval() -> N
     assert row["status"] == "approved"
     assert row["userId"]
 
-    r = await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
+    r = await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
     assert r.status == 400
     payload = _oauth(r)
     assert payload["error"] == "invalid_request"
@@ -572,9 +554,7 @@ async def test_rejects_deny_from_session_that_did_not_claim_pending_code() -> No
     await _sign_in(attacker, email="attacker@example.test", password="attackerpass1")
 
     code = await _device_code(driver)
-    r = await attacker.request(
-        "POST", "/device/deny", json_body={"user_code": code["user_code"]}
-    )
+    r = await attacker.request("POST", "/device/deny", json_body={"user_code": code["user_code"]})
     assert r.status == 400
     assert _oauth(r)["error"] == "invalid_request"
 
@@ -591,9 +571,7 @@ async def test_allows_approve_when_same_session_called_verify_first() -> None:
     await _sign_in(driver, email="legit@example.test", password="legitpass1")
     code = await _device_code(driver)
     await driver.request("GET", "/device", query=f"user_code={code['user_code']}")
-    r = await driver.request(
-        "POST", "/device/approve", json_body={"user_code": code["user_code"]}
-    )
+    r = await driver.request("POST", "/device/approve", json_body={"user_code": code["user_code"]})
     assert r.status == 200, r.json()
     assert r.json()["success"] is True
 
@@ -613,9 +591,7 @@ async def test_rejects_approve_from_different_user_after_another_claimed() -> No
     assert r.status == 403
     assert _oauth(r)["error"] == "access_denied"
 
-    r = await attacker.request(
-        "POST", "/device/deny", json_body={"user_code": code["user_code"]}
-    )
+    r = await attacker.request("POST", "/device/deny", json_body={"user_code": code["user_code"]})
     assert r.status == 403
     assert _oauth(r)["error"] == "access_denied"
 
@@ -748,17 +724,12 @@ async def test_should_use_absolute_url_for_verification_uri() -> None:
     driver = _build(device_authorization(verification_uri=custom))
     resp = await _device_code(driver)
     assert resp["verification_uri"] == custom
-    assert (
-        resp["verification_uri_complete"]
-        == f"{custom}?user_code={resp['user_code']}"
-    )
+    assert resp["verification_uri_complete"] == f"{custom}?user_code={resp['user_code']}"
 
 
 async def test_should_encode_user_code_in_verification_uri_complete() -> None:
     driver = _build(
-        device_authorization(
-            verification_uri="/device", generate_user_code=lambda: "ABC-123"
-        )
+        device_authorization(verification_uri="/device", generate_user_code=lambda: "ABC-123")
     )
     resp = await _device_code(driver)
     assert "user_code=ABC-123" in resp["verification_uri_complete"]

@@ -71,13 +71,9 @@ async def test_iss_matches_advertised_metadata_issuer(setup) -> None:
     # RFC 9207: the iss in the authorization response must equal the issuer in
     # the discovery metadata.
     _, driver, client = setup
-    metadata = (
-        await driver.request("GET", "/.well-known/openid-configuration")
-    ).json()
+    metadata = (await driver.request("GET", "/.well-known/openid-configuration")).json()
     verifier = pkce_verifier()
-    r = await _authorize(
-        driver, client, scope="openid", challenge=pkce_challenge(verifier)
-    )
+    r = await _authorize(driver, client, scope="openid", challenge=pkce_challenge(verifier))
     qs = parse_qs(urlsplit(r.json()["redirect"]).query)
     assert qs["iss"] == [metadata["issuer"]]
 
@@ -113,8 +109,7 @@ async def test_missing_pkce_is_invalid_request(setup) -> None:
     "stripping, localhost exemption) has no equivalent in the Python port -- the "
     "issuer is used exactly as configured."
 )
-async def test_validate_issuer_url_cases() -> None:
-    ...
+async def test_validate_issuer_url_cases() -> None: ...
 
 
 @pytest.mark.skip(
@@ -123,5 +118,4 @@ async def test_validate_issuer_url_cases() -> None:
     "session-gated authorize + login/consent pages + a PAR resolver not "
     "implemented in the Python port."
 )
-async def test_prompt_none_and_par_cases() -> None:
-    ...
+async def test_prompt_none_and_par_cases() -> None: ...

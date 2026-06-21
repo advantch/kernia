@@ -94,9 +94,7 @@ class MockStripe:
                 "price": {"id": it["price"]},
                 "quantity": it.get("quantity", 1),
                 "current_period_start": it.get("current_period_start", now),
-                "current_period_end": it.get(
-                    "current_period_end", now + 30 * 86400
-                ),
+                "current_period_end": it.get("current_period_end", now + 30 * 86400),
             }
             for it in items
         ]
@@ -184,11 +182,7 @@ class MockStripe:
             return httpx.Response(200, json=obj)
         if path == "/v1/customers" and method == "GET":
             email = request.url.params.get("email")
-            data = [
-                c
-                for c in self.customers.values()
-                if email is None or c.get("email") == email
-            ]
+            data = [c for c in self.customers.values() if email is None or c.get("email") == email]
             try:
                 limit = int(request.url.params.get("limit", "100"))
             except ValueError:
@@ -358,9 +352,7 @@ class MockStripe:
                 for s in self.schedules.values()
                 if customer is None or s.get("customer") == customer
             ]
-            return httpx.Response(
-                200, json={"object": "list", "data": data, "has_more": False}
-            )
+            return httpx.Response(200, json={"object": "list", "data": data, "has_more": False})
         if path == "/v1/subscription_schedules" and method == "POST":
             from_sub = body.get("from_subscription")
             source = self.subscriptions.get(from_sub) if from_sub else None
@@ -414,9 +406,7 @@ class MockStripe:
                 return self._err(404, f"No such schedule: {sched_id}")
             if action == "release":
                 obj["status"] = "released"
-                self.capture_events.append(
-                    {"type": "subscription_schedule.release", "object": obj}
-                )
+                self.capture_events.append({"type": "subscription_schedule.release", "object": obj})
                 return httpx.Response(200, json=obj)
             meta = self._collect_metadata(body)
             if meta:
@@ -450,16 +440,15 @@ class MockStripe:
                 "url": f"https://billing.stripe.test/p/{_new_id('sess')}",
                 "flow_data": self._collect_flow_data(body),
             }
-            self.capture_events.append(
-                {"type": "billing_portal.session.create", "object": obj}
-            )
+            self.capture_events.append({"type": "billing_portal.session.create", "object": obj})
             return httpx.Response(200, json=obj)
 
         # /v1/prices — list (supports lookup_keys[] filtering) and retrieve.
         if path == "/v1/prices" and method == "GET":
             params = dict(request.url.params.multi_items())
             lookup_keys = [
-                v for k, v in request.url.params.multi_items()
+                v
+                for k, v in request.url.params.multi_items()
                 if k in ("lookup_keys[]", "lookup_keys")
             ]
             data: list[dict[str, Any]] = []
@@ -515,9 +504,7 @@ class MockStripe:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         timestamp = int(time.time())
         signed_payload = f"{timestamp}.".encode("ascii") + body
-        sig = hmac.new(
-            secret.encode("utf-8"), signed_payload, hashlib.sha256
-        ).hexdigest()
+        sig = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
         return body, {
             "Stripe-Signature": f"t={timestamp},v1={sig}",
             "Content-Type": "application/json",
@@ -527,7 +514,9 @@ class MockStripe:
 
     @staticmethod
     def _err(status: int, message: str) -> httpx.Response:
-        return httpx.Response(status, json={"error": {"message": message, "type": "invalid_request_error"}})
+        return httpx.Response(
+            status, json={"error": {"message": message, "type": "invalid_request_error"}}
+        )
 
     @staticmethod
     def _parse_form(content: bytes) -> dict[str, str]:

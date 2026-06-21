@@ -23,6 +23,7 @@ export function baseOptions(): BaseLayoutProps {
     links: [
       { text: "Docs", url: "/docs", active: "nested-url" },
       { text: "Demo", url: "/docs/examples/fastapi-saas-demo" },
+      { text: "Blog", url: "/blog", active: "nested-url" },
       {
         text: "GitHub",
         url: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,

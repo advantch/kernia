@@ -17,7 +17,6 @@ from kernia.types.context import EndpointContext
 from kernia.types.endpoint import AuthEndpoint, EndpointOptions
 from kernia.types.plugin import KerniaPlugin, PluginSchema
 
-
 ADMIN_CONFIG_ERROR_CODES: Mapping[str, str] = {
     "AUTH_METHOD_DISABLED": "This login method is disabled.",
     "ADMIN_CONFIG_FORBIDDEN": "You are not allowed to manage admin configuration.",
@@ -259,11 +258,7 @@ def _build_endpoints(opts: AdminConfigOptions) -> tuple[AuthEndpoint, ...]:
             value=body.value,
             secret_fields=secret_fields,
         )
-        return {
-            "clients": _redact(_decode(row, {"clients": []}), secret_fields).get(
-                "clients", []
-            )
-        }
+        return {"clients": _redact(_decode(row, {"clients": []}), secret_fields).get("clients", [])}
 
     async def get_stripe_config(ctx: EndpointContext) -> dict[str, Any]:
         await _require_admin(ctx, opts)
@@ -321,20 +316,24 @@ def _build_endpoints(opts: AdminConfigOptions) -> tuple[AuthEndpoint, ...]:
     )
 
 
+# Hoisted out of the dataclass default (RUF009): defaults are evaluated once at
+# class-definition time anyway, and PluginSchema is frozen, so a single shared
+# instance is the intended (and previous) behavior — this just makes it explicit.
+_ADMIN_CONFIG_SCHEMA = PluginSchema(tables=(ADMIN_CONFIG_MODEL,))
+
+
 @dataclass(frozen=True)
 class _AdminConfigPlugin:
     id: str = "admin-config"
     version: str | None = "0.0.0"
-    schema: PluginSchema | None = PluginSchema(tables=(ADMIN_CONFIG_MODEL,))
+    schema: PluginSchema | None = _ADMIN_CONFIG_SCHEMA
     endpoints: tuple[AuthEndpoint, ...] = ()
     middlewares: None = None
     hooks: None = None
     on_request: Any = None
     on_response: None = None
     rate_limit: None = None
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(ADMIN_CONFIG_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(ADMIN_CONFIG_ERROR_CODES))
     init: None = None
 
 

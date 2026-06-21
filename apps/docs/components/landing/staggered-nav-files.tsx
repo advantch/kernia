@@ -11,6 +11,7 @@ const navFiles = [
   { name: "readme", href: "/" },
   { name: "docs", href: "/docs" },
   { name: "demo", href: "/docs/examples/fastapi-saas-demo" },
+  { name: "blog", href: "/blog" },
 ];
 
 export function StaggeredNavFiles() {

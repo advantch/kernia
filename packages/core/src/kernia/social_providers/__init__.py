@@ -43,7 +43,6 @@ from kernia.social_providers.vk import vk
 from kernia.social_providers.wechat import wechat
 from kernia.social_providers.zoom import zoom
 
-
 __all__ = [
     "OAuthProvider",
     "OAuthUserProfile",

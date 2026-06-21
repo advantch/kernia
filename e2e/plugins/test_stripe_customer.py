@@ -25,8 +25,8 @@ from kernia.auth import init
 from kernia.plugins.email_password import email_and_password
 from kernia.types.adapter import Where
 from kernia.types.init_options import (
-    KerniaOptions,
     EmailPasswordOptions,
+    KerniaOptions,
     RateLimitOptions,
 )
 from kernia_memory_adapter import memory_adapter
@@ -88,9 +88,7 @@ def _creates(mock: MockStripe) -> list[dict[str, Any]]:
     return [e for e in mock.capture_events if e["type"] == "customer.create"]
 
 
-def _seed_customer(
-    mock: MockStripe, cid: str, *, email: str, metadata: dict[str, Any]
-) -> None:
+def _seed_customer(mock: MockStripe, cid: str, *, email: str, metadata: dict[str, Any]) -> None:
     mock.customers[cid] = {
         "id": cid,
         "object": "customer",
@@ -120,9 +118,7 @@ async def test_customers_create_called_once_for_signup_and_upgrade() -> None:
     await _signup(driver, "single-create@email.com")
     await _signin(driver, "single-create@email.com")
 
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     assert r.status == 200, r.json()
     assert len(_creates(mock)) == 1
 
@@ -330,9 +326,9 @@ async def test_search_fallback_to_list_on_upgrade() -> None:
     adapter = auth.context.adapter  # type: ignore[attr-defined]
     uid = await _signup(driver, "fallback-upgrade@example.com", name="Fallback Upgrade")
     # No customer linked at signup (create_customer_on_sign_up=False).
-    assert not (
-        await adapter.find_one(model="user", where=(Where(field="id", value=uid),))
-    ).get("stripeCustomerId")
+    assert not (await adapter.find_one(model="user", where=(Where(field="id", value=uid),))).get(
+        "stripeCustomerId"
+    )
 
     _seed_customer(
         mock,
@@ -343,9 +339,7 @@ async def test_search_fallback_to_list_on_upgrade() -> None:
     mock.search_unavailable = True
 
     await _signin(driver, "fallback-upgrade@example.com")
-    r = await driver.request(
-        "POST", "/subscription/upgrade", json_body={"plan": "starter"}
-    )
+    r = await driver.request("POST", "/subscription/upgrade", json_body={"plan": "starter"})
     assert r.status == 200, r.json()
 
     assert not _creates(mock), "upgrade should reuse the list-fallback customer"

@@ -1,10 +1,10 @@
 [project]
-name = "better-auth-mcp"
+name = "kernia-mcp"
 version = "0.0.0"
-description = "OAuth-protected Model Context Protocol (MCP) integration for better-auth, built on FastMCP"
+description = "OAuth-protected Model Context Protocol (MCP) integration for kernia, built on FastMCP"
 requires-python = ">=3.11"
 dependencies = [
-    "better-auth",
+    "kernia",
     "fastmcp>=2.3",
 ]
 

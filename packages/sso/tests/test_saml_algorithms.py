@@ -53,11 +53,7 @@ PLAIN_ASSERTION_XML = """
 
 
 def _security_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
-    return [
-        r.getMessage()
-        for r in caplog.records
-        if "SAML Security Warning" in r.getMessage()
-    ]
+    return [r.getMessage() for r in caplog.records if "SAML Security Warning" in r.getMessage()]
 
 
 # --------------------------------------------------------------------------- #
@@ -79,15 +75,13 @@ class TestValidateSAMLAlgorithmsSignature:
         assert _security_warnings(caplog)
 
     def test_reject_deprecated_signature_with_reject(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_saml_algorithms(
                 {"sigAlg": alg.SignatureAlgorithm.RSA_SHA1, "samlContent": PLAIN_ASSERTION_XML},
                 {"onDeprecated": "reject"},
             )
 
-    def test_silently_allow_deprecated_with_allow(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_silently_allow_deprecated_with_allow(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_saml_algorithms(
                 {"sigAlg": alg.SignatureAlgorithm.RSA_SHA1, "samlContent": PLAIN_ASSERTION_XML},
@@ -96,7 +90,7 @@ class TestValidateSAMLAlgorithmsSignature:
         assert not _security_warnings(caplog)
 
     def test_enforce_custom_signature_allow_list(self) -> None:
-        with pytest.raises(APIError, match="(?i)not in allow-list"):
+        with pytest.raises(APIError, match=r"(?i)not in allow-list"):
             alg.validate_saml_algorithms(
                 {"sigAlg": alg.SignatureAlgorithm.RSA_SHA256, "samlContent": PLAIN_ASSERTION_XML},
                 {"allowedSignatureAlgorithms": [alg.SignatureAlgorithm.RSA_SHA512]},
@@ -106,7 +100,7 @@ class TestValidateSAMLAlgorithmsSignature:
         alg.validate_saml_algorithms({"sigAlg": None, "samlContent": PLAIN_ASSERTION_XML})
 
     def test_reject_unknown_signature_algorithms(self) -> None:
-        with pytest.raises(APIError, match="(?i)not recognized"):
+        with pytest.raises(APIError, match=r"(?i)not recognized"):
             alg.validate_saml_algorithms(
                 {"sigAlg": "http://example.com/unknown-algo", "samlContent": PLAIN_ASSERTION_XML}
             )
@@ -134,7 +128,7 @@ class TestValidateSAMLAlgorithmsEncryption:
         assert _security_warnings(caplog)
 
     def test_reject_deprecated_encryption_with_reject(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_saml_algorithms(
                 {
                     "sigAlg": alg.SignatureAlgorithm.RSA_SHA256,
@@ -160,21 +154,16 @@ class TestValidateSAMLAlgorithmsEncryption:
 class TestAlgorithmConstants:
     def test_signature_algorithm_constants(self) -> None:
         assert (
-            alg.SignatureAlgorithm.RSA_SHA256
-            == "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+            alg.SignatureAlgorithm.RSA_SHA256 == "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
         )
-        assert (
-            alg.SignatureAlgorithm.RSA_SHA1 == "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
-        )
+        assert alg.SignatureAlgorithm.RSA_SHA1 == "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
 
     def test_encryption_algorithm_constants(self) -> None:
         assert (
-            alg.KeyEncryptionAlgorithm.RSA_OAEP
-            == "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
+            alg.KeyEncryptionAlgorithm.RSA_OAEP == "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
         )
         assert (
-            alg.DataEncryptionAlgorithm.AES_256_GCM
-            == "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+            alg.DataEncryptionAlgorithm.AES_256_GCM == "http://www.w3.org/2009/xmlenc11#aes256-gcm"
         )
 
 
@@ -183,29 +172,23 @@ class TestAlgorithmConstants:
 # --------------------------------------------------------------------------- #
 class TestValidateConfigAlgorithmsSignature:
     def test_accept_secure_signature_algorithms(self) -> None:
-        alg.validate_config_algorithms(
-            {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA256}
-        )
+        alg.validate_config_algorithms({"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA256})
 
     def test_warn_by_default_for_deprecated_signature(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
-            alg.validate_config_algorithms(
-                {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1}
-            )
+            alg.validate_config_algorithms({"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1})
         assert _security_warnings(caplog)
 
     def test_reject_deprecated_signature_with_reject(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1},
                 {"onDeprecated": "reject"},
             )
 
-    def test_silently_allow_deprecated_with_allow(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_silently_allow_deprecated_with_allow(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1},
@@ -214,14 +197,14 @@ class TestValidateConfigAlgorithmsSignature:
         assert not _security_warnings(caplog)
 
     def test_enforce_custom_signature_allow_list(self) -> None:
-        with pytest.raises(APIError, match="(?i)not in allow-list"):
+        with pytest.raises(APIError, match=r"(?i)not in allow-list"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA256},
                 {"allowedSignatureAlgorithms": [alg.SignatureAlgorithm.RSA_SHA512]},
             )
 
     def test_reject_unknown_signature_algorithms(self) -> None:
-        with pytest.raises(APIError, match="(?i)not recognized"):
+        with pytest.raises(APIError, match=r"(?i)not recognized"):
             alg.validate_config_algorithms(
                 {"signatureAlgorithm": "http://example.com/unknown-algo"}
             )
@@ -236,7 +219,7 @@ class TestValidateConfigAlgorithmsSignature:
         alg.validate_config_algorithms({"signatureAlgorithm": "sha256"})
 
     def test_reject_typos_in_short_form_signature(self) -> None:
-        with pytest.raises(APIError, match="(?i)not recognized"):
+        with pytest.raises(APIError, match=r"(?i)not recognized"):
             alg.validate_config_algorithms({"signatureAlgorithm": "rsa-sha257"})
 
     def test_warn_for_deprecated_short_form_signature(
@@ -260,43 +243,37 @@ class TestValidateConfigAlgorithmsDigest:
     def test_accept_secure_digest_algorithms(self) -> None:
         alg.validate_config_algorithms({"digestAlgorithm": alg.DigestAlgorithm.SHA256})
 
-    def test_warn_by_default_for_deprecated_digest(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_warn_by_default_for_deprecated_digest(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms({"digestAlgorithm": alg.DigestAlgorithm.SHA1})
         assert _security_warnings(caplog)
 
     def test_reject_deprecated_digest_with_reject(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_config_algorithms(
                 {"digestAlgorithm": alg.DigestAlgorithm.SHA1},
                 {"onDeprecated": "reject"},
             )
 
     def test_enforce_custom_digest_allow_list(self) -> None:
-        with pytest.raises(APIError, match="(?i)not in allow-list"):
+        with pytest.raises(APIError, match=r"(?i)not in allow-list"):
             alg.validate_config_algorithms(
                 {"digestAlgorithm": alg.DigestAlgorithm.SHA256},
                 {"allowedDigestAlgorithms": [alg.DigestAlgorithm.SHA512]},
             )
 
     def test_reject_unknown_digest_algorithms(self) -> None:
-        with pytest.raises(APIError, match="(?i)not recognized"):
-            alg.validate_config_algorithms(
-                {"digestAlgorithm": "http://example.com/unknown-digest"}
-            )
+        with pytest.raises(APIError, match=r"(?i)not recognized"):
+            alg.validate_config_algorithms({"digestAlgorithm": "http://example.com/unknown-digest"})
 
     def test_accept_short_form_digest_names(self) -> None:
         alg.validate_config_algorithms({"digestAlgorithm": "sha256"})
 
     def test_reject_typos_in_short_form_digest(self) -> None:
-        with pytest.raises(APIError, match="(?i)not recognized"):
+        with pytest.raises(APIError, match=r"(?i)not recognized"):
             alg.validate_config_algorithms({"digestAlgorithm": "sha257"})
 
-    def test_warn_for_deprecated_short_form_digest(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_warn_for_deprecated_short_form_digest(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger="kernia.sso.saml"):
             alg.validate_config_algorithms({"digestAlgorithm": "sha1"})
         assert _security_warnings(caplog)
@@ -321,7 +298,7 @@ class TestValidateConfigAlgorithmsCombined:
         )
 
     def test_reject_if_signature_deprecated_even_if_digest_secure(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_config_algorithms(
                 {
                     "signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA1,
@@ -331,7 +308,7 @@ class TestValidateConfigAlgorithmsCombined:
             )
 
     def test_reject_if_digest_deprecated_even_if_signature_secure(self) -> None:
-        with pytest.raises(APIError, match="(?i)deprecated"):
+        with pytest.raises(APIError, match=r"(?i)deprecated"):
             alg.validate_config_algorithms(
                 {
                     "signatureAlgorithm": alg.SignatureAlgorithm.RSA_SHA256,

@@ -58,9 +58,7 @@ def _merge_fields(
     existing = {f.name for f in target.fields}
     for f in extra_fields:
         if f.name in existing:
-            raise ValueError(
-                f"{source} tries to redefine field {target.name}.{f.name}"
-            )
+            raise ValueError(f"{source} tries to redefine field {target.name}.{f.name}")
         existing.add(f.name)
     return ModelDef(
         name=target.name,
@@ -83,9 +81,7 @@ def _apply_model_override(model: ModelDef, override: Any) -> ModelDef:
     new_fields = list(model.fields)
     if renames:
         new_fields = [
-            dataclasses.replace(f, field_name=renames[f.name])
-            if f.name in renames
-            else f
+            dataclasses.replace(f, field_name=renames[f.name]) if f.name in renames else f
             for f in new_fields
         ]
 
@@ -160,18 +156,12 @@ def resolve_tables(
             by_name[new_model.name] = new_model
         for model_name, extra_fields in (schema.extend or {}).items():
             if model_name not in by_name:
-                raise ValueError(
-                    f"{source} tries to extend unknown model {model_name!r}"
-                )
-            by_name[model_name] = _merge_fields(
-                by_name[model_name], extra_fields, source=source
-            )
+                raise ValueError(f"{source} tries to extend unknown model {model_name!r}")
+            by_name[model_name] = _merge_fields(by_name[model_name], extra_fields, source=source)
 
     for model_name, extra_fields in (additional_fields or {}).items():
         if model_name not in by_name:
-            raise ValueError(
-                f"additionalFields target unknown model {model_name!r}"
-            )
+            raise ValueError(f"additionalFields target unknown model {model_name!r}")
         by_name[model_name] = _merge_fields(
             by_name[model_name], extra_fields, source="additionalFields"
         )

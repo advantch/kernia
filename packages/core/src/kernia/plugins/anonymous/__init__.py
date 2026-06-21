@@ -27,9 +27,7 @@ ANONYMOUS_ERROR_CODES: Mapping[str, str] = {
         "Anonymous users cannot sign in again anonymously"
     ),
     "FAILED_TO_DELETE_ANONYMOUS_USER": "Failed to delete anonymous user",
-    "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS": (
-        "Failed to delete anonymous user sessions"
-    ),
+    "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS": ("Failed to delete anonymous user sessions"),
     "USER_IS_NOT_ANONYMOUS": "User is not anonymous",
     "DELETE_ANONYMOUS_USER_DISABLED": "Deleting anonymous users is disabled",
 }
@@ -72,9 +70,10 @@ def _make_before_hook(on_link: OnLinkCallback | None) -> BeforeHook:
             where=(Where(field="id", value=ctx.session.user_id),),
         )
         if user and user.get("isAnonymous"):
-            ctx.auth.plugin_state.setdefault("_anonymous_pending", {})[
-                _request_key(ctx)
-            ] = {"user": user, "on_link": on_link}
+            ctx.auth.plugin_state.setdefault("_anonymous_pending", {})[_request_key(ctx)] = {
+                "user": user,
+                "on_link": on_link,
+            }
 
     return BeforeHook(match=_link_target_matcher, handler=before)
 
@@ -135,9 +134,7 @@ class _AnonymousPlugin:
     rate_limit: tuple[RateLimitRule, ...] = (
         RateLimitRule(path="/sign-in/anonymous", window=60, max=10),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(ANONYMOUS_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(ANONYMOUS_ERROR_CODES))
 
     async def init(self, ctx: Any) -> None:
         ctx.plugin_state["anonymous"] = dict(self.options)
@@ -169,7 +166,7 @@ def anonymous(
         options["generate_random_email"] = generate_random_email
     if generate_name is not None:
         options["generate_name"] = generate_name
-    return _AnonymousPlugin(options=options, hooks=hooks)  # type: ignore[return-value, call-arg]
+    return _AnonymousPlugin(options=options, hooks=hooks)  # type: ignore[return-value]
 
 
 __all__ = ["ANONYMOUS_ERROR_CODES", "anonymous"]

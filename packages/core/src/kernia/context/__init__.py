@@ -162,16 +162,18 @@ async def create_session(
     if auth.options.session.cookie_cache_enabled:
         cookies.append(session_data_cookie(auth, session=session))
     if not remember_me:
-        cookies.append((
-            DONT_REMEMBER_COOKIE,
-            "1",
-            CookieAttributes(
-                path="/",
-                http_only=True,
-                secure=_cookie_secure(auth),
-                same_site="lax",
-            ),
-        ))
+        cookies.append(
+            (
+                DONT_REMEMBER_COOKIE,
+                "1",
+                CookieAttributes(
+                    path="/",
+                    http_only=True,
+                    secure=_cookie_secure(auth),
+                    same_site="lax",
+                ),
+            )
+        )
     return session, cookies
 
 
@@ -224,9 +226,9 @@ async def revoke_session(
 
 __all__ = [
     "create_session",
-    "revoke_session",
     "refresh_session_cookies",
-    "should_refresh_session",
+    "revoke_session",
     "session_data_cookie",
     "session_token_cookie",
+    "should_refresh_session",
 ]

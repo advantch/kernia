@@ -24,9 +24,6 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlsplit
 
-import httpx
-import pytest
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.types.init_options import KerniaOptions

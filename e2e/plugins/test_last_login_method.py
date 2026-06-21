@@ -129,9 +129,7 @@ async def test_should_set_cookie_for_magic_link() -> None:
         )
     )
     driver = ASGIDriver(app=auth.router.mount())
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "ml@example.com"}
-    )
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "ml@example.com"})
     token = smtp.sent[0].meta["token"]
     await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     assert driver.cookies.get(COOKIE) == "magic-link"
@@ -205,9 +203,7 @@ async def test_store_in_database_magic_link() -> None:
         )
     )
     driver = ASGIDriver(app=auth.router.mount())
-    await driver.request(
-        "POST", "/sign-in/magic-link", json_body={"email": "mldb@example.com"}
-    )
+    await driver.request("POST", "/sign-in/magic-link", json_body={"email": "mldb@example.com"})
     token = smtp.sent[0].meta["token"]
     await driver.request("GET", "/magic-link/verify", query=urlencode({"token": token}))
     r = await driver.request("GET", "/get-session")

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from kernia.api.endpoint import create_auth_endpoint
 from kernia.context import create_session
@@ -209,7 +209,7 @@ async def _require_session(ctx: EndpointContext) -> Any:
     return user
 
 
-def _is_admin(opts: AdminOptions, user_row: dict | None) -> bool:
+def _is_admin(opts: AdminOptions, user_row: dict[str, Any] | None) -> bool:
     if user_row is None:
         return False
     if user_row.get("id") in opts.admin_user_ids:
@@ -305,7 +305,7 @@ def build_endpoints(opts: AdminOptions, roles_map: dict[str, Role]) -> tuple[Aut
         user = await ctx.auth.adapter.find_one(model="user", where=where)
         if not user:
             raise APIError(404, "USER_NOT_FOUND")
-        return _user_out(user)
+        return cast("dict[str, Any]", _user_out(user))
 
     async def create_user(ctx: EndpointContext) -> dict[str, Any]:
         # A request with a session must pass the create permission; a server-side
@@ -328,9 +328,7 @@ def build_endpoints(opts: AdminOptions, roles_map: dict[str, Role]) -> tuple[Aut
         )
         if existing:
             raise APIError(400, "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")
-        role_value = (
-            _parse_roles(body.role) if body.role else (opts.default_role or "user")
-        )
+        role_value = _parse_roles(body.role) if body.role else (opts.default_role or "user")
         now = int(time.time())
         data: dict[str, Any] = {
             "email": email,
@@ -403,7 +401,7 @@ def build_endpoints(opts: AdminOptions, roles_map: dict[str, Role]) -> tuple[Aut
         )
         if not user:
             raise APIError(404, "USER_NOT_FOUND")
-        return _user_out(user)
+        return cast("dict[str, Any]", _user_out(user))
 
     async def set_role(ctx: EndpointContext) -> dict[str, Any]:
         caller = await _require_session(ctx)
@@ -753,7 +751,7 @@ def build_endpoints(opts: AdminOptions, roles_map: dict[str, Role]) -> tuple[Aut
             pass
         # Resolve the subject: role takes priority over userId.
         if body.role:
-            role = body.role
+            role: str | None = body.role
             user_id = body.user_id or ""
         elif body.user_id is not None:
             if body.user_id == "":
@@ -876,7 +874,7 @@ def _to_int(value: Any) -> int | None:
     return n or None
 
 
-def _user_out(user: dict | None) -> dict | None:
+def _user_out(user: dict[str, Any] | None) -> dict[str, Any] | None:
     """Normalise a user row for the response.
 
     Ensures `banned` defaults to ``False`` (never ``None``) so equality filters
@@ -891,4 +889,4 @@ def _user_out(user: dict | None) -> dict | None:
     return out
 
 
-__all__ = ["build_endpoints", "has_permission", "ADMIN_IMPERSONATION_COOKIE"]
+__all__ = ["ADMIN_IMPERSONATION_COOKIE", "build_endpoints", "has_permission"]

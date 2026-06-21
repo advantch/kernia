@@ -17,7 +17,7 @@ import secrets
 import string
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -83,7 +83,7 @@ async def _store_token(opts: OneTimeTokenOptions, token: str) -> str:
     if store == "hashed":
         return default_key_hasher(token)
     if isinstance(store, dict) and store.get("type") == "custom-hasher":
-        return await store["hash"](token)
+        return cast("str", await store["hash"](token))
     return token
 
 
@@ -112,7 +112,9 @@ async def generate_token_for_session(
     return token
 
 
-def _make_generate(opts: OneTimeTokenOptions):
+def _make_generate(
+    opts: OneTimeTokenOptions,
+) -> Callable[[EndpointContext], Awaitable[dict[str, object]]]:
     async def _generate(ctx: EndpointContext) -> dict[str, object]:
         # A present request object means this is a client (HTTP) request.
         if opts.disable_client_request and ctx.request is not None:
@@ -137,7 +139,9 @@ def _make_generate(opts: OneTimeTokenOptions):
     return _generate
 
 
-def _make_verify(opts: OneTimeTokenOptions):
+def _make_verify(
+    opts: OneTimeTokenOptions,
+) -> Callable[[EndpointContext], Awaitable[dict[str, object]]]:
     async def _verify(ctx: EndpointContext) -> dict[str, object]:
         body: VerifyOneTimeTokenBody = ctx.body
         stored_token = await _store_token(opts, body.token)
@@ -164,6 +168,12 @@ def _make_verify(opts: OneTimeTokenOptions):
             model="user", where=(Where(field="id", value=session_row["userId"]),)
         )
 
+        # Check expiry BEFORE setting the session cookie (upstream order) — an
+        # expired session must never be (re)issued as a credential, not even on
+        # an error response.
+        if int(session_row.get("expiresAt", 0)) < _now():
+            raise APIError(400, "BAD_REQUEST", message="Session expired")
+
         if not opts.disable_set_session_cookie:
             signed = sign(session_token, secret=ctx.auth.secret)
             attrs = CookieAttributes(
@@ -174,9 +184,6 @@ def _make_verify(opts: OneTimeTokenOptions):
                 same_site="lax",
             )
             ctx.set_cookies.append((SESSION_TOKEN_COOKIE, signed, attrs))
-
-        if int(session_row.get("expiresAt", 0)) < _now():
-            raise APIError(400, "BAD_REQUEST", message="Session expired")
 
         return {"session": session_row, "user": user_row}
 

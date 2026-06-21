@@ -63,7 +63,9 @@ def _constructor_name(plugin_dir: Path) -> str:
                         if override in exports:
                             return override
                         for export in exports:
-                            if export.islower() and not export.startswith(("build_", "create_", "generate_")):
+                            if export.islower() and not export.startswith(
+                                ("build_", "create_", "generate_")
+                            ):
                                 return export
                         if exports:
                             return exports[0]
@@ -130,8 +132,7 @@ def render_plugin(plugin_dir: Path) -> tuple[str, str]:
                 plugin_obj = None
 
     body = (
-        TEMPLATE
-        .replace("{plugin_name}", name.replace("_", " ").title())
+        TEMPLATE.replace("{plugin_name}", name.replace("_", " ").title())
         .replace("{plugin_module}", mod_path)
         .replace("{plugin_constructor}", constructor)
         .replace("{plugin_docstring}", docstring)

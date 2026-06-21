@@ -8,16 +8,15 @@ endpoint or middleware can call with a Starlette ``Request``.
 
 from __future__ import annotations
 
-from starlette.applications import Starlette
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-
 from kernia.auth import Kernia
 from kernia.integrations.session import (
     resolve_session_from_request,
     strip_base_path,
 )
 from kernia.types.context import Session
+from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
 
 
 def mount_kernia(app: Starlette, auth: Kernia) -> None:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import httpx
-
 from kernia.oauth2 import verify_id_token
 from kernia_test_utils import MockIdP
 

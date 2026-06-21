@@ -11,7 +11,12 @@ import time
 from dataclasses import dataclass
 
 from kernia.api.endpoint import create_auth_endpoint
-from kernia.context import create_session, refresh_session_cookies, revoke_session, should_refresh_session
+from kernia.context import (
+    create_session,
+    refresh_session_cookies,
+    revoke_session,
+    should_refresh_session,
+)
 from kernia.crypto import hash_password, verify_password
 from kernia.error import APIError
 from kernia.types.adapter import Where
@@ -135,7 +140,9 @@ async def _sign_in_email(ctx: EndpointContext) -> dict[str, object]:
     if not verify_password(body.password, account["password"]):
         raise APIError(401, "INVALID_CREDENTIALS")
 
-    if ctx.auth.options.email_and_password.require_email_verification and not user.get("emailVerified"):
+    if ctx.auth.options.email_and_password.require_email_verification and not user.get(
+        "emailVerified"
+    ):
         raise APIError(403, "EMAIL_NOT_VERIFIED")
 
     session, cookies = await create_session(
@@ -180,9 +187,7 @@ async def _get_session(ctx: EndpointContext) -> dict[str, object] | None:
     # entry, preserving the distinct Max-Age of token vs. data cookies.
     disable_refresh = _is_truthy_query(ctx.request.query.get("disableRefresh"))
     if not disable_refresh and should_refresh_session(ctx.auth, ctx.session):
-        ctx.set_cookies.extend(
-            refresh_session_cookies(ctx.auth, session=ctx.session, user=user)
-        )
+        ctx.set_cookies.extend(refresh_session_cookies(ctx.auth, session=ctx.session, user=user))
 
     return {
         "session": {"id": ctx.session.id, "expiresAt": ctx.session.expires_at},

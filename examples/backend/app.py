@@ -22,20 +22,19 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from kernia.auth import init
 from kernia.plugins import email_and_password
 from kernia.plugins.admin import admin
 from kernia.plugins.admin_config import AdminConfigOptions, admin_config
 from kernia.plugins.email_otp import email_otp
 from kernia.plugins.magic_link import magic_link
-from kernia.plugins.organization import organization
 from kernia.plugins.open_api import open_api
+from kernia.plugins.organization import organization
 from kernia.social_providers import google
 from kernia.types.context import Session
 from kernia.types.init_options import KerniaOptions
-from kernia_fastapi import get_session, mount_kernia, require_session
 from kernia_api_key import api_key
+from kernia_fastapi import get_session, mount_kernia, require_session
 from kernia_memory_adapter import memory_adapter
 from kernia_stripe import StripeClient, StripeOptions, StripePlan, stripe
 
@@ -58,9 +57,7 @@ def build_app() -> FastAPI:
     google_id = os.environ.get("GOOGLE_CLIENT_ID")
     google_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
     if google_id and google_secret:
-        social_providers["google"] = google(
-            client_id=google_id, client_secret=google_secret
-        )
+        social_providers["google"] = google(client_id=google_id, client_secret=google_secret)
 
     async def _log_magic_link(email: str, url: str, token: str) -> None:
         print(f"[kernia demo] magic link for {email}: {url} ({token})")
@@ -84,7 +81,11 @@ def build_app() -> FastAPI:
             secret=os.environ.get("KERNIA_SECRET", "dev-only-secret-change-me"),
             base_url="http://localhost:8000",
             base_path="/api/auth",
-            trusted_origins=[*DEV_FRONTEND_ORIGINS, "http://localhost:8000", "http://127.0.0.1:8000"],
+            trusted_origins=[
+                *DEV_FRONTEND_ORIGINS,
+                "http://localhost:8000",
+                "http://127.0.0.1:8000",
+            ],
             plugins=[
                 admin_config(AdminConfigOptions(allow_any_authenticated=True)),
                 email_and_password(),
@@ -138,12 +139,14 @@ def build_app() -> FastAPI:
     event_log: list[dict] = []
 
     async def _log_member_event(payload) -> None:
-        event_log.append({
-            "event": f"organization.member.{payload.action}",
-            "organization_id": payload.organization_id,
-            "user_id": payload.user_id,
-            "role": payload.role,
-        })
+        event_log.append(
+            {
+                "event": f"organization.member.{payload.action}",
+                "organization_id": payload.organization_id,
+                "user_id": payload.user_id,
+                "role": payload.role,
+            }
+        )
 
     bus = get_bus(auth.context)
     bus.on("organization.member.added", _log_member_event)

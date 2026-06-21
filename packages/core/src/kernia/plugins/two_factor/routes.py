@@ -75,20 +75,20 @@ TWO_FACTOR_MODEL = "twoFactor"
 # ----- option helpers --------------------------------------------------------
 
 
-def _opts(ctx: EndpointContext) -> dict[str, object]:
+def _opts(ctx: EndpointContext) -> dict[str, Any]:
     return dict(ctx.auth.options.advanced.get(OPTIONS_KEY) or {})
 
 
-def _otp_options(ctx: EndpointContext) -> dict[str, object] | None:
+def _otp_options(ctx: EndpointContext) -> dict[str, Any] | None:
     raw = _opts(ctx).get("otp_options", _opts(ctx).get("otpOptions"))
     if raw is None:
         return None
-    return dict(raw)  # type: ignore[arg-type]
+    return dict(raw)
 
 
-def _totp_options(ctx: EndpointContext) -> dict[str, object]:
+def _totp_options(ctx: EndpointContext) -> dict[str, Any]:
     raw = _opts(ctx).get("totp_options", _opts(ctx).get("totpOptions")) or {}
-    return dict(raw)  # type: ignore[arg-type]
+    return dict(raw)
 
 
 def _skip_verification_on_enable(ctx: EndpointContext) -> bool:
@@ -104,15 +104,14 @@ def _allow_passwordless(ctx: EndpointContext) -> bool:
 def _trust_device_max_age(ctx: EndpointContext) -> int:
     o = _opts(ctx)
     return int(
-        o.get("trust_device_max_age", o.get("trustDeviceMaxAge"))  # type: ignore[arg-type]
-        or TRUST_DEVICE_COOKIE_MAX_AGE
+        o.get("trust_device_max_age", o.get("trustDeviceMaxAge")) or TRUST_DEVICE_COOKIE_MAX_AGE
     )
 
 
 def _two_factor_cookie_max_age(ctx: EndpointContext) -> int:
     o = _opts(ctx)
     return int(
-        o.get("two_factor_cookie_max_age", o.get("twoFactorCookieMaxAge"))  # type: ignore[arg-type]
+        o.get("two_factor_cookie_max_age", o.get("twoFactorCookieMaxAge"))
         or TWO_FACTOR_COOKIE_MAX_AGE
     )
 
@@ -124,11 +123,11 @@ def _issuer(ctx: EndpointContext) -> str:
 
 
 def _totp_digits(ctx: EndpointContext) -> int:
-    return int(_totp_options(ctx).get("digits") or DEFAULT_TOTP_DIGITS)  # type: ignore[arg-type]
+    return int(_totp_options(ctx).get("digits") or DEFAULT_TOTP_DIGITS)
 
 
 def _totp_period(ctx: EndpointContext) -> int:
-    return int(_totp_options(ctx).get("period") or DEFAULT_TOTP_PERIOD)  # type: ignore[arg-type]
+    return int(_totp_options(ctx).get("period") or DEFAULT_TOTP_PERIOD)
 
 
 def _totp_disabled(ctx: EndpointContext) -> bool:
@@ -138,7 +137,7 @@ def _totp_disabled(ctx: EndpointContext) -> bool:
 # ----- crypto / encoding helpers --------------------------------------------
 
 
-def _require_pyotp() -> object:
+def _require_pyotp() -> Any:
     try:
         import pyotp
     except ImportError as exc:  # pragma: no cover
@@ -166,7 +165,8 @@ def _now() -> int:
 def _generate_secret() -> str:
     """A base32 TOTP secret (pyotp-compatible)."""
     pyotp = _require_pyotp()
-    return pyotp.random_base32()  # type: ignore[attr-defined]
+    secret: str = pyotp.random_base32()
+    return secret
 
 
 def _generate_backup_codes_list() -> list[str]:
@@ -256,14 +256,10 @@ def _secure(ctx: EndpointContext) -> bool:
 
 
 async def _find_user(ctx: EndpointContext, user_id: str) -> dict[str, object] | None:
-    return await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=user_id),)
-    )
+    return await ctx.auth.adapter.find_one(model="user", where=(Where(field="id", value=user_id),))
 
 
-async def _credential_account(
-    ctx: EndpointContext, user_id: str
-) -> dict[str, object] | None:
+async def _credential_account(ctx: EndpointContext, user_id: str) -> dict[str, object] | None:
     return await ctx.auth.adapter.find_one(
         model="account",
         where=(
@@ -300,9 +296,7 @@ async def _check_password(ctx: EndpointContext, user_id: str, password: str | No
         raise APIError(400, "INVALID_PASSWORD", message="Invalid password")
 
 
-async def _find_two_factor(
-    ctx: EndpointContext, user_id: str
-) -> dict[str, object] | None:
+async def _find_two_factor(ctx: EndpointContext, user_id: str) -> dict[str, object] | None:
     return await ctx.auth.adapter.find_one(
         model=TWO_FACTOR_MODEL, where=(Where(field="userId", value=user_id),)
     )
@@ -430,9 +424,7 @@ async def _issue_trust_device(ctx: EndpointContext, user_id: str) -> None:
     attrs = CookieAttributes(
         path="/", max_age=max_age, http_only=True, secure=_secure(ctx), same_site="lax"
     )
-    _set_signed_cookie(
-        ctx, TRUST_DEVICE_COOKIE_NAME, f"{token}!{trust_identifier}", attrs
-    )
+    _set_signed_cookie(ctx, TRUST_DEVICE_COOKIE_NAME, f"{token}!{trust_identifier}", attrs)
 
 
 # ----- request body shapes ---------------------------------------------------
@@ -542,13 +534,12 @@ async def _enable(ctx: EndpointContext) -> dict[str, object]:
     return {"totpURI": totp_uri, "backupCodes": backup_codes}
 
 
-def _build_totp_uri(
-    secret: str, *, issuer: str, account: str, digits: int, period: int
-) -> str:
+def _build_totp_uri(secret: str, *, issuer: str, account: str, digits: int, period: int) -> str:
     pyotp = _require_pyotp()
-    return pyotp.TOTP(secret, digits=digits, interval=period).provisioning_uri(  # type: ignore[attr-defined]
+    uri: str = pyotp.TOTP(secret, digits=digits, interval=period).provisioning_uri(
         name=account, issuer_name=issuer
     )
+    return uri
 
 
 async def _disable(ctx: EndpointContext) -> dict[str, object]:
@@ -625,7 +616,7 @@ async def _verify_totp(ctx: EndpointContext) -> dict[str, object]:
         raise APIError(400, "TOTP_NOT_ENABLED", message="TOTP not enabled")
 
     pyotp = _require_pyotp()
-    totp = pyotp.TOTP(  # type: ignore[attr-defined]
+    totp = pyotp.TOTP(
         str(two_factor["secret"]), digits=_totp_digits(ctx), interval=_totp_period(ctx)
     )
     if not totp.verify(body.code, valid_window=0):
@@ -654,9 +645,9 @@ async def _send_otp(ctx: EndpointContext) -> dict[str, object]:
     if send_fn is None:
         raise APIError(400, "OTP_NOT_CONFIGURED", message="otp isn't configured")
     state = await _verify_two_factor(ctx)
-    digits = int((otp_options or {}).get("digits") or DEFAULT_OTP_DIGITS)  # type: ignore[arg-type]
+    digits = int((otp_options or {}).get("digits") or DEFAULT_OTP_DIGITS)
     period_min = (otp_options or {}).get("period")
-    period_seconds = int(period_min * 60) if period_min else DEFAULT_OTP_PERIOD  # type: ignore[arg-type]
+    period_seconds = int(period_min * 60) if period_min else DEFAULT_OTP_PERIOD
     code = "".join(secrets.choice("0123456789") for _ in range(digits))
     stored = await _store_otp(ctx, otp_options or {}, code)
     identifier = f"2fa-otp-{state.key}"
@@ -674,24 +665,24 @@ async def _send_otp(ctx: EndpointContext) -> dict[str, object]:
             "updatedAt": _now(),
         },
     )
-    result = send_fn({"user": state.user, "otp": code}, ctx)  # type: ignore[operator]
+    result = send_fn({"user": state.user, "otp": code}, ctx)
     if hasattr(result, "__await__"):
         await result
     return {"status": True}
 
 
-async def _store_otp(
-    ctx: EndpointContext, otp_options: dict[str, object], code: str
-) -> str:
+async def _store_otp(ctx: EndpointContext, otp_options: dict[str, Any], code: str) -> str:
     mode = otp_options.get("store_otp", otp_options.get("storeOTP", "plain"))
     if mode == "hashed":
         return _default_key_hasher(code)
     if isinstance(mode, dict) and "hash" in mode:
-        result = mode["hash"](code)  # type: ignore[operator]
-        return await result if hasattr(result, "__await__") else result
+        result = mode["hash"](code)
+        hashed: str = await result if hasattr(result, "__await__") else result
+        return hashed
     if isinstance(mode, dict) and "encrypt" in mode:
-        result = mode["encrypt"](code)  # type: ignore[operator]
-        return await result if hasattr(result, "__await__") else result
+        result = mode["encrypt"](code)
+        encrypted: str = await result if hasattr(result, "__await__") else result
+        return encrypted
     if mode == "encrypted":
         return _symmetric_encrypt(ctx.auth.secret, code)
     return code
@@ -699,7 +690,7 @@ async def _store_otp(
 
 async def _compare_otp(
     ctx: EndpointContext,
-    otp_options: dict[str, object],
+    otp_options: dict[str, Any],
     stored: str,
     user_input: str,
 ) -> bool:
@@ -707,11 +698,11 @@ async def _compare_otp(
     if mode == "hashed":
         return hmac.compare_digest(stored, _default_key_hasher(user_input))
     if isinstance(mode, dict) and "hash" in mode:
-        result = mode["hash"](user_input)  # type: ignore[operator]
+        result = mode["hash"](user_input)
         hashed = await result if hasattr(result, "__await__") else result
         return hmac.compare_digest(stored, hashed)
     if isinstance(mode, dict) and "decrypt" in mode:
-        result = mode["decrypt"](stored)  # type: ignore[operator]
+        result = mode["decrypt"](stored)
         decrypted = await result if hasattr(result, "__await__") else result
         return hmac.compare_digest(decrypted, user_input)
     if mode == "encrypted":
@@ -759,7 +750,11 @@ async def _verify_otp(ctx: EndpointContext) -> dict[str, object]:
 
     stored, _, counter_str = str(record["value"]).rpartition(":")
     counter = int(counter_str or "0")
-    allowed = int(otp_options.get("allowed_attempts", otp_options.get("allowedAttempts", DEFAULT_ALLOWED_ATTEMPTS)))  # type: ignore[arg-type]
+    allowed = int(
+        otp_options.get(
+            "allowed_attempts", otp_options.get("allowedAttempts", DEFAULT_ALLOWED_ATTEMPTS)
+        )
+    )
     if counter >= allowed:
         await ctx.auth.adapter.delete_many(
             model="verification",

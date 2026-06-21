@@ -206,8 +206,7 @@ class OAuthProviderOptions:
             for scope in self.advertised_scopes_supported:
                 if scope not in self.supported_scopes:
                     raise ValueError(
-                        f"advertisedMetadata.scopes_supported {scope} not found "
-                        f"in scopes"
+                        f"advertisedMetadata.scopes_supported {scope} not found in scopes"
                     )
 
 
@@ -236,9 +235,7 @@ def _pkce_required(client: OAuthClient, requested_scopes: Sequence[str]) -> str 
     return None
 
 
-def _oauth_error(
-    status: int, error: str, description: str | None = None
-) -> APIError:
+def _oauth_error(status: int, error: str, description: str | None = None) -> APIError:
     """Build an APIError carrying the OAuth `{error, error_description}` envelope
     in its `data` payload, mirroring upstream's `new APIError(status, {error, ...})`.
     """
@@ -286,9 +283,7 @@ def _sector_identifier(client: OAuthClient) -> str:
     return urlsplit(client.redirect_uris[0]).netloc
 
 
-def _resolve_sub(
-    user_id: str, client: OAuthClient, opts: OAuthProviderOptions
-) -> str:
+def _resolve_sub(user_id: str, client: OAuthClient, opts: OAuthProviderOptions) -> str:
     """Return the subject identifier for a user+client pair.
 
     Uses a pairwise (sector-scoped HMAC) identifier when the client opts in and
@@ -326,17 +321,12 @@ class OAuthClient:
             redirect_uris=tuple((row.get("redirectUris") or "").split(",")),
             allowed_scopes=tuple((row.get("allowedScopes") or "").split(",")),
             # Upstream default is `requirePKCE ?? true`: absent means required.
-            require_pkce=(
-                True if row.get("requirePKCE") is None else bool(row.get("requirePKCE"))
-            ),
-            token_endpoint_auth_method=row.get("tokenEndpointAuthMethod")
-            or "client_secret_basic",
+            require_pkce=(True if row.get("requirePKCE") is None else bool(row.get("requirePKCE"))),
+            token_endpoint_auth_method=row.get("tokenEndpointAuthMethod") or "client_secret_basic",
             subject_type=row.get("subjectType") or None,
             disabled=bool(row.get("disabled")),
             enable_end_session=bool(row.get("enableEndSession")),
-            post_logout_redirect_uris=tuple(
-                u for u in (post_logout or "").split(",") if u
-            ),
+            post_logout_redirect_uris=tuple(u for u in (post_logout or "").split(",") if u),
         )
 
 
@@ -425,7 +415,7 @@ def _client_auth(ctx: EndpointContext) -> tuple[str | None, str | None]:
         import base64
 
         try:
-            decoded = base64.b64decode(auth_header[len("Basic "):]).decode("utf-8")
+            decoded = base64.b64decode(auth_header[len("Basic ") :]).decode("utf-8")
         except Exception:
             return client_id, client_secret
         if ":" in decoded:
@@ -560,9 +550,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         if (
             not client_secret
             or not client.client_secret
-            or not _verify_secret(
-                opts.store_client_secret, client_secret, client.client_secret
-            )
+            or not _verify_secret(opts.store_client_secret, client_secret, client.client_secret)
         ):
             raise _oauth_error(401, "invalid_client", "invalid client credentials")
 
@@ -575,9 +563,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         consume_one = getattr(ctx.auth.adapter, "consume_one", None)
         where = (Where(field="code", value=body.code),)
         if consume_one is None:
-            record = await ctx.auth.adapter.find_one(
-                model="oauthAuthorizationCode", where=where
-            )
+            record = await ctx.auth.adapter.find_one(model="oauthAuthorizationCode", where=where)
             if record:
                 await ctx.auth.adapter.delete(model="oauthAuthorizationCode", where=where)
         else:
@@ -618,9 +604,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         if pkce_used_in_auth and pkce_used_in_token:
             method = record.get("codeChallengeMethod") or "S256"
             computed = (
-                pkce_challenge(body.code_verifier)
-                if method == "S256"
-                else body.code_verifier
+                pkce_challenge(body.code_verifier) if method == "S256" else body.code_verifier
             )
             if computed != challenge:
                 raise _oauth_error(401, "invalid_request", "code verification failed")
@@ -651,9 +635,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         # RFC 9700 §4.14 reuse detection: replaying a token that was already
         # rotated tears down the entire (client, user) family and rejects.
         if row.get("revoked"):
-            await _invalidate_refresh_family(
-                ctx, client_id=client_id, user_id=row["userId"]
-            )
+            await _invalidate_refresh_family(ctx, client_id=client_id, user_id=row["userId"])
             raise APIError(400, "INVALID_REQUEST", message="invalid_grant")
         if int(row.get("expiresAt", 0)) < now:
             raise APIError(400, "INVALID_REQUEST", message="refresh token expired")
@@ -664,9 +646,7 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
         if body.scope is not None:
             requested_scopes = [s for s in body.scope.split() if s]
             if set(requested_scopes) - set(granted_scopes):
-                raise _oauth_error(
-                    400, "invalid_scope", "requested scope exceeds original grant"
-                )
+                raise _oauth_error(400, "invalid_scope", "requested scope exceeds original grant")
             new_scope = " ".join(requested_scopes)
         else:
             new_scope = granted_scope
@@ -715,14 +695,10 @@ async def _token(ctx: EndpointContext) -> dict[str, object]:
             include_id_token=False,
         )
 
-    raise _oauth_error(
-        400, "unsupported_grant_type", f"unsupported grant_type {grant}"
-    )
+    raise _oauth_error(400, "unsupported_grant_type", f"unsupported grant_type {grant}")
 
 
-async def _invalidate_refresh_family(
-    ctx: EndpointContext, *, client_id: str, user_id: str
-) -> None:
+async def _invalidate_refresh_family(ctx: EndpointContext, *, client_id: str, user_id: str) -> None:
     """Tear down every refresh token for a (client, user) pair (RFC 9700 §4.14)."""
     await ctx.auth.adapter.delete_many(
         model="oauthRefreshToken",
@@ -751,9 +727,7 @@ async def _issue_tokens(
     # is applied only to the id_token and at the introspection presentation
     # layer. Client-credential tokens carry their synthetic `client:` id.
     # Mirrors upstream `resolveSubjectIdentifier` placement (utils + introspect).
-    pairwise_sub = (
-        user_id if user_id.startswith("client:") else _resolve_sub(user_id, client, opts)
-    )
+    pairwise_sub = user_id if user_id.startswith("client:") else _resolve_sub(user_id, client, opts)
     # `azp` records the client so introspection can recompute the pairwise sub.
     if opts.jwt_access_token:
         access_payload: dict[str, Any] = {
@@ -842,13 +816,11 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
     auth_header = ctx.request.headers.get("authorization", "")
     # Upstream accepts either "Bearer <token>" or a bare token, and reports a
     # missing/empty value as invalid_request / "authorization header not found".
-    token = auth_header[len("Bearer "):] if auth_header.startswith("Bearer ") else auth_header
+    token = auth_header[len("Bearer ") :] if auth_header.startswith("Bearer ") else auth_header
     if not token:
         raise _oauth_error(401, "invalid_request", "authorization header not found")
     try:
-        claims: Mapping[str, Any] = await verify_local_jwt(
-            ctx.auth, token, issuer=opts.issuer
-        )
+        claims: Mapping[str, Any] = await verify_local_jwt(ctx.auth, token, issuer=opts.issuer)
     except ValueError as jwt_err:
         # Fall back to the opaque-token table; an unknown/expired token is 401.
         row = await _lookup_opaque_access_token(ctx, opts, token)
@@ -871,9 +843,7 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
     # The access token `sub` is the real user id (for lookup). The response
     # `sub` is the pairwise identifier resolved from the issuing client (`azp`),
     # so /userinfo agrees with the id_token for pairwise clients.
-    user = await ctx.auth.adapter.find_one(
-        model="user", where=(Where(field="id", value=sub),)
-    )
+    user = await ctx.auth.adapter.find_one(model="user", where=(Where(field="id", value=sub),))
     if user is None:
         raise APIError(404, "USER_NOT_FOUND")
     response_sub = sub
@@ -886,9 +856,7 @@ async def _userinfo(ctx: EndpointContext) -> dict[str, object]:
     return out
 
 
-def _user_normal_claims(
-    user: Mapping[str, Any], scopes: set[str]
-) -> dict[str, object]:
+def _user_normal_claims(user: Mapping[str, Any], scopes: set[str]) -> dict[str, object]:
     """Build profile/email claims (mirrors upstream `userNormalClaims`).
 
     Splits `name` into `given_name`/`family_name` when more than one part.
@@ -925,9 +893,7 @@ async def _revoke(ctx: EndpointContext) -> dict[str, object]:
         if (
             not client_secret
             or not client.client_secret
-            or not _verify_secret(
-                opts.store_client_secret, client_secret, client.client_secret
-            )
+            or not _verify_secret(opts.store_client_secret, client_secret, client.client_secret)
         ):
             raise _oauth_error(401, "invalid_client", "invalid client credentials")
     hint = body.token_type_hint
@@ -979,9 +945,7 @@ async def _lookup_opaque_access_token(
     return row
 
 
-async def _is_access_token(
-    ctx: EndpointContext, opts: OAuthProviderOptions, token: str
-) -> bool:
+async def _is_access_token(ctx: EndpointContext, opts: OAuthProviderOptions, token: str) -> bool:
     """True when `token` is an access token issued by this server.
 
     Recognises both the self-contained JWT format and the opaque reference
@@ -1011,9 +975,7 @@ async def _live_session_id(ctx: EndpointContext, sid: Any) -> str | None:
     expires_at = session.get("expiresAt")
     if isinstance(expires_at, (int | float)) and expires_at < int(time.time()):
         return None
-    if isinstance(expires_at, datetime) and expires_at < datetime.now(
-        expires_at.tzinfo
-    ):
+    if isinstance(expires_at, datetime) and expires_at < datetime.now(expires_at.tzinfo):
         return None
     return sid
 
@@ -1026,11 +988,8 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
     if not client_id or not client_secret:
         raise _oauth_error(401, "invalid_client", "missing required credentials")
     client = await _load_client(ctx.auth, client_id)
-    if (
-        not client.client_secret
-        or not _verify_secret(
-            opts.store_client_secret, client_secret, client.client_secret
-        )
+    if not client.client_secret or not _verify_secret(
+        opts.store_client_secret, client_secret, client.client_secret
     ):
         raise _oauth_error(401, "invalid_client", "invalid client credentials")
     hint = body.token_type_hint
@@ -1092,15 +1051,9 @@ async def _introspect(ctx: EndpointContext) -> dict[str, object]:
         # Try as refresh token (stored hashed → hash the presented value).
         row = await ctx.auth.adapter.find_one(
             model="oauthRefreshToken",
-            where=(
-                Where(field="token", value=_store_secret(opts.store_tokens, body.token)),
-            ),
+            where=(Where(field="token", value=_store_secret(opts.store_tokens, body.token)),),
         )
-        if (
-            row
-            and not row.get("revoked")
-            and int(row.get("expiresAt", 0)) > int(time.time())
-        ):
+        if row and not row.get("revoked") and int(row.get("expiresAt", 0)) > int(time.time()):
             refresh_out: dict[str, object] = {
                 "active": True,
                 "sub": row.get("userId"),
@@ -1154,9 +1107,7 @@ def _metadata(opts: OAuthProviderOptions, *, openid: bool) -> dict[str, object]:
         "registration_endpoint": f"{base}/oauth2/register",
         "introspection_endpoint": f"{base}/oauth2/introspect",
         "revocation_endpoint": f"{base}/oauth2/revoke",
-        "scopes_supported": list(
-            opts.advertised_scopes_supported or opts.supported_scopes
-        ),
+        "scopes_supported": list(opts.advertised_scopes_supported or opts.supported_scopes),
         "response_types_supported": response_types,
         "response_modes_supported": ["query"],
         "grant_types_supported": grant_types,
@@ -1168,9 +1119,7 @@ def _metadata(opts: OAuthProviderOptions, *, openid: bool) -> dict[str, object]:
     }
     if openid:
         # OIDC discovery (OpenID-Connect-Discovery) adds the identity layer.
-        doc["claims_supported"] = list(
-            opts.advertised_claims_supported or _BASE_CLAIMS
-        )
+        doc["claims_supported"] = list(opts.advertised_claims_supported or _BASE_CLAIMS)
         doc["userinfo_endpoint"] = f"{base}/oauth2/userinfo"
         doc["subject_types_supported"] = (
             ["public", "pairwise"] if opts.pairwise_secret else ["public"]
@@ -1232,9 +1181,7 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
     confidential_types = {"web"}
     public_types = {"native", "user-agent-based"}
     if is_public and body.type in confidential_types:
-        raise _oauth_error(
-            400, "invalid_client_metadata", "public client cannot be type 'web'"
-        )
+        raise _oauth_error(400, "invalid_client_metadata", "public client cannot be type 'web'")
     if not is_public and body.type in public_types:
         raise _oauth_error(
             400,
@@ -1242,9 +1189,7 @@ async def _register(ctx: EndpointContext) -> dict[str, object]:
             f"confidential client cannot be type '{body.type}'",
         )
     client_id = secrets.token_urlsafe(16)
-    client_secret = (
-        "" if body.token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
-    )
+    client_secret = "" if body.token_endpoint_auth_method == "none" else secrets.token_urlsafe(32)
     now = int(time.time())
     await ctx.auth.adapter.create(
         model="oauthClient",
@@ -1318,22 +1263,16 @@ async def _end_session(ctx: EndpointContext) -> dict[str, object] | None:
     # an `sid` claim (the issuance-time signal a client was *not* opted in) is
     # treated the same way.
     if not client.enable_end_session:
-        raise _oauth_error(
-            401, "invalid_request", "client is not allowed to end sessions"
-        )
+        raise _oauth_error(401, "invalid_request", "client is not allowed to end sessions")
     sid = claims.get("sid")
     if not isinstance(sid, str) or not sid:
         raise _oauth_error(401, "invalid_request", "id_token_hint missing sid")
 
-    await ctx.auth.adapter.delete(
-        model="session", where=(Where(field="id", value=sid),)
-    )
+    await ctx.auth.adapter.delete(model="session", where=(Where(field="id", value=sid),))
 
     if post_logout_redirect_uri:
         if post_logout_redirect_uri not in client.post_logout_redirect_uris:
-            raise _oauth_error(
-                400, "invalid_request", "post_logout_redirect_uri not registered"
-            )
+            raise _oauth_error(400, "invalid_request", "post_logout_redirect_uri not registered")
         redirect = post_logout_redirect_uri
         if state:
             sep = "&" if "?" in redirect else "?"
@@ -1557,8 +1496,8 @@ async def create_client(
 
 
 __all__ = [
-    "oauth_provider",
-    "OAuthProviderOptions",
     "OAuthClient",
+    "OAuthProviderOptions",
     "create_client",
+    "oauth_provider",
 ]

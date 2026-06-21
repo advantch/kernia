@@ -6,14 +6,15 @@ front from `ModelDef`, so we hand it the merged user model via `extra_models`
 plus a tweaked CORE_MODELS list. The memory adapter accepts arbitrary fields
 freely, so it needs no extra wiring.
 
-We define a local adapter-factory matrix here so each adapter can apply the
-plugin's schema extension. Mongo is skipped automatically when Docker isn't
-available; the mongo factory is a placeholder until the adapter lands.
+We define a local parametrized adapter fixture here so each adapter can apply
+the plugin's schema extension. Mongo is skipped automatically when Docker
+isn't available; its testcontainer stays alive for the duration of each test.
 """
 
 from __future__ import annotations
 
 import secrets
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -38,13 +39,13 @@ def _extended_user_model() -> ModelDef:
     return ModelDef(name="user", fields=tuple(user.fields) + tuple(extra))
 
 
-async def _memory_factory() -> Any:
+async def _memory_factory() -> AsyncIterator[Any]:
     from kernia_memory_adapter import memory_adapter
 
-    return memory_adapter()
+    yield memory_adapter()
 
 
-async def _sqlite_factory() -> Any:
+async def _sqlite_factory() -> AsyncIterator[Any]:
     """SQLAlchemy on shared-cache in-memory SQLite, with the extended user table."""
     from kernia_sqlalchemy.adapter import SQLAlchemyAdapter, build_metadata
     from sqlalchemy.ext.asyncio import create_async_engine
@@ -58,36 +59,43 @@ async def _sqlite_factory() -> Any:
     adapter = SQLAlchemyAdapter(engine=engine, metadata=metadata, models=models)
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
-    return adapter
+    yield adapter
 
 
-def _phone_number_adapters() -> tuple[str, list[Any]]:
-    has_docker = docker_available()
-    return (
-        "adapter_factory",
-        [
-            pytest.param(_memory_factory, id="memory"),
-            pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
-            pytest.param(
-                _mongo_placeholder,
-                id="mongo",
-                marks=pytest.mark.skipif(
-                    not has_docker, reason="Docker required for mongo"
-                ),
-            ),
-        ],
-    )
-
-
-async def _mongo_placeholder() -> Any:
+async def _mongo_factory() -> AsyncIterator[Any]:
     try:
         from kernia_mongo import mongo_adapter  # type: ignore[attr-defined]
     except ImportError:
         pytest.skip("kernia_mongo.mongo_adapter is not implemented yet")
     from kernia_test_utils.containers import mongodb_container
 
+    # Yield inside the `with` so the container stays alive for the test body.
     with mongodb_container() as url:
-        return await mongo_adapter(url=url)
+        # Each test gets its own random db so parametrize doesn't leak state.
+        yield await mongo_adapter(
+            url=url,
+            db_name=f"kernia_test_{secrets.token_hex(4)}",
+        )
+
+
+def _adapter_params() -> list[Any]:
+    has_docker = docker_available()
+    return [
+        pytest.param(_memory_factory, id="memory"),
+        pytest.param(_sqlite_factory, id="sqlalchemy-sqlite"),
+        pytest.param(
+            _mongo_factory,
+            id="mongo",
+            marks=pytest.mark.skipif(not has_docker, reason="Docker required for mongo"),
+        ),
+    ]
+
+
+@pytest.fixture(params=_adapter_params())
+async def adapter(request: pytest.FixtureRequest) -> AsyncIterator[Any]:
+    """Parametrized adapter fixture; backing containers stay alive per test."""
+    async for a in request.param():
+        yield a
 
 
 # ---------- driver helper ------------------------------------------------------
@@ -128,9 +136,7 @@ def _build_driver_opts(adapter: Any, sms: MockSMS, **opts: Any):
 # ---------- tests --------------------------------------------------------------
 
 
-@pytest.mark.parametrize(*_phone_number_adapters())
-async def test_phone_number_signup_via_otp(adapter_factory) -> None:
-    adapter = await adapter_factory()
+async def test_phone_number_signup_via_otp(adapter: Any) -> None:
     sms = MockSMS()
     driver, _ = _build_driver(adapter, sms)
 
@@ -153,9 +159,7 @@ async def test_phone_number_signup_via_otp(adapter_factory) -> None:
     assert "better-auth.session_token" in driver.cookies
 
 
-@pytest.mark.parametrize(*_phone_number_adapters())
-async def test_phone_number_wrong_otp(adapter_factory) -> None:
-    adapter = await adapter_factory()
+async def test_phone_number_wrong_otp(adapter: Any) -> None:
     sms = MockSMS()
     driver, _ = _build_driver(adapter, sms)
     await driver.request(
@@ -170,10 +174,8 @@ async def test_phone_number_wrong_otp(adapter_factory) -> None:
     assert r.json()["code"] == "INVALID_OTP"
 
 
-@pytest.mark.parametrize(*_phone_number_adapters())
-async def test_phone_number_sign_in_with_password(adapter_factory) -> None:
+async def test_phone_number_sign_in_with_password(adapter: Any) -> None:
     """End-to-end: verify phone, set a password via reset, then sign in by phone."""
-    adapter = await adapter_factory()
     sms = MockSMS()
     driver, _ = _build_driver(adapter, sms)
 
@@ -218,9 +220,7 @@ async def test_phone_number_sign_in_with_password(adapter_factory) -> None:
     assert "better-auth.session_token" in driver.cookies
 
 
-@pytest.mark.parametrize(*_phone_number_adapters())
-async def test_phone_number_sign_in_unknown(adapter_factory) -> None:
-    adapter = await adapter_factory()
+async def test_phone_number_sign_in_unknown(adapter: Any) -> None:
     driver, _ = _build_driver(adapter, MockSMS())
     r = await driver.request(
         "POST",
@@ -231,9 +231,7 @@ async def test_phone_number_sign_in_unknown(adapter_factory) -> None:
     assert r.json()["code"] == "INVALID_PHONE_NUMBER_OR_PASSWORD"
 
 
-@pytest.mark.parametrize(*_phone_number_adapters())
-async def test_phone_number_signup_disabled(adapter_factory) -> None:
-    adapter = await adapter_factory()
+async def test_phone_number_signup_disabled(adapter: Any) -> None:
     sms = MockSMS()
     driver, _ = _build_driver(adapter, sms, disable_sign_up=True)
     await driver.request(
@@ -426,14 +424,10 @@ async def test_verify_last_code_invalidates_previous() -> None:
     driver, _ = _build_driver(memory_adapter(), sms)
     phone = "+15559996666"
 
-    await driver.request(
-        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
-    )
+    await driver.request("POST", "/phone-number/send-otp", json_body={"phone_number": phone})
     first_otp = sms.find_otp(phone)
     sms.clear()
-    await driver.request(
-        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
-    )
+    await driver.request("POST", "/phone-number/send-otp", json_body={"phone_number": phone})
     second_otp = sms.find_otp(phone)
     assert second_otp != first_otp
 
@@ -488,9 +482,7 @@ async def test_reset_password_creates_credential_account() -> None:
     phone = "+15559997777"
 
     # Create + verify a phone-only user (no credential account yet).
-    await driver.request(
-        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
-    )
+    await driver.request("POST", "/phone-number/send-otp", json_body={"phone_number": phone})
     await driver.request(
         "POST",
         "/phone-number/verify",
@@ -539,9 +531,7 @@ async def test_reset_password_too_many_attempts() -> None:
     phone = "+15559998888"
 
     # Create + verify a user so request-password-reset issues a code.
-    await driver.request(
-        "POST", "/phone-number/send-otp", json_body={"phone_number": phone}
-    )
+    await driver.request("POST", "/phone-number/send-otp", json_body={"phone_number": phone})
     await driver.request(
         "POST",
         "/phone-number/verify",

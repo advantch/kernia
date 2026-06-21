@@ -178,7 +178,11 @@ async def test_full_authorization_code_flow(setup) -> None:
     r = await driver.request(
         "POST",
         "/oauth2/revoke",
-        json_body={"token": new_refresh, "client_id": client.client_id, "client_secret": client.client_secret},
+        json_body={
+            "token": new_refresh,
+            "client_id": client.client_id,
+            "client_secret": client.client_secret,
+        },
     )
     assert r.status == 200
 

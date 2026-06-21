@@ -116,9 +116,7 @@ class DeviceAuthorizationOptions:
     generate_device_code: Callable[[], str | Awaitable[str]] | None = None
     generate_user_code: Callable[[], str | Awaitable[str]] | None = None
     validate_client: Callable[[str], bool | Awaitable[bool]] | None = None
-    on_device_auth_request: (
-        Callable[[str, str | None], None | Awaitable[None]] | None
-    ) = None
+    on_device_auth_request: Callable[[str, str | None], None | Awaitable[None]] | None = None
 
 
 # Module-level options register so the endpoint table doesn't need closure state.
@@ -146,13 +144,13 @@ async def _maybe_await(value: Any) -> Any:
 
 async def _gen_device_code(opts: DeviceAuthorizationOptions) -> str:
     if opts.generate_device_code is not None:
-        return await _maybe_await(opts.generate_device_code())
+        return str(await _maybe_await(opts.generate_device_code()))
     return _default_generate_device_code(opts.device_code_length)
 
 
 async def _gen_user_code(opts: DeviceAuthorizationOptions) -> str:
     if opts.generate_user_code is not None:
-        return await _maybe_await(opts.generate_user_code())
+        return str(await _maybe_await(opts.generate_user_code()))
     return _default_generate_user_code(opts.user_code_length)
 
 
@@ -174,9 +172,7 @@ def _build_verification_uris(
         complete = merged
 
     existing = complete.query
-    new_query = (existing + "&" if existing else "") + urlencode(
-        {"user_code": user_code}
-    )
+    new_query = (existing + "&" if existing else "") + urlencode({"user_code": user_code})
     complete_uri = urlunparse(complete._replace(query=new_query))
     return base_uri, complete_uri
 
@@ -205,9 +201,7 @@ class DeviceActionBody:
 # ----- error helper -----
 
 
-def _oauth_error(
-    status: int, code: str, error: str, error_description: str
-) -> APIError:
+def _oauth_error(status: int, code: str, error: str, error_description: str) -> APIError:
     return APIError(
         status,
         code,
@@ -226,9 +220,7 @@ async def _device_code(ctx: EndpointContext) -> dict[str, Any]:
     if opts.validate_client is not None:
         is_valid = await _maybe_await(opts.validate_client(body.client_id))
         if not is_valid:
-            raise _oauth_error(
-                400, "INVALID_REQUEST", "invalid_client", "Invalid client ID"
-            )
+            raise _oauth_error(400, "INVALID_REQUEST", "invalid_client", "Invalid client ID")
 
     if opts.on_device_auth_request is not None:
         await _maybe_await(opts.on_device_auth_request(body.client_id, body.scope))
@@ -276,23 +268,17 @@ async def _device_token(ctx: EndpointContext) -> dict[str, Any]:
     if opts.validate_client is not None:
         is_valid = await _maybe_await(opts.validate_client(body.client_id))
         if not is_valid:
-            raise _oauth_error(
-                400, "INVALID_DEVICE_CODE", "invalid_grant", "Invalid client ID"
-            )
+            raise _oauth_error(400, "INVALID_DEVICE_CODE", "invalid_grant", "Invalid client ID")
 
     row = await ctx.auth.adapter.find_one(
         model="deviceCode",
         where=(Where(field="deviceCode", value=body.device_code),),
     )
     if not row:
-        raise _oauth_error(
-            400, "INVALID_DEVICE_CODE", "invalid_grant", _MSG["INVALID_DEVICE_CODE"]
-        )
+        raise _oauth_error(400, "INVALID_DEVICE_CODE", "invalid_grant", _MSG["INVALID_DEVICE_CODE"])
 
     if row.get("clientId") and row["clientId"] != body.client_id:
-        raise _oauth_error(
-            400, "INVALID_DEVICE_CODE", "invalid_grant", "Client ID mismatch"
-        )
+        raise _oauth_error(400, "INVALID_DEVICE_CODE", "invalid_grant", "Client ID mismatch")
 
     now = int(time.time())
 
@@ -320,9 +306,7 @@ async def _device_token(ctx: EndpointContext) -> dict[str, Any]:
             model="deviceCode",
             where=(Where(field="id", value=row["id"]),),
         )
-        raise _oauth_error(
-            400, "EXPIRED_DEVICE_CODE", "expired_token", _MSG["EXPIRED_DEVICE_CODE"]
-        )
+        raise _oauth_error(400, "EXPIRED_DEVICE_CODE", "expired_token", _MSG["EXPIRED_DEVICE_CODE"])
 
     status = row["status"]
     if status == "pending":
@@ -337,9 +321,7 @@ async def _device_token(ctx: EndpointContext) -> dict[str, Any]:
             model="deviceCode",
             where=(Where(field="id", value=row["id"]),),
         )
-        raise _oauth_error(
-            400, "ACCESS_DENIED", "access_denied", _MSG["ACCESS_DENIED"]
-        )
+        raise _oauth_error(400, "ACCESS_DENIED", "access_denied", _MSG["ACCESS_DENIED"])
 
     if status == "approved" and row.get("userId"):
         user = await ctx.auth.adapter.find_one(
@@ -347,9 +329,7 @@ async def _device_token(ctx: EndpointContext) -> dict[str, Any]:
             where=(Where(field="id", value=row["userId"]),),
         )
         if not user:
-            raise _oauth_error(
-                500, "INTERNAL", "server_error", _MSG["USER_NOT_FOUND"]
-            )
+            raise _oauth_error(500, "INTERNAL", "server_error", _MSG["USER_NOT_FOUND"])
 
         session, _cookies = await create_session(
             ctx.auth,
@@ -378,31 +358,21 @@ async def _device_verify(ctx: EndpointContext) -> dict[str, Any]:
     if isinstance(user_code, list):
         user_code = user_code[0] if user_code else None
     if not user_code:
-        raise _oauth_error(
-            400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"]
-        )
+        raise _oauth_error(400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"])
     cleaned = user_code.replace("-", "")
     row = await ctx.auth.adapter.find_one(
         model="deviceCode",
         where=(Where(field="userCode", value=cleaned),),
     )
     if not row:
-        raise _oauth_error(
-            400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"]
-        )
+        raise _oauth_error(400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"])
     if int(row["expiresAt"]) < int(time.time()):
-        raise _oauth_error(
-            400, "EXPIRED_USER_CODE", "expired_token", _MSG["EXPIRED_USER_CODE"]
-        )
+        raise _oauth_error(400, "EXPIRED_USER_CODE", "expired_token", _MSG["EXPIRED_USER_CODE"])
 
     # Claim the code for the signed-in user. The update is guarded by
     # `userId IS NULL` so a concurrent claim is never overwritten
     # (GHSA-cq3f-vc6p-68fh).
-    if (
-        ctx.session is not None
-        and not row.get("userId")
-        and row["status"] == "pending"
-    ):
+    if ctx.session is not None and not row.get("userId") and row["status"] == "pending":
         claimed = await ctx.auth.adapter.update(
             model="deviceCode",
             where=(
@@ -428,13 +398,9 @@ async def _device_deny(ctx: EndpointContext) -> dict[str, Any]:
     return await _set_status(ctx, body.user_code, "denied")
 
 
-async def _set_status(
-    ctx: EndpointContext, user_code: str, status: str
-) -> dict[str, Any]:
+async def _set_status(ctx: EndpointContext, user_code: str, status: str) -> dict[str, Any]:
     if ctx.session is None:
-        raise _oauth_error(
-            401, "UNAUTHORIZED", "unauthorized", _MSG["AUTHENTICATION_REQUIRED"]
-        )
+        raise _oauth_error(401, "UNAUTHORIZED", "unauthorized", _MSG["AUTHENTICATION_REQUIRED"])
 
     cleaned = user_code.replace("-", "")
     row = await ctx.auth.adapter.find_one(
@@ -442,13 +408,9 @@ async def _set_status(
         where=(Where(field="userCode", value=cleaned),),
     )
     if not row:
-        raise _oauth_error(
-            400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"]
-        )
+        raise _oauth_error(400, "INVALID_USER_CODE", "invalid_request", _MSG["INVALID_USER_CODE"])
     if int(row["expiresAt"]) < int(time.time()):
-        raise _oauth_error(
-            400, "EXPIRED_USER_CODE", "expired_token", _MSG["EXPIRED_USER_CODE"]
-        )
+        raise _oauth_error(400, "EXPIRED_USER_CODE", "expired_token", _MSG["EXPIRED_USER_CODE"])
     if row["status"] != "pending":
         raise _oauth_error(
             400,
@@ -467,9 +429,7 @@ async def _set_status(
             _MSG["DEVICE_CODE_NOT_CLAIMED"],
         )
     if row["userId"] != ctx.session.user_id:
-        raise _oauth_error(
-            403, "FORBIDDEN", "access_denied", f"You are not authorized to {status}"
-        )
+        raise _oauth_error(403, "FORBIDDEN", "access_denied", f"You are not authorized to {status}")
 
     await ctx.auth.adapter.update(
         model="deviceCode",

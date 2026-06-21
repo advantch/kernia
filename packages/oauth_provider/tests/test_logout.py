@@ -60,9 +60,7 @@ async def _session_id(driver) -> str:
 
 async def test_should_fail_with_invalid_id_token_hint() -> None:
     _, driver = await _logged_in()
-    r = await driver.request(
-        "GET", "/oauth2/end-session", query="id_token_hint="
-    )
+    r = await driver.request("GET", "/oauth2/end-session", query="id_token_hint=")
     assert r.status == 401, r.json()
 
 
@@ -174,5 +172,4 @@ async def test_should_pass_with_redirection() -> None:
     "id_tokens, so the upstream `oauth logout - disableJwtPlugin` describe "
     "reduces to the JWT path already covered above."
 )
-async def test_disable_jwt_plugin_logout_variants() -> None:
-    ...
+async def test_disable_jwt_plugin_logout_variants() -> None: ...

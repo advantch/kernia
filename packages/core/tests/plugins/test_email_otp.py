@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kernia.plugins.email_otp import EMAIL_OTP_ERROR_CODES, email_otp, generate_otp
 from kernia.plugins.email_otp.routes import _identifier
 

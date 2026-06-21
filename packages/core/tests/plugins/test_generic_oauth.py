@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from kernia.plugins.generic_oauth import (
     GenericOAuthConfig,
     auth0,
@@ -49,9 +48,7 @@ def test_helpers_construct_discovery_url() -> None:
     a = auth0(client_id="x", client_secret="y", domain="tenant.auth0.com")
     assert a.discovery_url == "https://tenant.auth0.com/.well-known/openid-configuration"
     o = okta(client_id="x", client_secret="y", issuer="https://x.okta.com/oauth2/default/")
-    assert o.discovery_url == (
-        "https://x.okta.com/oauth2/default/.well-known/openid-configuration"
-    )
+    assert o.discovery_url == ("https://x.okta.com/oauth2/default/.well-known/openid-configuration")
     k = keycloak(
         client_id="x",
         client_secret="y",

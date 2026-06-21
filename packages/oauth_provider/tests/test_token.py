@@ -101,9 +101,7 @@ async def test_refresh_lesser_scopes(confidential) -> None:
 async def test_refresh_cannot_widen_scopes(confidential) -> None:
     _, driver, client = confidential
     tokens = await get_tokens(driver, client, scope="openid offline_access")
-    r = await _refresh(
-        driver, client, tokens["refresh_token"], scope="openid email offline_access"
-    )
+    r = await _refresh(driver, client, tokens["refresh_token"], scope="openid email offline_access")
     assert r.status == 400
 
 
@@ -267,5 +265,4 @@ async def test_reject_refresh_token_when_confidential_client_is_disabled(
     "auth_time, and encrypted client-secret storage are not implemented in the "
     "Python port (stateless-JWT model)."
 )
-async def test_prefix_resource_custom_claim_and_encrypted_secret_cases() -> None:
-    ...
+async def test_prefix_resource_custom_claim_and_encrypted_secret_cases() -> None: ...

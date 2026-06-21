@@ -87,9 +87,7 @@ class _OneTimeTokenPlugin:
         RateLimitRule(path="/one-time-token/generate", window=60, max=10),
         RateLimitRule(path="/one-time-token/verify", window=60, max=10),
     )
-    error_codes: Mapping[str, str] = field(
-        default_factory=lambda: dict(ONE_TIME_TOKEN_ERROR_CODES)
-    )
+    error_codes: Mapping[str, str] = field(default_factory=lambda: dict(ONE_TIME_TOKEN_ERROR_CODES))
     init: None = None
 
 

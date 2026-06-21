@@ -11,9 +11,7 @@ import platform
 import sys
 from pathlib import Path
 
-import kernia
 import click
-
 import kernia
 
 from kernia_cli.utils import find_auth_handle, load_config_module
@@ -27,7 +25,7 @@ def _redact(url: str) -> str:
         return url
     scheme, _, rest = url.partition("://")
     if "@" in rest:
-        creds, _, host = rest.partition("@")
+        _creds, _, host = rest.partition("@")
         return f"{scheme}://[REDACTED]@{host}"
     return url
 
@@ -43,10 +41,7 @@ def _collect(auth_handle) -> dict:
     if engine is not None and getattr(engine, "url", None) is not None:
         target = _redact(str(engine.url))
 
-    plugins = [
-        {"id": p.id, "version": getattr(p, "version", None)}
-        for p in ctx.plugins
-    ]
+    plugins = [{"id": p.id, "version": getattr(p, "version", None)} for p in ctx.plugins]
 
     routes = list(auth_handle.router._endpoints.keys())
     sample = [f"{method} {path}" for (method, path) in routes[:10]]
@@ -104,9 +99,7 @@ def info(config_path: str, cwd: str, as_json: bool, dry_run: bool) -> None:
         }
     else:
         full_config = (
-            Path(cwd) / config_path
-            if not Path(config_path).is_absolute()
-            else Path(config_path)
+            Path(cwd) / config_path if not Path(config_path).is_absolute() else Path(config_path)
         )
         mod = load_config_module(full_config)
         auth_handle = find_auth_handle(mod)
