@@ -74,14 +74,40 @@ jobs:
           path: dist/
           retention-days: 14
 
+  # One publish job per package: PyPI keys trusted publishers on the tuple
+  # (owner, repo, workflow, environment), so each package gets its own GitHub
+  # environment to make its tuple unique. Wheel/sdist filenames normalize "-"
+  # to "_", so the per-package glob is collision-free (dist/kernia-* matches
+  # only the core package; kernia-cli builds as kernia_cli-*).
   publish:
-    name: Publish to PyPI (trusted publishing)
+    name: Publish ${{ matrix.pkg }}
     needs: build
     if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: kernia, env: pypi }
+          - { pkg: kernia-cli, env: pypi-cli }
+          - { pkg: kernia-test-utils, env: pypi-test-utils }
+          - { pkg: kernia-memory-adapter, env: pypi-memory-adapter }
+          - { pkg: kernia-sqlalchemy, env: pypi-sqlalchemy }
+          - { pkg: kernia-mongo, env: pypi-mongo }
+          - { pkg: kernia-redis-storage, env: pypi-redis-storage }
+          - { pkg: kernia-api-key, env: pypi-api-key }
+          - { pkg: kernia-passkey, env: pypi-passkey }
+          - { pkg: kernia-sso, env: pypi-sso }
+          - { pkg: kernia-oauth-provider, env: pypi-oauth-provider }
+          - { pkg: kernia-scim, env: pypi-scim }
+          - { pkg: kernia-stripe, env: pypi-stripe }
+          - { pkg: kernia-mcp, env: pypi-mcp }
+          - { pkg: kernia-fastapi, env: pypi-fastapi }
+          - { pkg: kernia-starlette, env: pypi-starlette }
+          - { pkg: kernia-django, env: pypi-django }
     environment:
-      name: pypi
-      url: https://pypi.org/project/kernia/
+      name: ${{ matrix.env }}
+      url: https://pypi.org/project/${{ matrix.pkg }}/
     permissions:
       id-token: write  # OIDC for PyPI trusted publishing
     steps:
@@ -92,5 +118,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Publish (uv publish, OIDC)
-        run: uv publish --trusted-publishing always dist/*
+      - name: Publish ${{ matrix.pkg }} (uv publish, OIDC)
+        run: |
+          mod="$(echo "${{ matrix.pkg }}" | tr '-' '_')"
+          ls dist/ | grep -i "^${mod}-" || { echo "::error::no artifacts for ${{ matrix.pkg }}"; exit 1; }
+          uv publish --trusted-publishing always dist/${mod}-*

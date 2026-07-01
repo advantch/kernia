@@ -1395,11 +1395,13 @@ wheels = [
 
 [[package]]
 name = "kernia"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "argon2-cffi" },
     { name = "cryptography" },
+    { name = "httpx" },
+    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
@@ -1412,12 +1414,14 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=23" },
     { name = "authlib", marker = "extra == 'jwt'", specifier = ">=1.3" },
     { name = "cryptography", specifier = ">=42" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2" },
 ]
 provides-extras = ["jwt"]
 
 [[package]]
 name = "kernia-api-key"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/api_key" }
 dependencies = [
     { name = "kernia" },
@@ -1428,7 +1432,7 @@ requires-dist = [{ name = "kernia", editable = "packages/core" }]
 
 [[package]]
 name = "kernia-cli"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "alembic" },
@@ -1447,7 +1451,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-django"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/django_integration" }
 dependencies = [
     { name = "anyio" },
@@ -1464,7 +1468,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-fastapi"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/fastapi_integration" }
 dependencies = [
     { name = "fastapi" },
@@ -1479,7 +1483,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-mcp"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "fastmcp" },
@@ -1494,7 +1498,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-memory-adapter"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/memory_adapter" }
 dependencies = [
     { name = "kernia" },
@@ -1505,7 +1509,7 @@ requires-dist = [{ name = "kernia", editable = "packages/core" }]
 
 [[package]]
 name = "kernia-mongo"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/mongo_adapter" }
 dependencies = [
     { name = "kernia" },
@@ -1520,7 +1524,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-oauth-provider"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/oauth_provider" }
 dependencies = [
     { name = "authlib" },
@@ -1535,7 +1539,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-passkey"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/passkey" }
 dependencies = [
     { name = "kernia" },
@@ -1550,7 +1554,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-redis-storage"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/redis_storage" }
 dependencies = [
     { name = "kernia" },
@@ -1565,7 +1569,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-scim"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/scim" }
 dependencies = [
     { name = "kernia" },
@@ -1576,7 +1580,7 @@ requires-dist = [{ name = "kernia", editable = "packages/core" }]
 
 [[package]]
 name = "kernia-sqlalchemy"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/sqlalchemy_adapter" }
 dependencies = [
     { name = "aiosqlite" },
@@ -1595,7 +1599,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-sso"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/sso" }
 dependencies = [
     { name = "anyio" },
@@ -1620,7 +1624,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-starlette"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/starlette_integration" }
 dependencies = [
     { name = "kernia" },
@@ -1635,7 +1639,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-stripe"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/stripe" }
 dependencies = [
     { name = "httpx" },
@@ -1654,7 +1658,7 @@ requires-dist = [
 
 [[package]]
 name = "kernia-test-utils"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/test_utils" }
 dependencies = [
     { name = "cbor2" },
