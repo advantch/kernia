@@ -35,4 +35,6 @@ for pp in sorted(ROOT.glob("packages/*/pyproject.toml")):
 print(f"Bumped {len(changed)} packages to {VERSION}:")
 for n in sorted(changed):
     print(f"  {n}")
-print(f"\nNext: git commit -am 'release: v{VERSION}' && git tag v{VERSION} && git push --follow-tags")
+print(
+    f"\nNext: git commit -am 'release: v{VERSION}' && git tag v{VERSION} && git push --follow-tags"
+)
