@@ -1,93 +1,125 @@
-name: Publish Python packages
+name: Release
+
+# Publishes every Kernia package to PyPI when a version tag (v*) is pushed.
+# Auth is PyPI Trusted Publishing (OIDC) — no API tokens anywhere. The suite is
+# versioned in lockstep: the tag (e.g. v0.1.0) must match packages/core. Cut a
+# release with:
+#
+#   uv run --with tomlkit python scripts/bump_version.py 0.2.0
+#   git commit -am "release: v0.2.0" && git tag v0.2.0 && git push --follow-tags
+#
+# See RELEASING.md.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build only, skip upload"
+        description: "Build + validate only, skip the PyPI upload"
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
-    name: Build sdists + wheels
+    name: Build + validate all packages
     runs-on: ubuntu-latest
-    outputs:
-      dists: ${{ steps.collect.outputs.dists }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v6
         with:
-          version: "latest"
           enable-cache: true
 
-      - name: Install Python
-        run: uv python install 3.12
+      - run: uv python install 3.12
 
-      - name: Build every workspace package
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(grep -m1 '^version = ' packages/core/pyproject.toml | sed 's/version = //; s/"//g')"
+          echo "tag=$tag package=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match packages/core version $pkg" >&2
+            exit 1
+          fi
+
+      - name: Build every workspace package (uv build)
         run: |
           set -euo pipefail
           for pkg in \
-            kernia \
-            kernia-cli \
-            kernia-test-utils \
-            kernia-memory-adapter \
-            kernia-sqlalchemy \
-            kernia-mongo \
-            kernia-redis-storage \
-            kernia-api-key \
-            kernia-passkey \
-            kernia-sso \
-            kernia-oauth-provider \
-            kernia-scim \
-            kernia-stripe \
-            kernia-mcp \
-            kernia-fastapi \
-            kernia-starlette \
-            kernia-django \
-          ; do
+            kernia kernia-cli kernia-test-utils kernia-memory-adapter \
+            kernia-sqlalchemy kernia-mongo kernia-redis-storage kernia-api-key \
+            kernia-passkey kernia-sso kernia-oauth-provider kernia-scim \
+            kernia-stripe kernia-mcp kernia-fastapi kernia-starlette kernia-django
+          do
             echo "::group::build $pkg"
             uv build --package "$pkg" --out-dir dist/
             echo "::endgroup::"
           done
-
-      - id: collect
-        run: |
-          echo "dists=$(ls dist | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
           ls -la dist/
 
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
+      # uv has no README-render linter yet; this is the one non-uv step, kept so
+      # a malformed long_description fails here instead of mid-upload.
+      - name: Validate metadata rendering
+        run: uvx twine check dist/*
+
+      - uses: actions/upload-artifact@v4
         with:
           name: python-packages
           path: dist/
           retention-days: 14
 
+  # One publish job per package: PyPI keys trusted publishers on the tuple
+  # (owner, repo, workflow, environment), so each package gets its own GitHub
+  # environment to make its tuple unique. Wheel/sdist filenames normalize "-"
+  # to "_", so the per-package glob is collision-free (dist/kernia-* matches
+  # only the core package; kernia-cli builds as kernia_cli-*).
   publish:
-    name: Publish to PyPI
+    name: Publish ${{ matrix.pkg }}
     needs: build
-    if: ${{ github.event_name == 'release' || inputs.dry_run == false }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: kernia, env: pypi }
+          - { pkg: kernia-cli, env: pypi-cli }
+          - { pkg: kernia-test-utils, env: pypi-test-utils }
+          - { pkg: kernia-memory-adapter, env: pypi-memory-adapter }
+          - { pkg: kernia-sqlalchemy, env: pypi-sqlalchemy }
+          - { pkg: kernia-mongo, env: pypi-mongo }
+          - { pkg: kernia-redis-storage, env: pypi-redis-storage }
+          - { pkg: kernia-api-key, env: pypi-api-key }
+          - { pkg: kernia-passkey, env: pypi-passkey }
+          - { pkg: kernia-sso, env: pypi-sso }
+          - { pkg: kernia-oauth-provider, env: pypi-oauth-provider }
+          - { pkg: kernia-scim, env: pypi-scim }
+          - { pkg: kernia-stripe, env: pypi-stripe }
+          - { pkg: kernia-mcp, env: pypi-mcp }
+          - { pkg: kernia-fastapi, env: pypi-fastapi }
+          - { pkg: kernia-starlette, env: pypi-starlette }
+          - { pkg: kernia-django, env: pypi-django }
     environment:
-      name: pypi
-      url: https://pypi.org/project/kernia/
+      name: ${{ matrix.env }}
+      url: https://pypi.org/project/${{ matrix.pkg }}/
+    permissions:
+      id-token: write  # OIDC for PyPI trusted publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: python-packages
           path: dist/
 
-      - name: Publish to PyPI (trusted publisher)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
-          skip-existing: true
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish ${{ matrix.pkg }} (uv publish, OIDC)
+        run: |
+          mod="$(echo "${{ matrix.pkg }}" | tr '-' '_')"
+          ls dist/ | grep -i "^${mod}-" || { echo "::error::no artifacts for ${{ matrix.pkg }}"; exit 1; }
+          uv publish --trusted-publishing always dist/${mod}-*
