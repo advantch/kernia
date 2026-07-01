@@ -118,8 +118,20 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Publish ${{ matrix.pkg }} (uv publish, OIDC)
+      # Bootstrap: PyPI caps pending trusted publishers at 3/account, so the
+      # first-ever release uses a short-lived account token (PYPI_API_TOKEN
+      # secret), deleted right after. Once the projects exist and each has a
+      # per-project trusted publisher, the secret is removed and this falls
+      # through to OIDC permanently. --check-url makes reruns skip files that
+      # already made it up.
+      - name: Publish ${{ matrix.pkg }} (uv publish)
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           mod="$(echo "${{ matrix.pkg }}" | tr '-' '_')"
           ls dist/ | grep -i "^${mod}-" || { echo "::error::no artifacts for ${{ matrix.pkg }}"; exit 1; }
-          uv publish --trusted-publishing always dist/${mod}-*
+          if [ -n "${UV_PUBLISH_TOKEN}" ]; then
+            uv publish --check-url "https://pypi.org/simple/" dist/${mod}-*
+          else
+            uv publish --trusted-publishing always --check-url "https://pypi.org/simple/" dist/${mod}-*
+          fi
