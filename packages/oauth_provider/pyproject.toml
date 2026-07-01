@@ -1,13 +1,52 @@
 [project]
 name = "kernia-oauth-provider"
-version = "0.0.0"
+version = "0.1.0"
 description = "OAuth2/OIDC provider (issuer side) plugin"
 requires-python = ">=3.11"
 dependencies = [
-    "kernia",
+    "kernia>=0.1.0",
     "authlib>=1.3",
 ]
+readme = "README.md"
+license = "MIT"
+license-files = [
+    "LICENSE",
+]
+authors = [
+    {name = "Advantch"},
+]
+keywords = [
+    "authentication",
+    "authorization",
+    "sessions",
+    "oauth",
+    "passkeys",
+    "sso",
+    "asgi",
+    "fastapi",
+    "starlette",
+    "django",
+    "security",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Session",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
 
+[project.urls]
+Homepage = "https://kernia.dev"
+Documentation = "https://kernia.dev/docs"
+Source = "https://github.com/advantch/kernia"
+Issues = "https://github.com/advantch/kernia/issues"
+Changelog = "https://github.com/advantch/kernia/releases"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
