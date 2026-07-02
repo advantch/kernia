@@ -86,6 +86,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Serial: PyPI rate-limits new-project creation (429 on parallel bursts),
+      # and releases are not latency-critical.
+      max-parallel: 1
       matrix:
         include:
           - { pkg: kernia, env: pypi }
