@@ -17,9 +17,16 @@ Kernia is a framework-agnostic authentication library for Python. See [kernia.de
 
     pip install kernia
 
-You will also want an adapter and a server integration, for example:
+Adapters, server integrations, and optional plugins ship in the same
+distribution as extras. Install only what you use:
 
-    pip install kernia-sqlalchemy kernia-fastapi
+    pip install "kernia[fastapi,sqlalchemy]"
+
+Available extras: `jwt`, `passkey`, `sso`, `oauth-provider`, `stripe`, `mcp`,
+`sqlalchemy`, `mongo`, `redis`, `fastapi`, `starlette`, `django`, and `all`. Each
+pulls in its own third-party requirements; the import paths are unchanged
+(`from kernia_fastapi import mount_kernia`, `from kernia_sqlalchemy import
+sqlalchemy_adapter`, and so on).
 
 ## Usage
 

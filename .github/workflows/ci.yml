@@ -49,20 +49,6 @@ jobs:
         run: |
           uv sync
           uv pip install -e packages/core \
-            -e packages/memory_adapter \
-            -e packages/sqlalchemy_adapter \
-            -e packages/mongo_adapter \
-            -e packages/redis_storage \
-            -e packages/api_key \
-            -e packages/passkey \
-            -e packages/sso \
-            -e packages/oauth_provider \
-            -e packages/scim \
-            -e packages/stripe \
-            -e packages/mcp \
-            -e packages/fastapi_integration \
-            -e packages/starlette_integration \
-            -e packages/django_integration \
             -e packages/cli \
             -e packages/test_utils
           uv pip install pytest pytest-asyncio anyio
