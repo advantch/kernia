@@ -35,6 +35,7 @@ dev-dependencies = [
     "redis>=5",
     "stripe>=10",
     "python3-saml>=1.16",
+    "defusedxml>=0.7",
     "cbor2>=5",
     "lxml>=5",
     "openapi-spec-validator>=0.7",
