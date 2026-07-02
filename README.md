@@ -2,219 +2,135 @@
 
 # Kernia
 
-**Comprehensive authentication for Python — the Better Auth model, natively for ASGI.**
+**A type-safe, plugin-based authentication library for FastAPI, Starlette, and Django.**
 
-Email/password, OAuth, magic links, passkeys, organizations, SSO, SCIM, Stripe billing,
-and 30+ plugins. Wire-compatible with the official [Better Auth](https://better-auth.com)
-JavaScript client, so your existing frontend just works.
-
-[![CI](https://github.com/advantch/kernia/actions/workflows/ci.yml/badge.svg)](https://github.com/advantch/kernia/actions/workflows/ci.yml)
-[![Security](https://github.com/advantch/kernia/actions/workflows/security.yml/badge.svg)](https://github.com/advantch/kernia/actions/workflows/security.yml)
 [![PyPI](https://img.shields.io/pypi/v/kernia.svg)](https://pypi.org/project/kernia/)
+[![CI](https://github.com/advantch/kernia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/advantch/kernia/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://pypi.org/project/kernia/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Docs](https://img.shields.io/badge/docs-kernia-black.svg)](https://docs-advantch.vercel.app)
 
-[Live demo](https://kernia-demo-delta.vercel.app) ·
-[Documentation](https://docs-advantch.vercel.app) ·
+[Documentation](https://kernia.dev/docs) ·
+[Blog](https://kernia.dev/blog) ·
 [Quickstart](#quickstart) ·
-[Plugins](#whats-included) ·
-[Examples](./examples) ·
-[Contributing](./CONTRIBUTING.md)
+[Plugins and adapters](#plugins-and-adapters) ·
+[Examples](./examples)
 
 </div>
 
 ---
 
-Kernia is an independent Python implementation compatible with **Better Auth 1.6.11**.
-It preserves the Better Auth wire protocol — same routes, same cookie model, same
-camelCase payloads — while exposing a Python-native `kernia` package family for
-FastAPI, Starlette, and Django. No upstream source is vendored.
+Authentication in Kernia is a set of plugins you compose, not a framework you inherit from. You call `init` with options and the plugins you want, and you get back an `auth` object that serves the whole auth surface under `/api/auth/*`. Email and password is a plugin; so is everything past it, from magic links and passkeys to organizations, SSO, SCIM, and Stripe billing. Each plugin owns its own routes, database tables, rate-limit rules, and error codes, so adding a capability is adding a constructor to a list rather than starting another rewrite. Security is on by default: Argon2id hashing, HMAC-signed cookies, CSRF protection, PKCE-bound OAuth state, and AES-GCM encryption of OAuth tokens at rest are not opt-in homework.
+
+## Install
+
+```bash
+pip install kernia
+```
+
+Adapters, framework integrations, and heavier plugins ship as extras of the single `kernia` distribution, so you install only what a given app needs:
+
+```bash
+pip install "kernia[sqlalchemy,fastapi]"
+```
+
+The extras are `jwt`, `passkey`, `sso`, `oauth-provider`, `stripe`, `mcp`, `sqlalchemy`, `mongo`, `redis`, `fastapi`, `starlette`, `django`, and `all`. Import paths are the same however you install (`from kernia_fastapi import mount_kernia`, `from kernia_sqlalchemy import sqlalchemy_adapter`). The command-line tool (`kernia-cli`) and test helpers (`kernia-test-utils`) are separate distributions.
+
+## Quickstart
+
+Configure auth once, then mount it on your app. This is a minimal FastAPI setup with email and password over SQLAlchemy.
 
 ```python
+import os
+
 from kernia import KerniaOptions
 from kernia.auth import init
 from kernia.plugins import email_and_password
-from kernia.plugins.organization import organization
 from kernia_sqlalchemy import sqlalchemy_adapter
 
 auth = init(KerniaOptions(
     database=await sqlalchemy_adapter(url="postgresql+asyncpg://localhost/app"),
     secret=os.environ["KERNIA_SECRET"],
     base_url="https://app.example.com",
-    plugins=[email_and_password(), organization()],
+    plugins=[email_and_password()],
 ))
+```
 
-# FastAPI:
-from fastapi import FastAPI
+Mounting it is two lines. `mount_kernia` serves the whole auth surface under `/api/auth/*`, and `require_session` is a dependency that protects your own routes.
+
+```python
+from fastapi import Depends, FastAPI
 from kernia_fastapi import mount_kernia, require_session
+from kernia.types.context import Session
 
 app = FastAPI()
-mount_kernia(app, auth)                     # serves /api/auth/*
+mount_kernia(app, auth)                      # serves /api/auth/*
 
 @app.get("/me")
-async def me(session = Depends(require_session)):
+async def me(session: Session = Depends(require_session)):
     return {"user_id": session.user_id}
 ```
 
-Your React/Vue/Svelte frontend points the **official Better Auth client** at this
-server unchanged:
+`require_session` reads the signed cookie, loads the session, and returns 401 if there is none. `session.user_id` is typed. There is no middleware to register in a specific order and no request-local globals to thread through.
+
+To scaffold a project from scratch, `kernia init --adapter sqlite --framework fastapi` writes an `auth.py` and `.env.example`, and `kernia secret`, `kernia generate`, and `kernia migrate` handle the secret and migrations. A full FastAPI-plus-React SaaS reference app lives in [`examples/`](./examples).
+
+## The Better Auth client works unchanged
+
+Kernia speaks the same HTTP routes, cookie model, and camelCase JSON as [Better Auth](https://better-auth.com), so the official Better Auth JavaScript client talks to a Kernia backend with no shim:
 
 ```ts
 import { createAuthClient } from "better-auth/client";
 export const authClient = createAuthClient({ baseURL: "/api/auth" });
 ```
 
-## Why Kernia
+Point your React, Vue, or Svelte frontend at a Kernia server and it works. If you run Better Auth on a Node backend and are moving the API to Python, the browser cannot tell the difference and the migration is server-side only.
 
-- **Drop-in for the Better Auth ecosystem.** The official JS client and its
-  framework hooks talk to a Kernia server with no shim. A headless wire-check
-  (`examples/frontend/scripts/wire-check.mjs`) drives the real client against
-  the example server on every change.
-- **Batteries included.** 27 built-in plugins + 7 standalone packages: from
-  email/password to full OIDC provider, SAML SSO, SCIM provisioning, and Stripe
-  seat-based billing.
-- **One schema, many databases.** Memory, SQLAlchemy (Postgres/MySQL/SQLite),
-  and MongoDB adapters behind a single `CustomAdapter` protocol. A 64-case
-  conformance suite runs against each.
-- **Security by default.** Argon2id password hashing, HMAC-signed cookies,
-  CSRF/trusted-origins, PKCE-bound OAuth state, AES-GCM token encryption at rest,
-  rate limiting, and a real WebAuthn verifier.
-- **Frontends generate their own SDK.** The `open_api` plugin emits a validated
-  OpenAPI 3.1 document at `/api/auth/openapi.json` — no bespoke client to ship.
+## Plugins and adapters
 
-## Install
+Every feature past email and password is a plugin you add to the `plugins` list, or a module you pull in as an extra. The database is chosen the same way, behind one adapter protocol, so a query that works on SQLite works the same on Postgres.
 
-> **Not yet on PyPI.** Install from source ahead of the first release.
+| Category | What ships |
+| --- | --- |
+| Auth plugins | email/password, magic link, email OTP, phone number, username, two-factor, anonymous, one-tap, SIWE, generic OAuth, and more |
+| Organizations | multi-tenant organizations with teams and invitations, active-org on the session |
+| Enterprise | SSO (SAML + OIDC), SCIM provisioning, API keys, OIDC provider, JWT/JWKS |
+| Billing | Stripe seat-based billing |
+| Passkeys | WebAuthn registration and login |
+| Adapters | in-memory, SQLAlchemy (Postgres / MySQL / SQLite), MongoDB, Redis storage |
+| Integrations | FastAPI, Starlette, Django |
+| Providers | 35 built-in social providers (Apple, GitHub, Google, Discord, Microsoft, Slack, and others), plus generic-OAuth constructors for the rest |
+| Tooling | `open_api` plugin emits a validated OpenAPI 3.1 spec at `/api/auth/openapi.json`; HaveIBeenPwned and captcha (reCAPTCHA, Turnstile, hCaptcha) middleware |
+
+The adapter layer runs a conformance suite against every backend, so behavior stays consistent across databases. Kernia runs under our own applications.
+
+## Documentation
+
+- [Documentation](https://kernia.dev/docs) and [installation guide](https://kernia.dev/docs/installation)
+- [Basic usage](https://kernia.dev/docs/basic-usage) and [plugin reference](https://kernia.dev/docs/plugins)
+- [Blog](https://kernia.dev/blog)
+- [Examples](./examples): FastAPI backend plus React frontend SaaS reference app
+
+## Development
+
+Kernia is a `uv` workspace. Clone it and install everything:
 
 ```bash
 git clone https://github.com/advantch/kernia
 cd kernia
 uv sync
-uv pip install -e packages/core
 ```
 
-Once released, adapters, server integrations, and optional plugins ship as
-extras of the single `kernia` distribution — install only what you use:
+Run the tests, linter, and type checker:
 
 ```bash
-uv add "kernia[sqlalchemy,fastapi]"
+uv run pytest e2e/ -q          # cross-adapter, per-plugin, and integration tests
+uv run ruff check .            # lint
+uv run ruff format --check .   # format
+uv run mypy packages/core/src  # type check
 ```
 
-Extras: `jwt`, `passkey`, `sso`, `oauth-provider`, `stripe`, `mcp`,
-`sqlalchemy`, `mongo`, `redis`, `fastapi`, `starlette`, `django`, and `all`. The
-import paths are unchanged regardless of how you install (`from kernia_fastapi
-import mount_kernia`, `from kernia_sqlalchemy import sqlalchemy_adapter`). The
-CLI (`kernia-cli`) and test helpers (`kernia-test-utils`) are separate
-distributions.
-
-## Quickstart
-
-Scaffold an app with the CLI:
-
-```bash
-kernia init --adapter sqlite --framework fastapi   # writes auth.py + .env.example
-kernia secret                                      # generate KERNIA_SECRET
-kernia generate                                    # emit an Alembic migration
-kernia migrate                                     # apply it
-```
-
-Or run the full SaaS reference app (FastAPI backend + shadcn/React frontend):
-
-```bash
-# terminal 1 — backend on :5050
-uv run uvicorn examples.backend.app:app --port 5050 --reload
-
-# terminal 2 — frontend on :5173
-cd examples/frontend && pnpm install && pnpm dev
-```
-
-See [`examples/`](./examples) for the full walkthrough.
-
-## What's included
-
-**Built-in plugins** (`packages/core/src/kernia/plugins/`):
-`access`, `additional_fields`, `admin`, `anonymous`, `bearer`, `captcha`,
-`custom_session`, `device_authorization`, `email_otp`, `email_password`,
-`generic_oauth`, `haveibeenpwned`, `jwt`, `last_login_method`, `magic_link`,
-`mcp`, `multi_session`, `oauth_proxy`, `oidc_provider`, `one_tap`,
-`one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`,
-`two_factor`, `username`.
-
-**Optional modules** (shipped as `kernia` extras): `api_key`, `passkey`,
-`sso` (SAML + OIDC), `oauth_provider` (full OIDC issuer), `scim`, `stripe`,
-`mcp`, `redis`.
-
-**Adapters:** `memory`, `sqlalchemy` (Postgres/MySQL/SQLite + transactions, joins,
-case-insensitive, UUID PKs), `mongo` (motor).
-
-**Social providers:** 35 built-in (Apple, GitHub, Google, Discord, Microsoft,
-Slack, …) plus generic-OAuth constructors for Auth0, Okta, Keycloak, Entra ID,
-Patreon, Line, Gumroad, HubSpot.
-
-**Server integrations:** FastAPI, Starlette, Django (async-to-sync bridge).
-
-**CLI:** `kernia init | generate | migrate | secret | info`.
-
-## Security
-
-Argon2id (with scrypt verify-fallback and lazy `needs_rehash` upgrade),
-HMAC-SHA256 cookie signing wire-compatible with the Better Auth JS client,
-signed PKCE-bound OAuth `state`, pure-stdlib RS256 id_token verification + authlib
-ES256/EdDSA issuance, AES-GCM OAuth-token-at-rest encryption, trusted-origins CSRF
-(on by default), cookie-secret rotation, InMemory + Redis rate limiting, HIBP
-k-anonymity checks, and captcha middleware (reCAPTCHA v2/v3, Turnstile, hCaptcha).
-
-Found a vulnerability? See [SECURITY.md](./SECURITY.md) — please report privately.
-
-## Testing
-
-```bash
-uv run pytest e2e/ -q              # cross-adapter + per-plugin + integration
-```
-
-- `examples/frontend/scripts/wire-check.mjs` drives the official Better Auth JS
-  client through sign-up → session → sign-out → sign-in → organization
-  create/list, plus a negative-credentials case — proof the wire protocol holds
-  end to end.
-
-Tiers: unit tests in `packages/<pkg>/tests/`, plugin integration in
-`e2e/plugins/`, cross-cutting flows in `e2e/integration/`, adapter conformance in
-`e2e/adapter/`. Docker-gated suites (Postgres/MySQL/Mongo/Redis) skip cleanly when
-Docker is unavailable.
-
-## Repository layout
-
-Three published distributions. The `kernia` wheel ships the core plus every
-optional module tree (`kernia_passkey`, `kernia_sqlalchemy`, `kernia_fastapi`,
-…) side by side, gated behind extras; `kernia-cli` and `kernia-test-utils` are
-separate.
-
-```
-.
-├── packages/
-│   ├── core/                         # kernia distribution
-│   │   ├── src/kernia/               #   core: 27 plugins + 35 social providers + i18n
-│   │   ├── src/kernia_memory_adapter/  kernia_sqlalchemy/  kernia_mongo/  kernia_redis_storage/
-│   │   ├── src/kernia_api_key/  kernia_passkey/  kernia_sso/  kernia_oauth_provider/  kernia_scim/  kernia_stripe/  kernia_mcp/
-│   │   ├── src/kernia_fastapi/  kernia_starlette/  kernia_django/
-│   │   └── tests/                    #   core + one subdir per optional module
-│   ├── cli/                          # kernia-cli distribution
-│   └── test_utils/                   # kernia-test-utils distribution
-├── e2e/                              # adapter/ · plugins/ · integration/
-├── apps/docs/                        # Fumadocs + Next.js docs site (Vercel)
-├── examples/                         # FastAPI + React SaaS reference app
-└── .github/workflows/                # ci.yml · security.yml · publish.yml
-```
-
-## Contributing
-
-Issues and PRs welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) for the
-workspace layout, quality gates, and conventions. By contributing you
-agree to the [Code of Conduct](./CODE_OF_CONDUCT.md).
+Docker-gated suites for Postgres, MySQL, MongoDB, and Redis skip cleanly when Docker is unavailable. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the workspace layout and conventions, [RELEASING.md](./RELEASING.md) for the release process, and [SECURITY.md](./SECURITY.md) to report a vulnerability privately.
 
 ## License
 
-[MIT](./LICENSE) © Advantch. Kernia is an independent implementation and is not
-affiliated with or endorsed by the Better Auth project.
+[MIT](./LICENSE) © Advantch. Kernia is an independent project and is not affiliated with or endorsed by the Better Auth project.

@@ -24,7 +24,9 @@ def load_config_module(config_path: str | Path) -> ModuleType:
     path = Path(config_path).resolve()
     if not path.exists():
         raise click.ClickException(f"Config file not found: {path}")
-    mod_name = f"_kernia_user_config_{hashlib.sha1(str(path).encode()).hexdigest()[:8]}"
+    # Non-security: SHA1 only derives a stable module name from the path.
+    digest = hashlib.sha1(str(path).encode(), usedforsecurity=False).hexdigest()[:8]
+    mod_name = f"_kernia_user_config_{digest}"
     spec = importlib.util.spec_from_file_location(mod_name, path)
     if spec is None or spec.loader is None:
         raise click.ClickException(f"Could not load {path} as a Python module.")
@@ -61,7 +63,8 @@ def deterministic_revision(models: Any) -> str:
     Re-running `generate` on an unchanged schema produces the same revision, so
     the user doesn't accumulate spurious migration files.
     """
-    h = hashlib.sha1()
+    # Non-security: SHA1 fingerprints the schema shape into a stable revision id.
+    h = hashlib.sha1(usedforsecurity=False)
     for m in models:
         h.update(m.name.encode())
         for f in m.fields:

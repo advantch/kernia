@@ -39,6 +39,8 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 import anyio
+from defusedxml.ElementTree import ParseError as DefusedParseError
+from defusedxml.ElementTree import fromstring as defused_fromstring
 
 SAML_NS = {
     "samlp": "urn:oasis:names:tc:SAML:2.0:protocol",
@@ -350,8 +352,9 @@ def validate_permissive(
     """
     raw = base64.b64decode(saml_response_b64).decode("utf-8")
     try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as e:
+        # defusedxml hardens against XXE / billion-laughs on the untrusted IdP response.
+        root = defused_fromstring(raw)
+    except DefusedParseError as e:
         raise SAMLValidationError(f"malformed SAML response: {e}") from None
 
     # Status

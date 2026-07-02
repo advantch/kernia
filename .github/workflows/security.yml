@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
   schedule:
     # Weekly, Monday 06:00 UTC — catch newly-disclosed CVEs in deps.
     - cron: "0 6 * * 1"
@@ -63,6 +64,7 @@ jobs:
       - uses: github/codeql-action/init@v3
         with:
           languages: python
+          config-file: ./.github/codeql/codeql-config.yml
 
       - uses: github/codeql-action/analyze@v3
         with:

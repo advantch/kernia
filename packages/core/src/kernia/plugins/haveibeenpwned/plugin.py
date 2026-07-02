@@ -97,7 +97,9 @@ def _build_hook(cfg: _HIBPConfig) -> BeforeHook:
         password = getattr(ctx.body, "password", None)
         if not password:
             return
-        sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+        # HIBP Pwned Passwords range API is defined over SHA1 k-anonymity; the
+        # algorithm is mandated by the external protocol, not a local security choice.
+        sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()  # nosec B324
         prefix, suffix = sha1[:5], sha1[5:]
         body_text = await _fetch_range(
             prefix,

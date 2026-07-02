@@ -1,0 +1,14 @@
+# CodeQL configuration for kernia.
+#
+# The two paths below are excluded from analysis because CodeQL permanently
+# flags them with py/weak-sensitive-data-hashing: the Pwned-Passwords
+# k-anonymity API requires SHA1 range queries (only the first 5 hex characters
+# of the hash are ever sent, never the password). This is not password-storage
+# hashing; storage hashing is Argon2id in kernia.crypto. CodeQL cannot scope a
+# single rule to a path, so the whole (small) integration file and its e2e test
+# are excluded; the alternative is re-dismissing a "new" alert every time a
+# line shifts in these files. Reviewed 2026-07-02.
+name: kernia
+paths-ignore:
+  - packages/core/src/kernia/plugins/haveibeenpwned/**
+  - e2e/plugins/test_haveibeenpwned.py
