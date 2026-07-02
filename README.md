@@ -92,14 +92,22 @@ export const authClient = createAuthClient({ baseURL: "/api/auth" });
 git clone https://github.com/advantch/kernia
 cd kernia
 uv sync
-uv pip install -e packages/core -e packages/sqlalchemy_adapter -e packages/fastapi_integration
+uv pip install -e packages/core
 ```
 
-Once released:
+Once released, adapters, server integrations, and optional plugins ship as
+extras of the single `kernia` distribution — install only what you use:
 
 ```bash
-uv add kernia kernia-sqlalchemy kernia-fastapi
+uv add "kernia[sqlalchemy,fastapi]"
 ```
+
+Extras: `jwt`, `passkey`, `sso`, `oauth-provider`, `stripe`, `mcp`,
+`sqlalchemy`, `mongo`, `redis`, `fastapi`, `starlette`, `django`, and `all`. The
+import paths are unchanged regardless of how you install (`from kernia_fastapi
+import mount_kernia`, `from kernia_sqlalchemy import sqlalchemy_adapter`). The
+CLI (`kernia-cli`) and test helpers (`kernia-test-utils`) are separate
+distributions.
 
 ## Quickstart
 
@@ -134,8 +142,9 @@ See [`examples/`](./examples) for the full walkthrough.
 `one_time_token`, `open_api`, `organization`, `phone_number`, `siwe`,
 `two_factor`, `username`.
 
-**Standalone packages:** `api_key`, `passkey`, `sso` (SAML + OIDC),
-`oauth_provider` (full OIDC issuer), `scim`, `stripe`, `redis_storage`.
+**Optional modules** (shipped as `kernia` extras): `api_key`, `passkey`,
+`sso` (SAML + OIDC), `oauth_provider` (full OIDC issuer), `scim`, `stripe`,
+`mcp`, `redis`.
 
 **Adapters:** `memory`, `sqlalchemy` (Postgres/MySQL/SQLite + transactions, joins,
 case-insensitive, UUID PKs), `mongo` (motor).
@@ -177,14 +186,22 @@ Docker is unavailable.
 
 ## Repository layout
 
+Three published distributions. The `kernia` wheel ships the core plus every
+optional module tree (`kernia_passkey`, `kernia_sqlalchemy`, `kernia_fastapi`,
+…) side by side, gated behind extras; `kernia-cli` and `kernia-test-utils` are
+separate.
+
 ```
 .
 ├── packages/
-│   ├── core/                         # kernia: 27 plugins + 35 social providers + i18n
-│   ├── memory_adapter/  sqlalchemy_adapter/  mongo_adapter/  redis_storage/
-│   ├── api_key/  passkey/  sso/  oauth_provider/  scim/  stripe/  mcp/
-│   ├── fastapi_integration/  starlette_integration/  django_integration/
-│   └── cli/  test_utils/
+│   ├── core/                         # kernia distribution
+│   │   ├── src/kernia/               #   core: 27 plugins + 35 social providers + i18n
+│   │   ├── src/kernia_memory_adapter/  kernia_sqlalchemy/  kernia_mongo/  kernia_redis_storage/
+│   │   ├── src/kernia_api_key/  kernia_passkey/  kernia_sso/  kernia_oauth_provider/  kernia_scim/  kernia_stripe/  kernia_mcp/
+│   │   ├── src/kernia_fastapi/  kernia_starlette/  kernia_django/
+│   │   └── tests/                    #   core + one subdir per optional module
+│   ├── cli/                          # kernia-cli distribution
+│   └── test_utils/                   # kernia-test-utils distribution
 ├── e2e/                              # adapter/ · plugins/ · integration/
 ├── apps/docs/                        # Fumadocs + Next.js docs site (Vercel)
 ├── examples/                         # FastAPI + React SaaS reference app

@@ -1,9 +1,9 @@
 name: Release
 
-# Publishes every Kernia package to PyPI when a version tag (v*) is pushed.
-# Auth is PyPI Trusted Publishing (OIDC) — no API tokens anywhere. The suite is
-# versioned in lockstep: the tag (e.g. v0.1.0) must match packages/core. Cut a
-# release with:
+# Publishes the three Kernia distributions (kernia, kernia-cli,
+# kernia-test-utils) to PyPI when a version tag (v*) is pushed. Auth is PyPI
+# Trusted Publishing (OIDC) — no API tokens anywhere. The suite is versioned in
+# lockstep: the tag (e.g. v0.1.0) must match packages/core. Cut a release with:
 #
 #   uv run --with tomlkit python scripts/bump_version.py 0.2.0
 #   git commit -am "release: v0.2.0" && git tag v0.2.0 && git push --follow-tags
@@ -51,11 +51,7 @@ jobs:
       - name: Build every workspace package (uv build)
         run: |
           set -euo pipefail
-          for pkg in \
-            kernia kernia-cli kernia-test-utils kernia-memory-adapter \
-            kernia-sqlalchemy kernia-mongo kernia-redis-storage kernia-api-key \
-            kernia-passkey kernia-sso kernia-oauth-provider kernia-scim \
-            kernia-stripe kernia-mcp kernia-fastapi kernia-starlette kernia-django
+          for pkg in kernia kernia-cli kernia-test-utils
           do
             echo "::group::build $pkg"
             uv build --package "$pkg" --out-dir dist/
@@ -94,20 +90,6 @@ jobs:
           - { pkg: kernia, env: pypi }
           - { pkg: kernia-cli, env: pypi-cli }
           - { pkg: kernia-test-utils, env: pypi-test-utils }
-          - { pkg: kernia-memory-adapter, env: pypi-memory-adapter }
-          - { pkg: kernia-sqlalchemy, env: pypi-sqlalchemy }
-          - { pkg: kernia-mongo, env: pypi-mongo }
-          - { pkg: kernia-redis-storage, env: pypi-redis-storage }
-          - { pkg: kernia-api-key, env: pypi-api-key }
-          - { pkg: kernia-passkey, env: pypi-passkey }
-          - { pkg: kernia-sso, env: pypi-sso }
-          - { pkg: kernia-oauth-provider, env: pypi-oauth-provider }
-          - { pkg: kernia-scim, env: pypi-scim }
-          - { pkg: kernia-stripe, env: pypi-stripe }
-          - { pkg: kernia-mcp, env: pypi-mcp }
-          - { pkg: kernia-fastapi, env: pypi-fastapi }
-          - { pkg: kernia-starlette, env: pypi-starlette }
-          - { pkg: kernia-django, env: pypi-django }
     environment:
       name: ${{ matrix.env }}
       url: https://pypi.org/project/${{ matrix.pkg }}/
@@ -121,20 +103,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      # Bootstrap: PyPI caps pending trusted publishers at 3/account, so the
-      # first-ever release uses a short-lived account token (PYPI_API_TOKEN
-      # secret), deleted right after. Once the projects exist and each has a
-      # per-project trusted publisher, the secret is removed and this falls
-      # through to OIDC permanently. --check-url makes reruns skip files that
-      # already made it up.
+      # Auth is PyPI Trusted Publishing (OIDC) only — no API tokens. Each package
+      # has a per-project trusted publisher keyed on (owner, repo, workflow,
+      # environment). --check-url makes reruns skip files that already made it up.
       - name: Publish ${{ matrix.pkg }} (uv publish)
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           mod="$(echo "${{ matrix.pkg }}" | tr '-' '_')"
           ls dist/ | grep -i "^${mod}-" || { echo "::error::no artifacts for ${{ matrix.pkg }}"; exit 1; }
-          if [ -n "${UV_PUBLISH_TOKEN}" ]; then
-            uv publish --check-url "https://pypi.org/simple/" dist/${mod}-*
-          else
-            uv publish --trusted-publishing always --check-url "https://pypi.org/simple/" dist/${mod}-*
-          fi
+          uv publish --trusted-publishing always --check-url "https://pypi.org/simple/" dist/${mod}-*
