@@ -1,8 +1,6 @@
 # kernia
 
-Framework-agnostic authentication core for Python: email/password, sessions, OAuth, and a plugin system. Wire-compatible with the official Better Auth JavaScript client, so an existing frontend can talk to a Kernia server unchanged.
-
-Kernia is a framework-agnostic authentication library for Python. See [kernia.dev](https://kernia.dev).
+Framework-agnostic authentication for Python: email/password, sessions, OAuth, passkeys, organizations, and a plugin system for everything past that. See [kernia.dev](https://kernia.dev).
 
 ## Features
 
@@ -11,7 +9,7 @@ Kernia is a framework-agnostic authentication library for Python. See [kernia.de
 - OAuth 2.0 social sign-in with 35 built-in providers plus generic OAuth
 - A plugin system: organizations, admin, magic links, email OTP, two-factor, JWT, OpenAPI, and more
 - One schema across memory, SQLAlchemy, and MongoDB adapters
-- Wire-compatible with the official Better Auth JavaScript client
+- Compatible with the Better Auth wire protocol (verified against 1.6.11), so that ecosystem's JavaScript client also works against a Kernia server
 
 ## Installation
 
@@ -62,8 +60,6 @@ mount_kernia(app, auth)  # serves /api/auth/*
 async def me(session=Depends(require_session)):
     return {"user_id": session.user_id}
 ```
-
-Point the official Better Auth JavaScript client at `/api/auth` and it works without a shim.
 
 ## Documentation
 

@@ -74,17 +74,6 @@ async def me(session: Session = Depends(require_session)):
 
 To scaffold a project from scratch, `kernia init --adapter sqlite --framework fastapi` writes an `auth.py` and `.env.example`, and `kernia secret`, `kernia generate`, and `kernia migrate` handle the secret and migrations. A full FastAPI-plus-React SaaS reference app lives in [`examples/`](./examples).
 
-## The Better Auth client works unchanged
-
-Kernia speaks the same HTTP routes, cookie model, and camelCase JSON as [Better Auth](https://better-auth.com), so the official Better Auth JavaScript client talks to a Kernia backend with no shim:
-
-```ts
-import { createAuthClient } from "better-auth/client";
-export const authClient = createAuthClient({ baseURL: "/api/auth" });
-```
-
-Point your React, Vue, or Svelte frontend at a Kernia server and it works. If you run Better Auth on a Node backend and are moving the API to Python, the browser cannot tell the difference and the migration is server-side only.
-
 ## Plugins and adapters
 
 Every feature past email and password is a plugin you add to the `plugins` list, or a module you pull in as an extra. The database is chosen the same way, behind one adapter protocol, so a query that works on SQLite works the same on Postgres.
@@ -102,6 +91,17 @@ Every feature past email and password is a plugin you add to the `plugins` list,
 | Tooling | `open_api` plugin emits a validated OpenAPI 3.1 spec at `/api/auth/openapi.json`; HaveIBeenPwned and captcha (reCAPTCHA, Turnstile, hCaptcha) middleware |
 
 The adapter layer runs a conformance suite against every backend, so behavior stays consistent across databases. Kernia runs under our own applications.
+
+## Client compatibility
+
+Kernia's HTTP surface is compatible with the [Better Auth](https://better-auth.com) wire protocol (verified against 1.6.11), so that ecosystem's JavaScript client also works against a Kernia server:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+export const authClient = createAuthClient({ baseURL: "/api/auth" });
+```
+
+Teams moving a Node auth backend to Python can keep their existing frontend; the migration is server-side only.
 
 ## Documentation
 
